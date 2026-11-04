@@ -1,4 +1,4 @@
 # Claude Code가 새 worktree를 만들 때 복사해 넣는, git에서 뺀 파일
-# 복사본이다. 고칠 때는 원래 폴더의 파일을 고친다(CLAUDE.md 「worktree와 비공개 파일」).
+# 복사본이다. 고칠 때는 원래 폴더의 파일을 고친다(AGENTS.md 「worktree와 비공개 파일」).
 docs/private/
 .env
