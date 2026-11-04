@@ -1,0 +1,3 @@
+#!/bin/sh
+# 커밋 메시지 검사: AI 서명, Conventional Commits 첫 줄, 공개 금지 값 (CLAUDE.md 「커밋 메시지」)
+exec node "$(dirname "$0")/../scripts/check-commit-msg.mjs" "$1"

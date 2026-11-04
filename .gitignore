@@ -1,0 +1,29 @@
+# 비공개 메모: 개인 환경, 참고 앱, 위키 메모 (CLAUDE.md 「공개 저장소」)
+docs/private/
+
+# 녹음과 음성 파일: 사용자 목소리는 민감 정보다
+*.wav
+*.m4a
+*.mp3
+*.aac
+*.ogg
+*.opus
+*.flac
+*.caf
+recordings/
+
+# 키와 환경 변수
+.env
+.env.*
+!.env.example
+
+# Claude Code 개인 설정 (프로젝트 설정 .claude/settings.json 은 넣는다)
+.claude/settings.local.json
+
+# 맥
+.DS_Store
+
+# 작업용 복사 폴더(worktree)와 superpowers 임시 작업 공간
+.claude/worktrees/
+.worktrees/
+.superpowers/

@@ -1,0 +1,3 @@
+#!/bin/sh
+# 커밋 전 공개 금지 검사 (CLAUDE.md 「커밋 전 자동 검사」). core.hooksPath로 건다.
+exec node "$(dirname "$0")/../scripts/check-sensitive.mjs" --staged
