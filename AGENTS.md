@@ -39,7 +39,7 @@
 
 - **커밋:** 설계 문서를 쓰면 커밋하고, 작업 하나를 끝낼 때마다 커밋한다. 서브에이전트도 커밋한다. 커밋할 때마다 승인을 묻지 않는다.
 - **문서:** 설계(스펙)는 `docs/superpowers/specs/`, 계획은 `docs/superpowers/plans/`에 둔다.
-- **worktree:** 구현할 때는 worktree를 쓰고, 만들지 묻지 않는다. 비공개 파일은 아래 「worktree와 비공개 파일」을 따른다.
+- **worktree:** 구현할 때는 worktree를 쓰고, 만들지 묻지 않는다. 만드는 방법과 세션 나누기는 아래 「세션과 worktree」, 비공개 파일은 「worktree와 비공개 파일」을 따른다.
 - **TDD, 리뷰, 디버깅:** superpowers 스킬을 따른다. superpowers가 없으면 테스트를 먼저 쓰고 실패를 본 뒤 구현한다.
 
 ### 문서 순서: PRD 먼저 (2026-11-04 결정)
@@ -80,13 +80,35 @@ superpowers의 작업 기록(`.superpowers/sdd/`)은 마지막 리뷰가 끝나�
 - **양식:** 한 일, 흐름(AI 추천, 사용자 판단, 결과를 표로), 바로잡은 것(에이전트가 잘못한 것과 그것을 막으려고 더한 규칙이나 장치), 검증(돌린 명령과 결과), 다음.
 - **쓰지 않는 것:** 대화 원문은 붙이지 않고 요약한다. 무엇을 바꿨는지는 커밋에, 되돌리기 어려운 결정은 ADR에, 다음에도 따를 기준과 겪은 문제의 해결은 `docs/guide/`에 쓰고 여기서 되풀이하지 않는다. 공개되므로 「공개 저장소」 규칙을 지킨다.
 
-### worktree와 비공개 파일 (2026-11-04 확인)
+### 세션과 worktree: 오르카로 나눈다 (2026-11-05 결정)
+
+사용자는 오르카에서 세션을 본다. 오르카는 대화 카드를 탭을 연 폴더 밑에 둔다. 한 세션이 원래 폴더에서 시작해 worktree로 옮겨 가서 일하면, 카드는 main 밑에 있는데 작업은 다른 폴더에서 일어나 어긋난다(2026-11-04 PRD 작업에서 겪었다). 그래서 세션을 둘로 나눈다.
+
+- **main 세션:** 원래 폴더에서 무엇을 할지 의논하고 정한다. 파일을 고치는 일은 하지 않는다(「작은 문서 커밋」은 예외). 할 일이 정해지면 오르카로 worktree와 새 세션을 함께 띄운다.
+  - 명령: `orca worktree create --name <영어-주제> --branch <type>/<영어-주제> --no-parent --agent claude --prompt "<넘길 글>"`
+  - 넘길 글에는 정한 것, 읽을 문서(PRD의 절, ADR, todo), 사용자에게 물을 것을 적는다. 새 세션은 앞 대화를 모른다.
+  - 사용자에게 새 카드의 이름을 알린다. 그 일의 대화는 그 카드에서 한다.
+- **worktree 세션:** 그 일의 스펙, 계획, 구현, PR, 리뷰, devlog를 맡는다. 머지한 뒤 정리한다.
+- Claude Code가 아닌 에이전트는 `--agent codex`처럼 바꾼다. 오르카를 쓸 수 없으면 에이전트의 도구로 worktree를 만든다(Claude Code는 `CLAUDE.md`).
+
+### worktree와 비공개 파일 (2026-11-04 확인, 2026-11-05 고침)
 
 worktree는 git에 든 파일만 펼친다. 그래서 `docs/private/`와 `.env`가 빠진다.
 
-- Claude Code로 만든 worktree에는 `.worktreeinclude`에 적은 이 둘이 복사돼 들어간다(`CLAUDE.md`). 복사본이라 worktree에서 고치면 원래 폴더에 반영되지 않고, worktree를 지우면 사라진다.
-- 다른 도구(`git worktree add`, 오르카)로 만든 worktree에는 없다. 필요하면 원래 폴더에서 복사해 온다.
-- 비공개 파일은 언제나 원래 폴더(`git worktree list`의 첫 줄)의 파일을 고친다.
+- **오르카로 만든 worktree:** 오르카의 jake-english 프로젝트 설정 「설정 스크립트」가 원래 폴더에서 이 둘을 복사한다. 「실행 시기」는 「기본적으로 실행」이다. 2026-11-05 시험용 worktree를 만들어 복사되는 것을 확인했다.
+  - 스크립트는 로컬 스크립트라 이 맥의 오르카에만 저장된다. 다른 맥이나 새로 설치한 오르카에는 아래 스크립트를 다시 넣는다.
+  - 저장소에 커밋해 공유하는 `orca.yaml`은 쓰지 않는다. 오르카 전용 설정을 공개 저장소에 둘 이유가 없다(AI 판단).
+
+  ```sh
+  set -e
+  mkdir -p "$ORCA_WORKTREE_PATH/docs"
+  if [ -d "$ORCA_ROOT_PATH/docs/private" ]; then cp -R "$ORCA_ROOT_PATH/docs/private" "$ORCA_WORKTREE_PATH/docs/"; fi
+  if [ -f "$ORCA_ROOT_PATH/.env" ]; then cp "$ORCA_ROOT_PATH/.env" "$ORCA_WORKTREE_PATH/.env"; fi
+  ```
+
+- **Claude Code로 만든 worktree:** `.worktreeinclude`에 적은 이 둘이 복사돼 들어간다(`CLAUDE.md`).
+- **`git worktree add`로 만든 worktree:** 없다. 필요하면 원래 폴더에서 복사해 온다.
+- 어느 쪽이든 복사본이다. worktree에서 고치면 원래 폴더에 반영되지 않고, worktree를 지우면 사라진다. 비공개 파일은 언제나 원래 폴더(`git worktree list`의 첫 줄)의 파일을 고친다.
 
 ## 이 저장소에서 지키는 규칙
 

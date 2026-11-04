@@ -10,9 +10,11 @@
 
 superpowers 플러그인은 이 프로젝트에만 설치했다(`.claude/settings.json`의 `enabledPlugins`). 사용자가 정한 대로 **superpowers 스킬의 규칙이 전역 CLAUDE.md의 작업 방식보다 앞선다.** superpowers가 정하지 않은 것만 전역 CLAUDE.md를 따른다. 전역 CLAUDE.md와 이 저장소 규칙 사이의 순서는 `AGENTS.md` 서문을 따른다.
 
-## worktree (2026-11-04 확인)
+## worktree (2026-11-04 확인, 2026-11-05 고침)
 
-worktree는 Claude Code 도구(EnterWorktree, `--worktree`)로 만든다. 그래야 `.worktreeinclude`에 적은 `docs/private/`와 `.env`가 복사된다(Claude Code 2.1.318에서 시험해 확인). 복사본이라 고칠 때는 원래 폴더의 파일을 고친다(`AGENTS.md` 「worktree와 비공개 파일」).
+- worktree는 오르카로 만들고, 그 worktree에 새 Claude 세션을 띄운다(`AGENTS.md` 「세션과 worktree」).
+- 오르카 설정 「일반 → 소스 → Claude Code」를 「표시」로 바꿨다(2026-11-05). 기본은 숨김이라, Claude Code가 만든 `.claude/worktrees/*`가 오르카 사이드바에 보이지 않았다.
+- 오르카를 쓸 수 없을 때만 Claude Code 도구(EnterWorktree, `--worktree`)로 만든다. 그러면 `.worktreeinclude`에 적은 `docs/private/`와 `.env`가 복사된다(Claude Code 2.1.318에서 시험해 확인). 복사본이라 고칠 때는 원래 폴더의 파일을 고친다(`AGENTS.md` 「worktree와 비공개 파일」).
 
 ## 커밋 가드 훅 (2026-11-04 결정)
 

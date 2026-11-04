@@ -47,3 +47,4 @@
 - [2026-11-04 공통 규칙을 AGENTS.md로 나누기](2026-11-04-agents-md.md)
 - [2026-11-04 push 전 검사가 한글 이름의 가이드를 막던 버그](2026-11-04-push-korean-names.md)
 - [2026-11-04 PRD와 첫 결정 기록](2026-11-04-writing-prd.md)
+- [2026-11-05 오르카로 세션과 worktree 나누기](2026-11-05-orca-worktrees.md)
