@@ -8,7 +8,7 @@
 
 ## superpowers (2026-11-04 결정)
 
-superpowers 플러그인은 이 프로젝트에만 설치했다(`.claude/settings.json`의 `enabledPlugins`). 사용자가 정한 대로 **superpowers 스킬의 규칙이 전역 CLAUDE.md의 작업 방식보다 앞선다.** superpowers가 정하지 않은 것만 전역 CLAUDE.md를 따르고, 전역 CLAUDE.md와 `AGENTS.md`가 다르면 `AGENTS.md`를 따른다(예: 커밋 승인을 묻지 않는다).
+superpowers 플러그인은 이 프로젝트에만 설치했다(`.claude/settings.json`의 `enabledPlugins`). 사용자가 정한 대로 **superpowers 스킬의 규칙이 전역 CLAUDE.md의 작업 방식보다 앞선다.** superpowers가 정하지 않은 것만 전역 CLAUDE.md를 따른다. 전역 CLAUDE.md와 이 저장소 규칙 사이의 순서는 `AGENTS.md` 서문을 따른다.
 
 ## worktree (2026-11-04 확인)
 
