@@ -1,4 +1,4 @@
-// 커밋 메시지 규칙 (CLAUDE.md 「커밋 메시지」)
+// 커밋 메시지 규칙 (AGENTS.md 「커밋 메시지」)
 // commit-msg 훅(scripts/check-commit-msg.mjs)과 커밋 가드(scripts/hooks/guard-git.mjs)가 함께 쓴다.
 
 import { scanText } from "./sensitive-rules.mjs";

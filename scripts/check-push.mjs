@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// push 전 검사 (pre-push 훅, CLAUDE.md 「작은 문서 커밋은 main에 바로 올린다」)
+// push 전 검사 (pre-push 훅, AGENTS.md 「작은 문서 커밋은 main에 바로 올린다」)
 //   git이 표준 입력으로 「<로컬 ref> <로컬 sha> <원격 ref> <원격 sha>」 줄을 넘긴다.
 // - main으로 가는 push에는 작은 문서 커밋만 둔다. superpowers는 스펙과 계획을 지금 브랜치(대개 로컬 main)에 먼저 커밋하므로,
 //   작은 문서 커밋을 올리다가 PR을 기다리는 스펙과 계획이 같이 올라갈 수 있다.
@@ -9,7 +9,7 @@
 import { execFileSync } from "node:child_process";
 
 const ZERO = /^0+$/;
-// 작은 문서 커밋이 고칠 수 있는 파일. PRD, ADR, 스펙, 계획, CLAUDE.md, REVIEW.md는 PR로 올린다.
+// 작은 문서 커밋이 고칠 수 있는 파일. PRD, ADR, 스펙, 계획, AGENTS.md, CLAUDE.md, REVIEW.md는 PR로 올린다.
 const SMALL_DOC_FILE = /^docs\/(todo|devlog|guide)\/.+\.md$/;
 const DOCS_SUBJECT = /^docs(\([a-z0-9-]+\))?!?: /;
 
@@ -65,7 +65,7 @@ try {
     for (const p of problems) console.error(`  - ${p}`);
     console.error(
       "main에는 작은 문서 커밋(docs 커밋이고 docs/todo, docs/devlog, docs/guide의 .md만 고친 것)만 바로 올립니다. " +
-        "나머지는 기능 브랜치를 push하고 PR로 합칩니다. --no-verify로 넘기지 않습니다 (CLAUDE.md).",
+        "나머지는 기능 브랜치를 push하고 PR로 합칩니다. --no-verify로 넘기지 않습니다 (AGENTS.md).",
     );
     process.exit(1);
   }

@@ -1,4 +1,4 @@
-// 검사 스크립트가 함께 쓰는 git 도우미 (CLAUDE.md 「커밋 전 자동 검사」)
+// 검사 스크립트가 함께 쓰는 git 도우미 (AGENTS.md 「커밋 전 자동 검사」)
 
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";

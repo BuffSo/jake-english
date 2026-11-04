@@ -1,4 +1,4 @@
-// 커밋 가드 훅의 판정 (scripts/hooks/guard-git.mjs, CLAUDE.md 「커밋 전 자동 검사」)
+// 커밋 가드 훅의 판정 (scripts/hooks/guard-git.mjs, CLAUDE.md 「커밋 가드 훅」)
 // jake-homepage(ADR-0006)의 판정을 가져와, commit만 찾던 것을 git 하위 명령 전체(commit, push)로 넓혔다.
 // 명령 문자열에서 실제로 git을 실행하는 자리만 찾고, 훅을 건너뛰는 옵션은 그 인자에서만 찾는다.
 // 명령 전체에서 git-commit과 -n을 따로 찾으면, sed -n이나 grep -n이 같은 명령에 있을 때 커밋이 아니어도 막는다.

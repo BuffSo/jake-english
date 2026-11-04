@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Claude Code PreToolUse 훅 (CLAUDE.md 「커밋 전 자동 검사」)
+// Claude Code PreToolUse 훅 (CLAUDE.md 「커밋 가드 훅」, AGENTS.md 「커밋 전 자동 검사」)
 // 에이전트가 git commit이나 git push를 실행하기 직전에 본다. git 훅을 건너뛰는 길(--no-verify, -n, 훅 폴더 바꾸기,
 // 훅 폴더가 걸려 있지 않은 저장소)을 막고, 커밋이면 pre-commit 훅과 같은 공개 금지 검사를 미리 돌린다. AI 서명이 든 커밋 명령도 막는다.
 // 종료 코드 2를 돌려주면 Claude Code가 명령을 실행하지 않고 stderr를 에이전트에게 전달한다.
@@ -30,7 +30,7 @@ const pushes = found.filter((c) => c.sub === "push");
 // 명령을 해석하지 못한 커밋도 놓치지 않게, git과 commit이 한 구간에 보이면 찾는다.
 const looksLikeCommit = commits.length > 0 || /\bgit\b[^;&|\n]*\bcommit\b/.test(command);
 if (looksLikeCommit && AI_SIGNATURE.test(command)) {
-  block("커밋 메시지에 AI 공동 작성자 줄이나 생성 도구 서명을 넣지 않습니다 (CLAUDE.md 「커밋 메시지」).");
+  block("커밋 메시지에 AI 공동 작성자 줄이나 생성 도구 서명을 넣지 않습니다 (AGENTS.md 「커밋 메시지」).");
 }
 
 if (commits.length === 0 && pushes.length === 0) process.exit(0);

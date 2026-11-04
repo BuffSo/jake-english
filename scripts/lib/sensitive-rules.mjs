@@ -1,4 +1,4 @@
-// 공개 금지 검사 규칙 (CLAUDE.md 「커밋 전 자동 검사」)
+// 공개 금지 검사 규칙 (AGENTS.md 「커밋 전 자동 검사」)
 // 커밋 전 검사(scripts/check-sensitive.mjs)와 커밋 메시지 검사(scripts/check-commit-msg.mjs)가 함께 쓴다.
 // 형식으로 찾는 검사라 문맥상의 노출은 다 잡지 못한다. 그건 리뷰(REVIEW.md)가 본다.
 
