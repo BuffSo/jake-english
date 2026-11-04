@@ -47,7 +47,8 @@ function checkUpdate(line) {
       problems.push(`${label}: merge 커밋은 main에 바로 올리지 않습니다. 작은 문서 커밋이면 git pull --rebase로 줄을 세우세요.`);
       continue;
     }
-    const files = git(["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", sha]).split("\n").filter(Boolean);
+    // -z: 그대로의 경로를 NUL로 나눠 받는다. 없으면 git이 한글 경로를 따옴표와 8진수로 바꿔 규칙에 맞지 않는다.
+    const files = git(["diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--root", sha]).split("\0").filter(Boolean);
     const others = files.filter((f) => !SMALL_DOC_FILE.test(f));
     if (others.length > 0) problems.push(`${label}: 작은 문서 파일이 아닌 것이 있습니다 (${others.join(", ")}).`);
     else if (!DOCS_SUBJECT.test(subject)) problems.push(`${label}: 작은 문서 커밋은 docs 커밋이어야 합니다.`);

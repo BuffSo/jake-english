@@ -188,6 +188,14 @@ test("pre-push: docs/todo, docs/devlog, docs/guide만 고친 docs 커밋은 main
   expectPassed(git(dir, ["push", "-q", "origin", "main"]));
 });
 
+test("pre-push: 파일 이름에 한글이 있어도 docs/guide만 고친 docs 커밋은 main에 올라간다", () => {
+  // git은 한글 경로를 따옴표로 감싸고 8진수로 바꿔 보여 준다(core.quotePath). 가이드 이름 규칙은 주제를 한글로 쓴다.
+  const dir = repoWithRemote();
+  git(dir, ["push", "-q", "origin", "main"]);
+  commitFile(dir, "docs/guide/GIT_한글_주제_20260101.md", "# 가이드\n", "docs(guide): add guide");
+  expectPassed(git(dir, ["push", "-q", "origin", "main"]));
+});
+
 test("pre-push: PRD를 고친 커밋은 docs여도 main에 바로 올리지 못한다", () => {
   const dir = repoWithRemote();
   git(dir, ["push", "-q", "origin", "main"]);
