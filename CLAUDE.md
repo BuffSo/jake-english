@@ -27,7 +27,7 @@ worktree는 Claude Code 도구(EnterWorktree, `--worktree`)로 만든다. 그래
 
 PR을 열면 pr-review 스킬로 리뷰한다. 확인된 문제는 receiving-code-review대로 맞는지 따져 보고 고쳐 같은 PR에 push한다.
 
-- pr-review는 CLAUDE.md만 찾는다. 이 저장소의 작업 규칙은 대부분 `AGENTS.md`에 있으니, 규칙 준수를 볼 때 `AGENTS.md`도 함께 본다. `REVIEW.md`에도 적어 두어 리뷰어에게 전달된다.
+- pr-review는 `CLAUDE.md`와 함께 `AGENTS.md`도 찾아, 같은 무게의 규칙 원본으로 리뷰어와 점수 에이전트에게 넘긴다(2026-11-04 스킬 고침). 전에는 `CLAUDE.md`만 찾아서 이 줄과 `REVIEW.md`로 메웠다. `REVIEW.md`의 같은 안내는 superpowers 리뷰어를 위해 남긴다.
 - pr-review는 `REVIEW.md`의 「반드시 지적할 것」을 CLAUDE.md와 같은 무게로 점수에 쓰고, 「넘길 것」을 오탐 목록에 더한다.
 - pr-review가 코멘트를 게시한 뒤 수정 범위를 묻는 단계는 이 저장소에서 건너뛴다(2026-11-04 결정). 확인된 문제는 묻지 않고 고치고, 고친 것과 남긴 것은 머지 결정을 물을 때 알린다. 스킬은 여러 저장소가 같이 쓰는 것이라 고치지 않고, 이 저장소 규칙이 앞선다.
 - superpowers가 작업 리뷰어나 최종 리뷰어를 띄울 때도 리뷰 요청에 `REVIEW.md`와 `AGENTS.md`를 함께 넘긴다. superpowers 규칙은 바꾸지 않고 입력만 더한다.
