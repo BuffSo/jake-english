@@ -136,3 +136,55 @@ class FakeClaude:
         self.calls.append(("recommend", (recent,)))
         self._maybe_fail()
         return "카페에서 커피를 주문하는 상황으로 연습하고 싶어."
+
+
+class FakeVoice:
+    """Returns sound keys without making sound; writes a small placeholder so file routes work."""
+
+    def __init__(self, audio_dir):
+        from pathlib import Path
+
+        self.audio_dir = Path(audio_dir)
+        self.calls: list[tuple[str, str, str, bool]] = []
+        self.fail_text: str | None = None
+
+    async def start(self):
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
+
+    async def stop(self):
+        pass
+
+    def path(self, key):
+        return self.audio_dir / f"{key}.m4a"
+
+    async def say(self, text, voice, lang, urgent):
+        from je_server.tts import VoiceError, audio_key
+
+        self.calls.append((text, voice, lang, urgent))
+        if text == self.fail_text:
+            raise VoiceError("fake")
+        key = audio_key(voice, lang, text)
+        self.audio_dir.mkdir(parents=True, exist_ok=True)
+        self.path(key).write_bytes(b"fake")
+        return key
+
+    async def rate_file(self, key, rate):
+        return self.path(key)
+
+
+class FakeWhisper:
+    def __init__(self, text: str = "It's right over there."):
+        self.text = text
+        self.calls = 0
+        self.langs: list[str] = []
+
+    async def start(self):
+        pass
+
+    async def stop(self):
+        pass
+
+    async def transcribe(self, wav, lang):
+        self.calls += 1
+        self.langs.append(lang)
+        return self.text

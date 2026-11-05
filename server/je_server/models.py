@@ -38,3 +38,45 @@ class Frame(BaseModel):
 
 Speaker = Literal["ryan", "user"]
 Draft = list[tuple[Speaker, str]]
+
+
+class ScriptLine(BaseModel):
+    idx: int
+    speaker: Speaker
+    text: str
+    kind: Literal["script", "reply"] = "script"
+    three: ThreeLine | None = None
+    audio: str | None = None  # sound key (sha256 hex) of Ryan reading the line
+
+
+class Issue(BaseModel):
+    target: str
+    heard: str
+    sound: tuple[str, str]
+    explain: str
+
+
+class Attempt(BaseModel):
+    n: int
+    mode: Literal["turn", "retry"]
+    heard: str
+    followed: bool
+    issues: list[Issue]
+    say_ko: str
+    audio: list[str]
+    timings: dict[str, float]
+
+
+class Roleplay(BaseModel):
+    id: str
+    created: str
+    situation: str
+    frame: Frame
+    lines: list[ScriptLine]
+    attempts: dict[int, list[Attempt]] = {}
+    pos: int = 0
+
+
+class Said(BaseModel):
+    text: str
+    audio: str

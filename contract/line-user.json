@@ -1,0 +1,90 @@
+{
+ "idx": 1,
+ "speaker": "user",
+ "text": "I'd like a cup of coffee.",
+ "kind": "script",
+ "three": {
+  "words": [
+   {
+    "syl": [
+     {
+      "en": "I'd",
+      "ko": "아잇",
+      "m": "n",
+      "hi": ""
+     }
+    ],
+    "emph": false,
+    "link": false
+   },
+   {
+    "syl": [
+     {
+      "en": "like",
+      "ko": "라이",
+      "m": "n",
+      "hi": ""
+     }
+    ],
+    "emph": false,
+    "link": true
+   },
+   {
+    "syl": [
+     {
+      "en": "a",
+      "ko": "커",
+      "m": "w",
+      "hi": ""
+     }
+    ],
+    "emph": false,
+    "link": false
+   },
+   {
+    "syl": [
+     {
+      "en": "cup",
+      "ko": "커",
+      "m": "n",
+      "hi": ""
+     }
+    ],
+    "emph": false,
+    "link": true
+   },
+   {
+    "syl": [
+     {
+      "en": "of",
+      "ko": "퍼",
+      "m": "w",
+      "hi": ""
+     }
+    ],
+    "emph": false,
+    "link": false
+   },
+   {
+    "syl": [
+     {
+      "en": "cof",
+      "ko": "카",
+      "m": "s",
+      "hi": "카"
+     },
+     {
+      "en": "fee.",
+      "ko": "피",
+      "m": "w",
+      "hi": ""
+     }
+    ],
+    "emph": false,
+    "link": false
+   }
+  ],
+  "reading": "coffee는 앞을 세게, [[카-피]]. 뒤 [[피]]는 짧고 약하게. cup of는 이어서 [[커-퍼]]."
+ },
+ "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}
