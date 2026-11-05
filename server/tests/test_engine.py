@@ -136,3 +136,14 @@ async def test_copy_keeps_reply_lines_in_order(engine_with_rp, speech_bytes, fak
     # text only: background preparation may still add notes and sounds to either record
     shape = lambda lines: [(l.idx, l.speaker, l.text, l.kind) for l in lines]  # noqa: E731
     assert shape(new.lines) == shape(engine.store.load(rp_id).lines)
+
+
+async def test_a_line_whose_sound_failed_comes_without_audio(engine, fake_voice):
+    # final review: a Ryan line whose voice fails must still come (shadow practice can record it, the roleplay
+    # moves on after its pause) instead of a 500
+    from fakes import DRAFT_RYAN
+
+    fake_voice.fail_text = DRAFT_RYAN[0]
+    rp = await engine.create("길 묻기")
+    line = await engine.line(rp.id, 0)
+    assert line.text == DRAFT_RYAN[0] and line.audio is None

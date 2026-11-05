@@ -146,7 +146,12 @@ class Engine:
         _, line = self.get_line(rp_id, idx)
         if self.ready(line):
             return line
-        await asyncio.wait_for(asyncio.shield(self.schedule(rp_id, idx)), LINE_WAIT)
+        try:
+            await asyncio.wait_for(asyncio.shield(self.schedule(rp_id, idx)), LINE_WAIT)
+        except VoiceError:
+            # the line comes without its sound rather than as an error: the roleplay moves on after a pause and
+            # shadow practice can still record it (final review); the next request tries the sound again
+            log.info("line sound failed: %s/%d", rp_id, idx)
         return self.get_line(rp_id, idx)[1]
 
     def recording(self, rp_id: str, idx: int, n: int) -> Path:
@@ -417,7 +422,9 @@ class Engine:
             lines.append({"line": l.model_dump(mode="json"), "tries": [
                 {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
                  "issues": [{"target": i.target, "heard": i.heard} for i in a.issues],
-                 "point_ko": "" if a.followed else a.say_ko} for a in tries]})
+                 # Ryan's one point for a roleplay turn said differently; a retry said differently only asked
+                 # to follow the line, which is not a point (final review)
+                 "point_ko": a.say_ko if a.mode == "turn" and not a.followed else ""} for a in tries]})
         return {"say": self.said("closing_retry" if issues_left else "closing_clean").model_dump(), "lines": lines}
 
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:

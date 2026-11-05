@@ -59,3 +59,12 @@ async def test_offscript_try_carries_ryans_point(engine_with_rp, speech_bytes, f
 async def test_line_without_attempts_has_no_tries(engine_with_rp):
     engine, rp_id, user_idx = engine_with_rp
     assert tries(engine.summary(rp_id), user_idx) == []
+
+
+async def test_retry_said_differently_has_no_point(engine_with_rp, speech_bytes, fake_whisper):
+    # final review: a retry said differently only gets 「대사를 그대로 따라 말해 볼까요?」; that is not a point
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "I have no idea at all."
+    await run(engine, rp_id, user_idx, speech_bytes, "retry")
+    [t] = tries(engine.summary(rp_id), user_idx)
+    assert t["followed"] is False and t["point_ko"] == ""
