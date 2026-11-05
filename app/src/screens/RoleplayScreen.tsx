@@ -31,8 +31,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const rec = useRecorder();
   const line = state.line;
   const shadow = state.mode === "shadow";
-  const gate = useRef(createGate()).current; // one start or stop (and its upload) at a time
-  const mounted = useRef(true); // false once the learner leaves: set by leave() at once, and on unmount
+  // one start or stop at a time; the recording is sent and the answer read outside it (`stopThenSend`)
+  const gate = useRef(createGate()).current;
+  // false once this screen goes away: set by leave() at once when it leaves the screen (`leavesScreen`), and on
+  // unmount. Back from a line practised mid-roleplay keeps the screen, so it stays true there; `epoch` covers that.
+  const mounted = useRef(true);
   // Bumped by every leave(). Back from a line practised mid-roleplay stays on this screen, so `mounted` stays true;
   // a start, stop or stream that began before the leave sees the number change and drops itself (spec 9).
   const epoch = useRef(0);
@@ -102,8 +105,9 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
 
   // Leaving (back or 「처음으로」): sounds stop, a recording in progress is deleted without being sent, and a
-  // stream still answering is dropped by `epoch` (and by `mounted` when the screen goes away). There is no resume
-  // yet, so leaving a roleplay in progress asks first; a practice has nothing to lose (`askFirst`).
+  // stream still answering is dropped by `epoch` (and by `mounted` when the screen goes away). A roleplay cannot
+  // be picked up again later yet (이어 하기), so leaving one in progress asks first; a practice has nothing to lose
+  // (`askFirst`).
   async function leave(a: "back" | "home") {
     // set before anything is awaited: a stop or start still finishing sees it (PR #13 review)
     epoch.current += 1;
