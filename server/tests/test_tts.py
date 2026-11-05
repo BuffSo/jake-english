@@ -83,3 +83,15 @@ async def test_key_changes_with_speaking_rate():
     from je_server import tts
 
     assert audio_key("ryan", "korean", "안녕") != tts.hashlib.sha256("ryan|korean|안녕".encode()).hexdigest()
+
+
+async def test_same_slow_copy_made_twice_at_once(voice, tmp_path):
+    # PR #12 review: two requests for an uncached 0.8x copy shared one temp file; one got FileNotFoundError
+    import shutil
+
+    from audiotools import make_m4a
+
+    key = audio_key("ryan", "english", "Slow down.")
+    shutil.copy(make_m4a(tmp_path, "sine=f=220:r=24000", 2), voice.path(key))
+    paths = await asyncio.gather(*[voice.rate_file(key, 0.8) for _ in range(3)])
+    assert len(set(paths)) == 1 and paths[0].exists() and paths[0].stat().st_size > 0

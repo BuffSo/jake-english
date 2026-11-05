@@ -42,6 +42,7 @@ class Voice:
         self.seq = itertools.count()
         self.ids = itertools.count(1)
         self.consumer: asyncio.Task | None = None
+        self.rating: dict[str, asyncio.Future] = {}
 
     def path(self, key: str) -> Path:
         return self.audio_dir / f"{key}.m4a"
@@ -109,16 +110,27 @@ class Voice:
         os.replace(tmp, self.path(key))
 
     async def rate_file(self, key: str, rate: float) -> Path:
+        """A 0.6x/0.8x copy, made once. Requests for the same copy at the same time share one ffmpeg run
+        (PR #12 review: they shared one temp file and the second os.replace failed)."""
         if rate not in RATES:
             raise ValueError("rate")
         if rate == 1.0:
             return self.path(key)
         out = self.audio_dir / f"{key}@{rate}.m4a"
-        if not out.exists():
-            tmp = self.tmp_dir / out.name
-            await with_rate(self.path(key), rate, tmp)
-            os.replace(tmp, out)
+        if out.exists():
+            return out
+        job = self.rating.get(out.name)
+        if job is None:
+            job = asyncio.ensure_future(self._make_rate(key, rate, out))
+            self.rating[out.name] = job
+            job.add_done_callback(lambda _: self.rating.pop(out.name, None))
+        await asyncio.shield(job)
         return out
+
+    async def _make_rate(self, key: str, rate: float, out: Path) -> None:
+        tmp = self.tmp_dir / f"{out.stem}-{next(self.ids)}.m4a"
+        await with_rate(self.path(key), rate, tmp)
+        os.replace(tmp, out)
 
     async def stop(self) -> None:
         if self.consumer:
