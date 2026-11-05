@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Image, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../api";
-import type { Home, Roleplay } from "../api/types";
+import type { Home, Roleplay, Said } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate } from "../flow/gate";
@@ -12,7 +12,7 @@ import { Button } from "../ui/Button";
 import { colors } from "../ui/theme";
 import { messageOf, styles as common, Waiting } from "./common";
 
-type Props = { sounds: SoundQueue; home: Home; onCreated: (rp: Roleplay) => void; onBack: () => void };
+type Props = { sounds: SoundQueue; home: Home; onCreated: (rp: Roleplay, jake: Said | null) => void; onBack: () => void };
 type Step = "input" | "askRecommend" | "working";
 
 const WANTS_RECOMMEND = /모르겠|추천/;
@@ -31,13 +31,13 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     sounds.enqueue(api.audioSource(home.lines.ask_situation.audio));
   }, [sounds, home]);
 
-  async function create(situation: string) {
+  async function create(situation: string, jakeSaid: Said | null = null) {
     setStep("working");
     setStatus("라이언이 대본을 만들고 있어요");
     setError(null);
     try {
       // the script is made while Jake (or Ryan) is still talking; the roleplay screen opens after they finish
-      onCreated(await whenSilent(sounds, api.createRoleplay(situation)));
+      onCreated(await whenSilent(sounds, api.createRoleplay(situation)), jakeSaid);
     } catch (e) {
       setError(messageOf(e));
       setStep("input");
@@ -59,7 +59,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
       setJake(said.text);
       sounds.clear();
       sounds.enqueue(api.audioSource(said.audio)); // Jake asks for it, the way the learner would
-      await create(said.text);
+      await create(said.text, said);
     } catch (e) {
       setError(messageOf(e));
       setStep("input");

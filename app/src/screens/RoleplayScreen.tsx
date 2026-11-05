@@ -8,7 +8,7 @@ import type { AttemptEvent, ThreeLine } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate } from "../flow/gate";
-import type { Action, State } from "../flow/state";
+import { canReplay, type Action, type State } from "../flow/state";
 import { Button } from "../ui/Button";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { colors, top } from "../ui/theme";
@@ -85,6 +85,12 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     setRate(r);
     sounds.clear();
     sounds.enqueue(api.audioSource(line.audio, r));
+  }
+
+  function replayJake() {
+    if (!state.jake || !canReplay(state.phase)) return;
+    sounds.clear();
+    sounds.enqueue(api.audioSource(state.jake.audio));
   }
 
   async function toggleThree(idx: number) {
@@ -172,6 +178,12 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         </Text>
       </View>
       <ScrollView ref={scroll} contentContainerStyle={styles.scroll}>
+        {state.jake && (
+          <Pressable onPress={replayJake} style={[styles.bubble, styles.user]}>
+            <Text style={styles.plainText}>제이크: {state.jake.text}</Text>
+            <Text style={styles.hint}>눌러서 다시 듣기</Text>
+          </Pressable>
+        )}
         {state.history.map((b, i) =>
           b.kind === "ryan" ? (
             <RyanBubble key={i} idx={b.idx} text={b.text} />

@@ -1,6 +1,6 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Roleplay, ScriptLine } from "../api/types";
-import { initial, reduce, type State } from "./state";
+import { canReplay, initial, reduce, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -129,4 +129,27 @@ test("a late failure after leaving the roleplay is ignored", () => {
   expect(reduce(home, { type: "failed", code: "offline" })).toBe(home);
   const ready = at("ready");
   expect(reduce(ready, { type: "failed", code: "offline" })).toBe(ready);
+});
+
+const jake = { text: "카페에서 주문하는 상황으로 연습하고 싶어.", audio: "a".repeat(64) };
+
+test("Jake's recommended situation stays with the roleplay", () => {
+  // 2026-11-05 on the phone: after Ryan's first line the user wanted to hear Jake's line again
+  let s = reduce(reduce(initial, { type: "chooseRoleplay" }), { type: "created", roleplay: rp, jake });
+  expect(s.jake).toEqual(jake);
+  s = reduce(reduce(s, { type: "lineLoaded", line: ryanLine }), { type: "ryanDone" });
+  s = reduce(s, { type: "lineMissing" });
+  expect(s.jake).toEqual(jake);
+  expect(reduce(s, { type: "home" }).jake).toBeNull();
+});
+
+test("a typed situation has no Jake line", () => {
+  expect(reduce(reduce(initial, { type: "chooseRoleplay" }), { type: "created", roleplay: rp }).jake).toBeNull();
+});
+
+test("Jake's line can be played again only while nothing else is going on", () => {
+  // clearing the queue in Ryan's turn would drop the callback that moves the roleplay on
+  expect(canReplay("ready")).toBe(true);
+  expect(canReplay("evaluated")).toBe(true);
+  for (const p of ["loading", "ryan", "recording", "evaluating", "error"] as const) expect(canReplay(p)).toBe(false);
 });
