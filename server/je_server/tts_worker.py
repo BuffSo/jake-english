@@ -33,6 +33,13 @@ def sentences(part: str) -> list[str]:
     return [s for s in re.split(r"(?<=[.?!。])\s+", part.strip()) if s]
 
 
+def split_parts(chunks: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Korean chunks one sentence at a time, so their short pause cap keeps the pause between sentences. English
+    chunks stay whole: the model lines did not change (final review: 「Mr. Smith」, 「3 p.m.」 would have been
+    broken up, and their sound keys were kept)."""
+    return [(s, lang) for chunk, lang in chunks for s in (sentences(chunk) if lang == "korean" else [chunk])]
+
+
 def pause_cap(lang: str) -> float:
     return KOREAN_PAUSE_CAP if lang == "korean" else MODULE_PAUSE_CAP
 
@@ -58,9 +65,8 @@ def main() -> None:
         player.ensure_model(conf["model"])
         pieces, sr = [], 24000
         # Korean speech may quote English, so let the module split by language; script lines stay English.
-        # Then one sentence at a time, so cutting pauses inside a sentence keeps the pause between sentences.
-        parts = [(s, plang) for chunk, plang in srv.lang_chunks(text, "english" if lang == "english" else "auto")
-                 for s in sentences(chunk)]
+        # Then Korean one sentence at a time, so cutting pauses inside a sentence keeps the pause between them.
+        parts = split_parts(srv.lang_chunks(text, "english" if lang == "english" else "auto"))
         for part, plang in parts:
             audio, sr = player.make(conf, part, plang)
             if conf["model"] == "base":

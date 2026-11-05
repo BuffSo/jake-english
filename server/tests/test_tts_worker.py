@@ -16,3 +16,13 @@ def test_korean_pauses_inside_a_sentence_are_short():
     # broken up. English model lines keep the module's cap.
     assert tts_worker.pause_cap("korean") <= 0.15
     assert tts_worker.pause_cap("english") == 0.75
+
+
+def test_only_korean_is_split_into_sentences():
+    # final review: English model lines must stay as they were made (one piece, no 0.6 s gap at "Mr." or
+    # between sentences), and their sound keys did not change
+    chunks = [("Sure. What size would you like?", "english"), ("Ask Mr. Smith at 3 p.m. today.", "english"),
+              ("좋아요. 다음으로 가요.", "korean")]
+    assert tts_worker.split_parts(chunks) == [
+        ("Sure. What size would you like?", "english"), ("Ask Mr. Smith at 3 p.m. today.", "english"),
+        ("좋아요.", "korean"), ("다음으로 가요.", "korean")]
