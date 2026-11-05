@@ -8,13 +8,12 @@ import time
 from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 from . import audio
 from .claude import ClaudeUnavailable
 from . import sounds
 from .compare import FOLLOW_MIN, find_issues, praise_candidates, similarity, sound_pairs, words
-from .models import Attempt, Draft, Issue, Roleplay, Said, ScriptLine, ThreeLine
+from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, ScriptLine, ThreeLine
 from .sentences import SentenceBuffer
 from .tts import VoiceError
 from .phrases import PHRASES
@@ -169,20 +168,22 @@ class Engine:
 
     # --- a turn: the learner's recording ------------------------------------------------------
 
-    def user_line(self, rp_id: str, idx: int) -> ScriptLine:
+    def target_line(self, rp_id: str, idx: int, mode: Mode) -> ScriptLine:
+        """The line a recording is said against: Ryan's for shadow practice, the learner's for the rest."""
         _, line = self.get_line(rp_id, idx)
-        if line.speaker != "user":
+        if line.speaker != ("ryan" if mode == "shadow" else "user"):
             raise NotFound(f"{rp_id}/{idx}")
         return line
 
     def error(self, code: str, phrase: str | None = None) -> dict:
         return {"type": "error", "code": code, "say": self.said(phrase or code).model_dump()}
 
-    async def attempt(self, rp_id: str, idx: int, body: bytes,
-                      mode: Literal["turn", "retry"]) -> AsyncIterator[dict]:
+    async def attempt(self, rp_id: str, idx: int, body: bytes, mode: Mode) -> AsyncIterator[dict]:
+        """Only a roleplay turn said differently gets Ryan's reply and a new rest of the script; the other modes
+        ask to follow the line and leave the script and the position alone."""
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
-        line = self.user_line(rp_id, idx)
+        line = self.target_line(rp_id, idx, mode)
         n, rec = self.store.next_rec(rp_id, idx)
         rec.write_bytes(body)  # kept on the Mac (spec 「녹음과 기록」)
         wav = self.store.tmp_dir / f"{rp_id}-{idx}-{n}.wav"
@@ -218,7 +219,7 @@ class Engine:
             issues = find_issues(line.text, heard, limit=2)
             text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard), issues)
             nxt = idx + 1 if mode == "turn" else idx
-        elif mode == "retry":
+        elif mode != "turn":
             text = _one(self.said("retry_offscript").text)
             nxt = idx
         else:

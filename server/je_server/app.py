@@ -12,7 +12,6 @@ from fastapi import Path as PathParam
 from fastapi import Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +19,7 @@ from .auth import RequestGuard, token_checker
 from .claude import ClaudeUnavailable
 from .config import Settings
 from .engine import Engine, NotFound, TooLong
+from .models import Mode
 
 log = logging.getLogger("je_server")
 MAX_UPLOAD = 5 * 1024 * 1024
@@ -184,10 +184,10 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
 
     @router.post("/roleplays/{rp_id}/lines/{idx}/attempts")
     async def attempt(request: Request, rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0),
-                      mode: Literal["turn", "retry"] = Query("turn")):
+                      mode: Mode = Query("turn")):
         body = await read_body(request)
         try:
-            engine().user_line(rp_id, idx)
+            engine().target_line(rp_id, idx, mode)
         except NotFound:
             raise ApiError(404, "not_found") from None
 

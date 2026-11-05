@@ -56,9 +56,14 @@ class Issue(BaseModel):
     explain: str
 
 
+# turn: the roleplay's first try at a line; retry: 「다시 해 보기」 inside the roleplay; practice: the learner's lines
+# again after the roleplay (spec roleplay-practice 4); shadow: following Ryan's lines after the roleplay (5)
+Mode = Literal["turn", "retry", "practice", "shadow"]
+
+
 class Attempt(BaseModel):
     n: int
-    mode: Literal["turn", "retry"]
+    mode: Mode
     heard: str
     followed: bool
     issues: list[Issue]

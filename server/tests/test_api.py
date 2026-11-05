@@ -98,3 +98,12 @@ def test_bad_content_length_is_400(client):
     r = client.post("/roleplays", content=b"{}", headers={"Content-Type": "application/json",
                                                            "Content-Length": "abc"})
     assert r.status_code == 400
+
+
+def test_attempt_route_modes(client, speech_bytes):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    client.get(f"/roleplays/{rp['id']}/lines/0")
+    ok = client.post(f"/roleplays/{rp['id']}/lines/0/attempts?mode=shadow", content=speech_bytes)
+    assert ok.status_code == 200 and ok.text.strip().splitlines()
+    assert client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=shadow", content=speech_bytes).status_code == 404
+    assert client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=bogus", content=speech_bytes).status_code == 422
