@@ -69,3 +69,17 @@ async def test_prepared_jobs_go_in_rank_order(voice, tmp_path):
     await asyncio.gather(*jobs)
     # all four are queued before the worker takes one, so it takes them by rank
     assert calls(tmp_path) == ["rank 1", "rank 3", "rank 5", "rank 9"]
+
+
+async def test_korean_is_spoken_faster_english_is_not(voice, tmp_path):
+    # 2026-11-05 the greeting sounded drawn out at 1x; the reply reader plays Korean at 1.3x
+    await voice.say("안녕하세요.", "ryan", "korean", urgent=True)
+    await voice.say("Hello.", "ryan", "english", urgent=True)
+    rates = (tmp_path / ".tmp" / "rates.txt").read_text(encoding="utf-8").splitlines()
+    assert rates == ["korean 1.3", "english 1.0"]
+
+
+async def test_key_changes_with_speaking_rate():
+    from je_server import tts
+
+    assert audio_key("ryan", "korean", "안녕") != tts.hashlib.sha256("ryan|korean|안녕".encode()).hexdigest()

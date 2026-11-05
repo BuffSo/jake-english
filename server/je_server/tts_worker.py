@@ -6,7 +6,8 @@ It loads that module the way the existing render script does and repeats its ste
 voice-likeness check with retries, optional pitch matching, even pauses, then WAV -> AAC (afconvert).
 Protocol, one JSON object per line:
     -> {"ready": true}
-    <- {"id": 1, "text": "...", "voice": "ryan" | "jake", "lang": "english" | "korean", "out": "/abs/x.m4a"}
+    <- {"id": 1, "text": "...", "voice": "ryan" | "jake", "lang": "english" | "korean", "rate": 1.3,
+        "out": "/abs/x.m4a"}
     -> {"id": 1, "ok": true, "seconds": 1.8}  or  {"id": 1, "ok": false, "error": "TypeName"}
 Library output goes to stderr so stdout carries only the protocol. Texts are not logged.
 """
@@ -35,7 +36,7 @@ def main() -> None:
     kind = srv.voice_conf("ryan")["model"]
     player = srv.Player(load_model(srv.MODELS[kind]), kind)  # its queue threads stay idle
 
-    def render(text: str, voice: str, lang: str, out: str) -> float:
+    def render(text: str, voice: str, lang: str, out: str, rate: float = 1.0) -> float:
         conf = srv.voice_conf(voice)
         player.ensure_model(conf["model"])
         pieces, sr = [], 24000
@@ -67,11 +68,16 @@ def main() -> None:
                 w.setsampwidth(2)
                 w.setframerate(sr)
                 w.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
+            if abs(rate - 1.0) > 1e-6:  # speed only, pitch kept (ffmpeg atempo), as the render script does
+                fast = wav + ".rate.wav"
+                subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", wav, "-filter:a", f"atempo={rate}", fast],
+                               check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                os.replace(fast, wav)
             subprocess.run(["afconvert", "-f", "m4af", "-d", "aac", wav, out], check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         finally:
             os.remove(wav)
-        return len(audio) / sr
+        return len(audio) / sr / rate
 
     warm = tempfile.mkstemp(suffix=".m4a")[1]
     try:
@@ -83,7 +89,7 @@ def main() -> None:
     for line in sys.stdin:
         req = json.loads(line)
         try:
-            secs = render(req["text"], req["voice"], req["lang"], req["out"])
+            secs = render(req["text"], req["voice"], req["lang"], req["out"], float(req.get("rate", 1.0)))
             proto.write(json.dumps({"id": req["id"], "ok": True, "seconds": round(secs, 2)}) + "\n")
         except Exception as e:  # noqa: BLE001 - report the type only, never the text
             proto.write(json.dumps({"id": req["id"], "ok": False, "error": type(e).__name__}) + "\n")
