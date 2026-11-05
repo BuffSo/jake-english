@@ -28,6 +28,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const rec = useRecorder();
   const line = state.line;
+  const shadow = state.mode === "shadow";
   const gate = useRef(createGate()).current; // one start or stop (and its upload) at a time
   const mounted = useRef(true); // false once the learner leaves: set by leave() at once, and on unmount
 
@@ -45,7 +46,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     let alive = true;
     api
       .getLine(rp.id, state.idx)
-      .then((l) => alive && dispatch({ type: "lineLoaded", line: l }))
+      .then((l) => alive && dispatch({ type: "lineLoaded", line: l, progress: l.progress }))
       .catch((e) => {
         if (!alive) return;
         if (e instanceof ApiError && e.code === "not_found") dispatch({ type: "lineMissing" });
@@ -70,12 +71,17 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       }
     }
     const key = `${line.idx}:${state.mode}`;
-    if (state.phase === "ready" && line.speaker === "user" && line.audio && !played.current.has(key)) {
+    if (state.phase === "ready" && (line.speaker === "user" || shadow) && line.audio && !played.current.has(key)) {
       played.current.add(key);
       sounds.clear();
       sounds.enqueue(api.audioSource(line.audio, rate));
     }
   }, [line, state.phase, state.mode, sounds, dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ryan's lines get their three-line notes only when asked; the end screen starts making them (spec 5)
+  useEffect(() => {
+    if (shadow && line && !line.three && state.phase === "ready" && !threes[line.idx]) fetchThree(line.idx);
+  }, [shadow, line, state.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
@@ -90,7 +96,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
 
   // Leaving (back or 「처음으로」): sounds stop, a recording in progress is deleted without being sent, and a
   // stream still answering is dropped by `mounted`. There is no resume yet, so a roleplay in progress asks
-  // first; a line retried from the end screen has nothing to lose.
+  // first; a practice from the end screen has nothing to lose.
   async function leave(a: "back" | "home") {
     // set before anything is awaited: a stop or start still finishing sees it (PR #13 review)
     mounted.current = false;
@@ -119,21 +125,33 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     sounds.enqueue(api.audioSource(state.jake.audio));
   }
 
-  async function toggleThree(idx: number) {
-    if (open[idx]) return setOpen({ ...open, [idx]: false });
-    setOpen({ ...open, [idx]: true });
-    if (threes[idx]) return;
+  async function fetchThree(idx: number): Promise<boolean> {
     setThrees((t) => ({ ...t, [idx]: "loading" }));
     try {
       const three = await api.getThree(rp.id, idx);
       setThrees((t) => ({ ...t, [idx]: three }));
+      return true;
     } catch {
       setThrees((t) => {
         const { [idx]: _, ...rest } = t;
         return rest;
       });
-      setOpen((o) => ({ ...o, [idx]: false }));
+      return false;
     }
+  }
+
+  async function toggleThree(idx: number) {
+    if (open[idx]) return setOpen({ ...open, [idx]: false });
+    setOpen({ ...open, [idx]: true });
+    if (threes[idx]) return;
+    if (!(await fetchThree(idx))) setOpen((o) => ({ ...o, [idx]: false }));
+  }
+
+  // the Ryan line before a practised line of mine, to know what it answers (spec 4)
+  function playBefore(audio: string | null) {
+    if (!audio || !canReplay(state.phase)) return;
+    sounds.clear();
+    sounds.enqueue(api.audioSource(audio));
   }
 
   const startRecording = () => gate.run(doStart);
@@ -203,19 +221,35 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
 
   const busy = state.phase === "evaluating";
-  const userTurn = line?.speaker === "user" && ["ready", "recording", "evaluating", "evaluated", "error"].includes(state.phase);
+  // the learner's turn: a line of mine, or Ryan's line to follow in shadow practice
+  const myTurn =
+    (line?.speaker === "user" || shadow) && ["ready", "recording", "evaluating", "evaluated", "error"].includes(state.phase);
+  const practice = state.practice;
+  const title = practice ? (practice.kind === "mine" ? "내 대사 다시 연습" : "라이언 대사 따라 말하기") : rp.frame.title_ko;
+  const count = practice
+    ? `${practice.at + 1}/${practice.order.length}`
+    : state.progress && state.progress.total > 0
+      ? `내 대사 ${state.progress.no}/${state.progress.total}`
+      : null;
+  const shadowThree = shadow && line ? (line.three ?? threes[line.idx]) : undefined;
+  const before = practice?.kind === "mine" && line ? state.seen[line.idx - 1] : undefined;
 
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
         <BackButton onPress={() => askLeave("back")} />
-        <Text style={common.title}>{rp.frame.title_ko}</Text>
+        <View style={styles.titleRow}>
+          <Text style={[common.title, styles.titleText]}>{title}</Text>
+          {count && <Text style={styles.count}>{count}</Text>}
+        </View>
         <Text style={common.sub}>
-          나: {rp.frame.user_role_ko} · 라이언: {rp.frame.ryan_role_ko} · {rp.frame.place_ko}
+          {practice
+            ? rp.frame.title_ko
+            : `나: ${rp.frame.user_role_ko} · 라이언: ${rp.frame.ryan_role_ko} · ${rp.frame.place_ko}`}
         </Text>
       </View>
       <ScrollView ref={scroll} contentContainerStyle={styles.scroll}>
-        {state.jake && (
+        {state.jake && !practice && (
           <Pressable onPress={replayJake} style={[styles.bubble, styles.user]}>
             <Text style={styles.plainText}>제이크: {state.jake.text}</Text>
             <Text style={styles.hint}>눌러서 다시 듣기</Text>
@@ -224,15 +258,30 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {state.history.map((b, i) =>
           b.kind === "ryan" ? (
             <RyanBubble key={i} idx={b.idx} text={b.text} />
+          ) : b.kind === "user" && b.script ? (
+            <View key={i} style={[styles.bubble, styles.user]}>
+              <Text style={styles.label}>대본</Text>
+              <Text style={styles.plainText}>{b.script}</Text>
+              <Text style={[styles.label, styles.gap]}>들린 말</Text>
+              <Text style={styles.plainText}>{b.text}</Text>
+            </View>
           ) : (
             <View key={i} style={[styles.bubble, b.kind === "user" ? styles.user : styles.feedback]}>
               <Text style={styles.plainText}>{b.text}</Text>
             </View>
           ),
         )}
-        {state.phase === "loading" && <Waiting text="다음 대사를 준비하고 있어요" />}
+        {state.phase === "loading" && <Waiting text={practice ? "대사를 준비하고 있어요" : "다음 대사를 준비하고 있어요"} />}
         {state.phase === "ryan" && line && <RyanBubble idx={line.idx} text={line.text} />}
-        {userTurn && line?.three && <ThreeLineView three={line.three} />}
+        {myTurn && before?.speaker === "ryan" && (
+          <Pressable onPress={() => playBefore(before.audio)} style={styles.before}>
+            <Text style={styles.beforeText}>라이언: {before.text}</Text>
+          </Pressable>
+        )}
+        {myTurn && shadow && line && <Text style={styles.bigText}>{line.text}</Text>}
+        {myTurn && shadow && shadowThree === "loading" && <Text style={common.sub}>세 줄을 만들고 있어요…</Text>}
+        {myTurn && shadowThree && shadowThree !== "loading" && <ThreeLineView three={shadowThree} />}
+        {myTurn && !shadow && line?.three && <ThreeLineView three={line.three} />}
         {state.heard && <Text style={styles.heard}>들린 말: {state.heard}</Text>}
         {state.feedback !== "" && (
           <View style={[styles.bubble, styles.feedback]}>
@@ -245,7 +294,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       </ScrollView>
 
       <View style={styles.controls}>
-        {userTurn && state.phase !== "error" && (
+        {myTurn && state.phase !== "error" && (
           <>
             <View style={styles.row}>
               <Button label="다시 듣기" onPress={() => listen()} kind="plain" small disabled={busy || state.phase === "recording"} />
@@ -262,7 +311,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </View>
             {state.phase !== "evaluated" && (
               <Button
-                label={state.phase === "recording" ? "■ 말하기 끝" : busy ? "평가하고 있어요" : "🎤 말하기"}
+                label={state.phase === "recording" ? "■ 말하기 끝" : busy ? "평가하고 있어요" : shadow ? "🎤 따라 말하기" : "🎤 말하기"}
                 onPress={state.phase === "recording" ? stopRecording : startRecording}
                 disabled={busy}
               />
@@ -285,6 +334,14 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: colors.bg, paddingTop: top },
   header: { paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#E9ECEF" },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  titleText: { flexShrink: 1 },
+  count: { fontSize: 14, fontWeight: "700", color: colors.text, backgroundColor: colors.strong, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  label: { fontSize: 12, color: colors.sub },
+  gap: { marginTop: 6 },
+  bigText: { fontSize: 22, color: colors.text, lineHeight: 30, marginBottom: 8 },
+  before: { alignSelf: "flex-start", marginBottom: 8 },
+  beforeText: { fontSize: 15, color: colors.sub },
   scroll: { padding: 16, paddingBottom: 32 },
   bubble: { borderRadius: 14, padding: 12, marginVertical: 5, maxWidth: "92%" },
   ryan: { backgroundColor: colors.ryan, alignSelf: "flex-start" },
