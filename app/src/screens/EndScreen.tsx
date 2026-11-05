@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { api } from "../api";
 import type { Summary, TranscriptLine, Try } from "../api/types";
 import type { SoundQueue } from "../audio/player";
+import { createGate } from "../flow/gate";
 import type { Action, State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
@@ -23,6 +24,9 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   const id = rp.id;
   const said = useRef(state.closingPlayed); // the closing words are said once, not again after each practice
   const mounted = useRef(true);
+  // one copy at a time: `copying` is the render's value, so two taps before the next render would both pass it
+  // (PR #15 review); the gate is checked at the tap itself, like the recording buttons (PR #13)
+  const gate = useRef(createGate()).current;
 
   useEffect(() => {
     mounted.current = true;
@@ -56,6 +60,12 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   }
   useBackKey(back);
 
+  // 「처음으로」 stops what is playing too, like every other button here (PR #15 review)
+  function home() {
+    sounds.clear();
+    dispatch({ type: "home" });
+  }
+
   function play(src: Source) {
     sounds.clear();
     sounds.enqueue(src);
@@ -66,8 +76,9 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
     dispatch({ type: "startPractice", kind, order });
   }
 
-  async function restart() {
-    if (copying) return; // a second tap must not make a second roleplay
+  const restart = () => gate.run(doRestart);
+
+  async function doRestart() {
     setCopying(true);
     setError(null);
     sounds.clear();
@@ -111,7 +122,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
             <Button label={copying ? "준비하고 있어요" : "같은 대본으로 처음부터"} onPress={restart} kind="plain" disabled={copying} />
           </>
         )}
-        <Button label="처음으로" onPress={() => dispatch({ type: "home" })} kind="plain" small />
+        <Button label="처음으로" onPress={home} kind="plain" small />
       </View>
     </View>
   );
