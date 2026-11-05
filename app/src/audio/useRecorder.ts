@@ -2,29 +2,33 @@
 import { RecordingPresets, requestRecordingPermissionsAsync, useAudioRecorder } from "expo-audio";
 import { useRef, useState } from "react";
 
-const MAX_MS = 60_000; // the server takes up to 60 seconds
+import { RECORD_LIMIT_MS } from "../config";
 
 export function useRecorder() {
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1 });
   const [recording, setRecording] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // read through a ref: the auto-stop callback was created when recording started and sees old state
+  const active = useRef(false);
 
   async function start(onAutoStop: () => void): Promise<void> {
     const perm = await requestRecordingPermissionsAsync();
     if (!perm.granted) throw new Error("mic");
     await recorder.prepareToRecordAsync();
     recorder.record();
+    active.current = true;
     setRecording(true);
-    timer.current = setTimeout(onAutoStop, MAX_MS);
+    timer.current = setTimeout(onAutoStop, RECORD_LIMIT_MS);
   }
 
   async function stop(): Promise<string> {
     clearTimeout(timer.current);
+    active.current = false;
     await recorder.stop();
     setRecording(false);
     if (!recorder.uri) throw new Error("no recording");
     return recorder.uri;
   }
 
-  return { start, stop, recording };
+  return { start, stop, recording, isRecording: () => active.current };
 }

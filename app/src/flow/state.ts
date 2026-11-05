@@ -131,6 +131,8 @@ export function reduce(s: State, a: Action): State {
       return s;
     }
     case "failed":
+      // only a request this screen is waiting for can fail it; a stream left behind by 「처음으로」 cannot
+      if (s.screen !== "roleplay" || (s.phase !== "loading" && s.phase !== "evaluating")) return s;
       return { ...s, phase: "error", message: messageFor(a.code, a.say), errorFrom: s.phase === "loading" ? "loading" : "evaluating" };
     case "retry":
       if (s.phase !== "error") return s;

@@ -7,6 +7,7 @@ import { ApiError } from "../api/client";
 import type { AttemptEvent, ThreeLine } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
+import { createGate } from "../flow/gate";
 import type { Action, State } from "../flow/state";
 import { Button } from "../ui/Button";
 import { ThreeLineView } from "../ui/ThreeLine";
@@ -26,6 +27,16 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const rec = useRecorder();
   const line = state.line;
+  const gate = useRef(createGate()).current; // one start or stop (and its upload) at a time
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      // leaving mid-evaluation: the stream may still answer; its sounds and errors must not reach other screens
+      mounted.current = false;
+    };
+  }, []);
 
   // load the current line (the server waits until its notes and sound are ready)
   useEffect(() => {
@@ -93,7 +104,10 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     }
   }
 
-  async function startRecording() {
+  const startRecording = () => gate.run(doStart);
+  const stopRecording = () => gate.run(doStop);
+
+  async function doStart() {
     if (state.phase !== "ready" && state.phase !== "evaluated") return;
     sounds.clear();
     dispatch({ type: "recordStart" });
@@ -104,7 +118,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     }
   }
 
-  async function stopRecording() {
+  async function doStop() {
+    if (!rec.isRecording()) return; // already stopped (auto-stop and a tap)
     let uri: string;
     try {
       uri = await rec.stop();
@@ -114,6 +129,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     }
     dispatch({ type: "recordStop" });
     const onEvent = (e: AttemptEvent) => {
+      if (!mounted.current) return;
       if (e.type === "audio") sounds.enqueue(api.audioSource(e.key));
       if (e.type === "reply" && e.line.audio) sounds.enqueue(api.audioSource(e.line.audio));
       if (e.type === "error" && e.say?.audio) sounds.enqueue(api.audioSource(e.say.audio));
@@ -122,7 +138,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     try {
       await api.attempt(rp.id, state.idx, uri, state.mode, onEvent);
     } catch (e) {
-      dispatch({ type: "failed", code: codeOf(e), say: e instanceof ApiError ? e.say : undefined });
+      if (mounted.current) dispatch({ type: "failed", code: codeOf(e), say: e instanceof ApiError ? e.say : undefined });
     } finally {
       try {
         new File(uri).delete(); // sent to the Mac; nothing stays on the phone

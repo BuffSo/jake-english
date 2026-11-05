@@ -122,3 +122,11 @@ test("again after an off-script turn keeps Ryan's reply in the conversation", ()
   expect(s.history.filter((b) => b.text === "No worries!")).toHaveLength(1);
   expect(s.history.map((b) => b.text)).toEqual(["I don't know", "No worries!", "I'd like a cup of coffee"]);
 });
+
+test("a late failure after leaving the roleplay is ignored", () => {
+  // PR #12 review: an old attempt stream failing after 「처음으로」 put the next roleplay into the error state
+  const home = reduce(at("evaluating"), { type: "home" });
+  expect(reduce(home, { type: "failed", code: "offline" })).toBe(home);
+  const ready = at("ready");
+  expect(reduce(ready, { type: "failed", code: "offline" })).toBe(ready);
+});

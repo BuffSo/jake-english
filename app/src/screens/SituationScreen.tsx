@@ -1,11 +1,12 @@
 import { File } from "expo-file-system";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../api";
 import type { Home, Roleplay } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
+import { createGate } from "../flow/gate";
 import { Button } from "../ui/Button";
 import { colors } from "../ui/theme";
 import { messageOf, styles as common, Waiting } from "./common";
@@ -22,6 +23,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   const [jake, setJake] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rec = useRecorder();
+  const gate = useRef(createGate()).current; // a double tap or the auto-stop must not send the recording twice
 
   useEffect(() => {
     sounds.clear();
@@ -68,7 +70,10 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     else create(t);
   }
 
-  async function startMic() {
+  const startMic = () => gate.run(doStartMic);
+  const stopMic = () => gate.run(doStopMic);
+
+  async function doStartMic() {
     setError(null);
     sounds.clear();
     try {
@@ -78,7 +83,8 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     }
   }
 
-  async function stopMic() {
+  async function doStopMic() {
+    if (!rec.isRecording()) return; // already stopped (auto-stop and a tap)
     let uri: string | null = null;
     try {
       uri = await rec.stop();
