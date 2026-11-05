@@ -11,6 +11,9 @@ SPEECH_MIN_SECONDS = 0.4
 # 2026-11-05: whisper wrote "you" for 2s of silence and "Okay." for faint noise, so nothing quieter than
 # this (loudest 50 ms window) goes to transcription. Tuned against the test recordings in Task 6.
 SPEECH_MIN_DBFS = -35.0
+# A pocket bump or the tap that ends recording is one loud window; speech is loud for a while. Require this much
+# loud time in total (2026-11-05 final review).
+SPEECH_MIN_LOUD_SECONDS = 0.2  # a short "Sure." stays in; real lines measured ~0.7 s loud each
 
 
 class AudioError(Exception):
@@ -32,24 +35,34 @@ async def to_wav16k(src: Path, dst: Path) -> float:
         return w.getnframes() / w.getframerate()
 
 
-def _loudest_dbfs(path: Path) -> tuple[float, float]:
+WINDOW = 0.05
+
+
+def _window_dbfs(path: Path) -> tuple[list[float], float]:
+    """Loudness (dBFS) of each 50 ms window, and the length in seconds."""
     with wave.open(str(path)) as w:
         rate, width, n = w.getframerate(), w.getsampwidth(), w.getnframes()
         if width != 2 or w.getnchannels() != 1:
             raise AudioError("expected 16-bit mono")
         samples = array("h", w.readframes(n))
-    win = max(int(rate * 0.05), 1)
-    loudest = 0.0
+    win = max(int(rate * WINDOW), 1)
+    out = []
     for start in range(0, len(samples) - win + 1, win):
         chunk = samples[start:start + win]
         rms = math.sqrt(sum(x * x for x in chunk) / win) / 32768
-        loudest = max(loudest, rms)
-    return (20 * math.log10(loudest) if loudest > 0 else -120.0), n / rate
+        out.append(20 * math.log10(rms) if rms > 0 else -120.0)
+    return out, n / rate
+
+
+def _loudest_dbfs(path: Path) -> tuple[float, float]:
+    windows, seconds = _window_dbfs(path)
+    return (max(windows) if windows else -120.0), seconds
 
 
 def _has_speech(wav: Path) -> bool:
-    dbfs, seconds = _loudest_dbfs(wav)
-    return seconds >= SPEECH_MIN_SECONDS and dbfs >= SPEECH_MIN_DBFS
+    windows, seconds = _window_dbfs(wav)
+    loud = sum(1 for d in windows if d >= SPEECH_MIN_DBFS) * WINDOW
+    return seconds >= SPEECH_MIN_SECONDS and loud >= SPEECH_MIN_LOUD_SECONDS
 
 
 async def has_speech(wav: Path) -> bool:

@@ -44,3 +44,9 @@ async def test_rate_keeps_length_ratio(tmp_path):
     src = make_m4a(tmp_path, "sine=f=220:r=24000", 2)
     await audio.with_rate(src, 0.8, tmp_path / "slow.m4a")
     assert 2.4 < duration(tmp_path / "slow.m4a") < 2.6
+
+
+async def test_a_single_click_is_not_speech(tmp_path):
+    # review: a pocket bump or the tap that ends recording passed the peak-only gate, then whisper said "you"
+    click = make_wav(tmp_path, "sine=f=1000:r=16000:duration=0.1,apad", 2)
+    assert not await audio.has_speech(click)
