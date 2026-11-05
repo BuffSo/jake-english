@@ -10,6 +10,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from .claude import QUICKS, WRITERS
+
 SERVER_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = SERVER_DIR.parent
 DEFAULT_DATA_DIR = "~/Library/Application Support/jake-english"
@@ -29,6 +31,15 @@ class Settings:
     port: int = 8787
     whisper_exe: str = "whisper-server"
     whisper_port: int = 8788
+    claude_writer: str = "sonnet"  # a key of claude.WRITERS
+    claude_quick: str = "haiku"  # a key of claude.QUICKS
+
+
+def _model_name(env: Mapping[str, str], key: str, choices: Mapping[str, object], default: str) -> str:
+    name = env.get(key, "").strip().lower() or default
+    if name not in choices:
+        raise ValueError(f"{key} must be one of {', '.join(choices)}, not {name!r}")
+    return name
 
 
 def read_env_file(path: Path) -> dict[str, str]:
@@ -64,4 +75,6 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         port=int(env.get("JE_PORT", "8787")),
         whisper_exe=env.get("JE_WHISPER_SERVER", "whisper-server"),
         whisper_port=int(env.get("JE_WHISPER_PORT", "8788")),
+        claude_writer=_model_name(env, "JE_CLAUDE_WRITER", WRITERS, "sonnet"),
+        claude_quick=_model_name(env, "JE_CLAUDE_QUICK", QUICKS, "haiku"),
     )

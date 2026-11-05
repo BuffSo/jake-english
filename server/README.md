@@ -18,6 +18,19 @@ cp .env.example .env   # 값을 채운다. 경로는 비공개 메모를 본다
 uv run python -m je_server
 ```
 
+## Claude 모델 고르기
+
+`server/.env`의 두 줄로 모델을 고른다. 비우면 기본값이고, 바꾸면 서버를 다시 띄운다.
+
+| 항목 | 맡는 일 | 값 | 기본 |
+|---|---|---|---|
+| `JE_CLAUDE_WRITER` | 대본, 세 줄 설명, 대본 밖 말에 대답, 대본 이어 가기 | `haiku`, `sonnet`, `opus` | `sonnet` |
+| `JE_CLAUDE_QUICK` | 녹음 평가 글, 상황 추천 | `haiku`, `sonnet` | `haiku` |
+
+- 모델만 바뀌고 설정은 그대로다. 글쓰기는 생각하는 단계를 끄고 effort low, 짧은 말은 생각하는 단계를 끈다. Opus는 생각하는 단계를 끌 수 없어 켠 채 effort low로 쓴다.
+- 없는 값이면 서버가 시작할 때 `JE_CLAUDE_WRITER must be one of haiku, sonnet, opus, not '…'` 오류로 멈춘다.
+- 서버 로그에 `claude models: writer …, quick …` 줄로 고른 모델이 찍힌다.
+
 ## 시험
 
 ```sh
