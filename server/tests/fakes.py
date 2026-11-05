@@ -133,6 +133,7 @@ class FakeClaude:
         self.offscript_out = Offscript(point_kind="expression", point_ko="이럴 때는 I'm not sure처럼 말해도 좋아요.",
                                        meant="", heard_word="", reply_en="Oh, no worries. Thanks anyway!")
         self.fail_continue = False
+        self.continue_gate = None  # an asyncio.Event to hold continue_script until set
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -169,7 +170,9 @@ class FakeClaude:
         return self.offscript_out
 
     async def continue_script(self, frame, history, user_turns):
-        self.calls.append(("continue_script", (user_turns,)))
+        self.calls.append(("continue_script", (user_turns, list(history))))
+        if self.continue_gate is not None:
+            await self.continue_gate.wait()
         if self.fail_continue:
             raise ClaudeUnavailable("fake")
         draft = []

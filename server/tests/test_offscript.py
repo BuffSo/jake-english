@@ -101,3 +101,45 @@ async def test_claude_down_on_offscript_keeps_script(engine_with_rp, speech_byte
     fake_claude.fail_next = True
     ev = await run(engine, rp_id, user_idx, speech_bytes)
     assert ev[-1]["code"] == "claude_unavailable" and engine.store.load(rp_id).lines == before
+
+
+async def test_second_off_script_answer_replaces_the_first_rebuild(engine_with_rp, speech_bytes, fake_whisper,
+                                                                    fake_claude):
+    # PR #12 review: the app gave up during the first rebuild, the learner retried and was off-script again;
+    # the first rebuild was not cancelled and no new one started (`left` was 0)
+    import asyncio
+
+    engine, rp_id, user_idx = engine_with_rp
+    fake_claude.continue_gate = asyncio.Event()
+    fake_whisper.text = "Sorry, I don't know this area."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    fake_claude.offscript_out = Offscript(point_kind="none", point_ko="", meant="", heard_word="",
+                                          reply_en="Oh, then I'll ask someone else.")
+    fake_whisper.text = "I'm new here myself, sorry."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    fake_claude.continue_gate.set()
+    nxt = await engine.line(rp_id, user_idx + 2)
+    rp = engine.store.load(rp_id)
+    assert rp.lines[user_idx + 1].text == "Oh, then I'll ask someone else."
+    assert sum(1 for l in rp.lines[user_idx + 2:] if l.speaker == "user") == 2
+    assert nxt.speaker == "user" and [l.idx for l in rp.lines] == list(range(len(rp.lines)))
+    rebuilds = [args for name, args in fake_claude.calls if name == "continue_script"]
+    assert len(rebuilds) == 2 and rebuilds[-1][0] == 2
+    assert rebuilds[-1][1][-1] == ("ryan", "Oh, then I'll ask someone else.")  # the kept rebuild follows reply 2
+
+
+async def test_rebuild_starts_before_the_reply_sound(engine_with_rp, speech_bytes, fake_whisper, fake_voice):
+    # spec: 「라이언이 대답하는 동안 다음 사용자 대사의 세 줄과 본보기를 먼저 만들고, 나머지는 뒤에서 만든다.」
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Sorry, I don't know this area."
+    seen = {}
+    real_say = fake_voice.say
+
+    async def say(text, voice, lang, urgent, rank=0):
+        if text == "Oh, no worries. Thanks anyway!":
+            seen["rebuilding"] = rp_id in engine.continuing
+        return await real_say(text, voice, lang, urgent, rank)
+
+    fake_voice.say = say
+    await run(engine, rp_id, user_idx, speech_bytes)
+    assert seen == {"rebuilding": True}

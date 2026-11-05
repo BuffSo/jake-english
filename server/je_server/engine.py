@@ -42,6 +42,7 @@ class Engine:
         self.locks: dict[str, asyncio.Lock] = {}
         self.sem = asyncio.Semaphore(3)
         self.continuing: dict[str, asyncio.Task] = {}
+        self.left: dict[str, int] = {}  # learner lines the running rebuild is writing
 
     # --- fixed phrases ------------------------------------------------------------------------
 
@@ -239,11 +240,14 @@ class Engine:
                     failed = True
                 yield ev
         if reply is not None:
+            # start rebuilding the rest first, so it runs while Ryan's reply is made and played (spec 「역할극의
+            # 한 차례」 5: 라이언이 대답하는 동안 다음 사용자 대사를 먼저 만든다)
+            await self.add_reply(rp_id, idx, heard, reply)
             try:
                 reply.audio = await self.voice.say(reply.text, "ryan", "english", urgent=True)
+                await self.update_line(rp_id, reply.idx, reply.text, audio=reply.audio)
             except VoiceError:
                 log.info("reply voice failed")
-            await self.add_reply(rp_id, idx, heard, reply)
             yield {"type": "reply", "line": reply.model_dump(mode="json")}
         timings["total"] = time.perf_counter() - t0
         await self.save_attempt(rp_id, idx, Attempt(n=n, mode=mode, heard=heard, followed=followed, issues=issues,
@@ -333,10 +337,18 @@ class Engine:
         return "", []
 
     async def add_reply(self, rp_id: str, idx: int, heard: str, reply: ScriptLine) -> None:
-        """Puts Ryan's reply after the line, drops the old rest of the script and rebuilds it in the background."""
+        """Puts Ryan's reply after the line, drops the old rest of the script and rebuilds it in the background.
+
+        If a rebuild for an earlier reply on this line is still running (the app gave up and the learner was
+        off-script again), it is cancelled and its count of learner lines is reused (PR #12 review)."""
         async with self.lock(rp_id):
             rp = self.store.load(rp_id)
-            left = sum(1 for l in rp.lines[idx + 1:] if l.speaker == "user")
+            running = self.continuing.get(rp_id)
+            if running is not None and not running.done():
+                running.cancel()
+                left = self.left.get(rp_id, 0)
+            else:
+                left = sum(1 for l in rp.lines[idx + 1:] if l.speaker == "user")
             rp.lines = rp.lines[:idx + 1] + [reply]
             self.store.save(rp)
         for key in [k for k in self.tasks if k[0] == rp_id and k[1] > idx]:
@@ -346,6 +358,7 @@ class Engine:
             task = asyncio.create_task(self._continue(rp_id, rp.frame, history, left))
             task.add_done_callback(_quiet)
             self.continuing[rp_id] = task
+            self.left[rp_id] = left
 
     async def _continue(self, rp_id: str, frame, history: Draft, user_turns: int) -> None:
         try:
