@@ -81,7 +81,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   async function recommend() {
     const my = gen.current;
     setStep("working");
-    setStatus("라이언이 상황을 고르고 있어요");
+    setStatus("제이크가 상황을 고르고 있어요");
     setError(null);
     try {
       const said = await api.recommend();
