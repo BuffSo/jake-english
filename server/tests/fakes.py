@@ -24,6 +24,12 @@ def refusal_response():
     return SimpleNamespace(content=[], stop_reason="refusal", usage=SimpleNamespace(input_tokens=1, output_tokens=0))
 
 
+def status_error(code: int):
+    req = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    cls = {400: anthropic.BadRequestError, 401: anthropic.AuthenticationError}.get(code, anthropic.APIStatusError)
+    return cls("error", response=httpx2.Response(code, request=req), body=None)
+
+
 def connection_error() -> anthropic.APIConnectionError:
     return anthropic.APIConnectionError(request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
 
@@ -70,7 +76,12 @@ class FakeAnthropic:
     def __init__(self, answers):
         self.answers = list(answers)
         self.requests: list[dict] = []
+        self.options: list[dict] = []
         self.messages = _Messages(self)
+
+    def with_options(self, **options):
+        self.options.append(options)
+        return self
 
 
 FRAME = {"title_ko": "길 묻기", "user_role_ko": "동네 사람", "ryan_role_ko": "여행자",

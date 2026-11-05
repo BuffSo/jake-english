@@ -136,3 +136,29 @@ async def test_continue_script_retries_wrong_shape():
     draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 1)
     assert draft == [("user", "Thanks."), ("ryan", "Bye!")] and len(fake.requests) == 2
     assert "start with the learner" in fake.requests[1]["messages"][0]["content"]
+
+
+async def test_any_api_status_error_becomes_unavailable():
+    # final review: a 400 (e.g. no credit left) or 401 surfaced as a bare 500 or a dropped stream
+    from fakes import status_error
+
+    for code in (400, 401, 429, 503):
+        with pytest.raises(ClaudeUnavailable):
+            await Claude(FakeAnthropic([status_error(code)])).make_script("길 묻기")
+    with pytest.raises(ClaudeUnavailable):
+        [t async for t in Claude(FakeAnthropic([status_error(400)])).feedback("a", "b", [], [])]
+
+
+async def test_live_turn_calls_give_up_before_the_app_does():
+    # the app waits 30s between stream events; a stalled connection must end on the server side first
+    from fakes import FRAME
+    from je_server.claude import LIVE_OPTIONS
+    from je_server.models import Frame
+
+    assert LIVE_OPTIONS["timeout"] * (LIVE_OPTIONS["max_retries"] + 1) < 30
+    fake = FakeAnthropic([["ok"], json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
+                                              "reply_en": "Sure."})])
+    c = Claude(fake)
+    [t async for t in c.feedback("a", "b", [], [])]
+    await c.offscript(Frame(**FRAME), [], "a", "b")
+    assert fake.options == [LIVE_OPTIONS, LIVE_OPTIONS]

@@ -25,7 +25,9 @@ USER_MAX_WORDS = 14
 ANNOTATE_TRIES = 3
 
 
-ERRORS = (anthropic.APIConnectionError, anthropic.RateLimitError)
+# Calls made while the learner waits in a turn (feedback, off-script reply). The app gives up after 30s without a
+# stream event, so these must fail sooner and let Ryan say "지금은 대답할 수 없어요" (final review, 2026-11-05).
+LIVE_OPTIONS: dict[str, Any] = {"timeout": 12.0, "max_retries": 1}
 
 
 class ClaudeUnavailable(Exception):
@@ -49,24 +51,27 @@ class Claude:
         kw["output_config"] = output_config
         return kw
 
-    async def _create(self, **kw):
+    def _client(self, live: bool):
+        return self.client.with_options(**LIVE_OPTIONS) if live else self.client
+
+    async def _create(self, live: bool = False, **kw):
         try:
-            resp = await self.client.messages.create(**kw)
+            resp = await self._client(live).messages.create(**kw)
         except anthropic.APIConnectionError as e:  # includes timeouts
             raise ClaudeUnavailable("connection") from e
-        except anthropic.RateLimitError as e:
-            raise ClaudeUnavailable("rate limit") from e
         except anthropic.APIStatusError as e:
-            if e.status_code >= 500:
-                raise ClaudeUnavailable(f"status {e.status_code}") from e
-            raise
+            # 429 and 5xx, but also 400 (e.g. no credit left) and 401: the learner can only be told "not now"
+            log.info("claude api status %d", e.status_code)
+            raise ClaudeUnavailable(f"status {e.status_code}") from e
         if resp.stop_reason == "refusal":
             raise ClaudeUnavailable("refusal")
         return resp
 
-    async def _json(self, model: dict[str, Any], system: str, user: str, schema: dict, max_tokens: int) -> Any:
+    async def _json(self, model: dict[str, Any], system: str, user: str, schema: dict, max_tokens: int,
+                    live: bool = False) -> Any:
         """Returns parsed JSON, or None when the answer is not valid JSON."""
         resp = await self._create(
+            live,
             **self._request(model, {"format": {"type": "json_schema", "schema": schema}}),
             max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user}],
         )
@@ -157,7 +162,7 @@ class Claude:
     async def offscript(self, frame: Frame, history: Draft, expected: str, heard: str) -> Offscript:
         body = {**self._talk(frame, history), "대본의 대사": expected, "학습자가 한 말(받아쓴 글)": heard}
         data = await self._json(self.writer, prompts.OFFSCRIPT_SYSTEM, json.dumps(body, ensure_ascii=False),
-                                prompts.OFFSCRIPT_SCHEMA, 1000)
+                                prompts.OFFSCRIPT_SCHEMA, 1000, live=True)
         try:
             out = Offscript.model_validate(data)
         except ValidationError as e:
@@ -201,15 +206,14 @@ class Claude:
         }
         kw = {k: v for k, v in self.quick.items() if k != "effort"}
         try:
-            async with self.client.messages.stream(
+            async with self._client(live=True).messages.stream(
                 **kw, max_tokens=800, system=prompts.FEEDBACK_SYSTEM,
                 messages=[{"role": "user", "content": json.dumps(found, ensure_ascii=False)}],
             ) as stream:
                 async for text in stream.text_stream:
                     yield text
-        except ERRORS as e:
-            raise ClaudeUnavailable(type(e).__name__) from e
+        except anthropic.APIConnectionError as e:
+            raise ClaudeUnavailable("connection") from e
         except anthropic.APIStatusError as e:
-            if e.status_code >= 500:
-                raise ClaudeUnavailable(f"status {e.status_code}") from e
-            raise
+            log.info("claude api status %d", e.status_code)
+            raise ClaudeUnavailable(f"status {e.status_code}") from e

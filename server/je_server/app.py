@@ -55,7 +55,7 @@ def build_services(settings: Settings) -> Services:
     store = Store(settings.data_dir)
     voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir)
     whisper = Whisper(settings.whisper_exe, settings.whisper_model, settings.whisper_port)
-    claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=60))
+    claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30))
     return Services(engine=Engine(store, claude, voice, whisper), voice=voice, whisper=whisper)
 
 
