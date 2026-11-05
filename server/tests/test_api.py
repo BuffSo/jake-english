@@ -64,3 +64,37 @@ def test_upload_size_limited(client):
 def test_recommend_route(client):
     j = client.post("/recommend").json()
     assert j["text"].endswith("싶어.") and len(j["audio"]) == 64
+
+
+def _app(settings, engine, fake_voice, fake_whisper):
+    from je_server.app import Services, create_app
+
+    return create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper))
+
+
+def test_unauthenticated_body_is_not_read(settings, engine, fake_voice, fake_whisper):
+    # PR #12 review: FastAPI read and parsed the /roleplays JSON body before the router's token check
+    from fastapi.testclient import TestClient
+
+    sent = []
+
+    def body():
+        for i in range(4):
+            sent.append(i)
+            yield b" " * 1024
+
+    r = TestClient(_app(settings, engine, fake_voice, fake_whisper)).post(
+        "/roleplays", content=body(), headers={"Content-Type": "application/json"})
+    assert r.status_code == 401 and len(sent) <= 1
+
+
+def test_declared_body_over_limit_is_rejected_before_reading(client):
+    r = client.post("/roleplays", content=b"{}", headers={"Content-Type": "application/json",
+                                                           "Content-Length": str(5 * 1024 * 1024 + 1)})
+    assert r.status_code == 413 and r.json()["code"] == "too_long"
+
+
+def test_bad_content_length_is_400(client):
+    r = client.post("/roleplays", content=b"{}", headers={"Content-Type": "application/json",
+                                                           "Content-Length": "abc"})
+    assert r.status_code == 400

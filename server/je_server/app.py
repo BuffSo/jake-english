@@ -16,7 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .auth import token_checker
+from .auth import RequestGuard, token_checker
 from .claude import ClaudeUnavailable
 from .config import Settings
 from .engine import Engine, NotFound, TooLong
@@ -69,8 +69,7 @@ class NewRoleplay(BaseModel):
 
 
 async def read_body(request: Request) -> bytes:
-    if int(request.headers.get("content-length") or 0) > MAX_UPLOAD:
-        raise ApiError(413, "too_long")
+    """The declared size is checked by RequestGuard; this also stops an undeclared (chunked) body at the limit."""
     buf = bytearray()
     async for chunk in request.stream():
         buf += chunk
@@ -90,6 +89,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             await services.stop()
 
     app = FastAPI(title="jake-english server", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app.add_middleware(RequestGuard, token=settings.token, max_body=MAX_UPLOAD)
     router = APIRouter(dependencies=[Depends(token_checker(settings.token))])
 
     @app.exception_handler(ApiError)
