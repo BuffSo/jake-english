@@ -1,6 +1,6 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Roleplay, ScriptLine } from "../api/types";
-import { canReplay, initial, reduce, type State } from "./state";
+import { askFirst, canReplay, initial, leavesScreen, modelKey, practiceFor, reduce, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -211,7 +211,7 @@ test("the learner's bubble keeps the script line and what was heard", () => {
   s = reduce(s, { type: "event", e: { type: "heard", text: "I like a cup of copy", followed: true } });
   s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 0 } });
   s = reduce(s, { type: "next" });
-  expect(s.history[0]).toEqual({ kind: "user", text: "I like a cup of copy", script: userLine.text });
+  expect(s.history[0]).toEqual({ kind: "user", text: "I like a cup of copy", script: userLine.text, idx: 1 });
 });
 
 test("practice of my lines goes through the order and back to the end", () => {
@@ -290,5 +290,119 @@ describe("notes start closed (spec roleplay-practice 8)", () => {
 
   test("a practice line from the end starts closed", () => {
     expect(reduce(end({ reading: true }), { type: "startPractice", kind: "mine", order: [1] }).reading).toBe(false);
+  });
+});
+
+// --- one line in the middle of the roleplay (spec roleplay-practice 9) ---------------------------------------------
+
+describe("one line in the middle of the roleplay (spec roleplay-practice 9)", () => {
+  const ryan2 = rp.lines[2] as ScriptLine;
+  const user3: ScriptLine = { ...userLine, idx: 3, text: "Just one, thanks." };
+  // the learner is on line 3; lines 0-2 are behind
+  const midway = (phase: State["phase"], extra: Partial<State> = {}): State => ({
+    ...reduce(situation, { type: "created", roleplay: rp }),
+    idx: 3,
+    line: user3,
+    phase,
+    progress: { no: 2, total: 2 },
+    seen: { 0: ryanLine, 1: userLine, 2: ryan2, 3: user3 },
+    history: [
+      { kind: "ryan", text: ryanLine.text, idx: 0 },
+      { kind: "user", text: "I'd like a cup of coffee", script: userLine.text, idx: 1 },
+      { kind: "feedback", text: "좋아요." },
+      { kind: "ryan", text: ryan2.text, idx: 2 },
+    ],
+    ...extra,
+  });
+
+  test("my past line opens at once from the line the app holds", () => {
+    const s = reduce(midway("ready"), { type: "practiseLine", kind: "mine", idx: 1 });
+    expect([s.screen, s.mode, s.idx, s.phase, s.line, s.history, s.practice?.from]).toEqual([
+      "roleplay",
+      "practice",
+      1,
+      "ready",
+      userLine,
+      [],
+      "roleplay",
+    ]);
+  });
+
+  test("Ryan's past line opens as shadow", () => {
+    const s = reduce(midway("evaluated"), { type: "practiseLine", kind: "shadow", idx: 2 });
+    expect([s.mode, s.idx, s.phase, s.line]).toEqual(["shadow", 2, "ready", ryan2]);
+  });
+
+  test("next after the line comes back to the same spot", () => {
+    const before = midway("evaluated", { heard: "Just one, thanks.", feedback: "좋아요.", nextIdx: 4, reading: true });
+    let s = reduce(before, { type: "practiseLine", kind: "mine", idx: 1 });
+    s = reduce(reduce(s, { type: "recordStart" }), { type: "recordStop" });
+    s = reduce(reduce(s, { type: "event", e: { type: "done", next: 1, issues: 0 } }), { type: "next" });
+    expect(s).toEqual({ ...before, practiceNo: before.practiceNo + 1 });
+  });
+
+  test("back from the line comes back to the roleplay", () => {
+    const before = midway("ready");
+    const s = reduce(reduce(before, { type: "practiseLine", kind: "shadow", idx: 0 }), { type: "back" });
+    expect(s).toEqual({ ...before, practiceNo: before.practiceNo + 1 });
+  });
+
+  test("only while my turn is waiting", () => {
+    for (const p of ["loading", "ryan", "recording", "evaluating", "error"] as const) {
+      const s = midway(p);
+      expect(reduce(s, { type: "practiseLine", kind: "mine", idx: 1 })).toBe(s);
+    }
+  });
+
+  test("not the line on screen, an unseen line, the wrong speaker, or inside a practice", () => {
+    const s = midway("ready");
+    for (const a of [
+      { kind: "mine", idx: 3 }, // the line on screen: 「다시 해 보기」 covers it
+      { kind: "mine", idx: 5 }, // not seen yet
+      { kind: "shadow", idx: 1 }, // my line is not Ryan's
+      { kind: "mine", idx: 0 }, // Ryan's line is not mine
+    ] as const)
+      expect(reduce(s, { type: "practiseLine", ...a })).toBe(s);
+    const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
+    expect(reduce(inside, { type: "practiseLine", kind: "shadow", idx: 0 })).toBe(inside);
+  });
+
+  test("which bubbles get a practice button", () => {
+    const s = midway("ready");
+    expect(s.history.map((b) => practiceFor(s, b))).toEqual(["shadow", "mine", null, "shadow"]);
+    expect(practiceFor(s, { kind: "user", idx: 3 })).toBeNull(); // the line on screen, tried again
+    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null };
+    expect(practiceFor({ ...s, seen: { ...s.seen, 4: reply } }, { kind: "ryan", idx: 4 })).toBe("shadow");
+    const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
+    expect(practiceFor(inside, s.history[0])).toBeNull();
+  });
+
+  test("asks first only when a roleplay would be lost", () => {
+    const s = midway("ready");
+    expect([askFirst(s, "back"), askFirst(s, "home")]).toEqual([true, true]);
+    const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
+    expect([askFirst(inside, "back"), askFirst(inside, "home")]).toEqual([false, true]);
+    const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
+    expect([askFirst(fromEnd, "back"), askFirst(fromEnd, "home")]).toEqual([false, false]);
+  });
+
+  test("only back from a line practised mid-roleplay stays on the roleplay screen", () => {
+    const s = midway("ready");
+    const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
+    const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
+    expect([leavesScreen(inside, "back"), leavesScreen(inside, "home")]).toEqual([false, true]);
+    expect([leavesScreen(s, "back"), leavesScreen(fromEnd, "back")]).toEqual([true, true]);
+  });
+
+  test("the roleplay line keeps its model key across a practice", () => {
+    const before = midway("ready");
+    const after = reduce(reduce(before, { type: "practiseLine", kind: "mine", idx: 1 }), { type: "back" });
+    expect(modelKey(after)).toBe(modelKey(before));
+  });
+
+  test("two practices of the same line get different model keys", () => {
+    const first = reduce(midway("ready"), { type: "practiseLine", kind: "mine", idx: 1 });
+    const second = reduce(reduce(first, { type: "back" }), { type: "practiseLine", kind: "mine", idx: 1 });
+    expect(modelKey(second)).not.toBe(modelKey(first));
   });
 });
