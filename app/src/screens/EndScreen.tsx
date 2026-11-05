@@ -5,6 +5,7 @@ import { api } from "../api";
 import type { Summary } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import type { Action, State } from "../flow/state";
+import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { colors } from "../ui/theme";
 import { messageOf, styles as common, Waiting } from "./common";
@@ -17,17 +18,30 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   const id = state.roleplay!.id;
 
   useEffect(() => {
+    let alive = true; // a summary that comes back after leaving must not speak on the next screen
     api
       .summary(id)
       .then((s) => {
+        if (!alive) return;
         setSummary(s);
         sounds.onIdle(() => sounds.enqueue(api.audioSource(s.say.audio)));
       })
-      .catch((e) => setError(messageOf(e)));
+      .catch((e) => alive && setError(messageOf(e)));
+    return () => {
+      alive = false;
+    };
   }, [id, sounds]);
+
+  // back: a new situation (the roleplay is over, so nothing is lost)
+  function back() {
+    sounds.clear();
+    dispatch({ type: "back" });
+  }
+  useBackKey(back);
 
   return (
     <View style={styles.wrap}>
+      <BackButton onPress={back} floating />
       {!summary && !error && <Waiting text="마무리하고 있어요" />}
       {summary && (
         <>

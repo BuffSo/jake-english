@@ -28,6 +28,7 @@ export type State = {
 
 export type Action =
   | { type: "home" }
+  | { type: "back" }
   | { type: "chooseRoleplay" }
   | { type: "created"; roleplay: Roleplay; jake?: Said | null }
   | { type: "lineLoaded"; line: ScriptLine }
@@ -92,9 +93,16 @@ export function reduce(s: State, a: Action): State {
   switch (a.type) {
     case "home":
       return { ...initial };
+    case "back":
+      // the on-screen back button and the phone's back key: the screen before this one
+      if (s.screen === "situation") return { ...initial };
+      if (s.screen === "roleplay" && s.returnToEnd) return { ...s, ...freshTurn, screen: "end", returnToEnd: false, mode: "turn" };
+      if (s.screen === "roleplay" || s.screen === "end") return { ...initial, screen: "situation" };
+      return s;
     case "chooseRoleplay":
       return { ...initial, screen: "situation" };
     case "created":
+      if (s.screen !== "situation") return s; // a script that comes back after the learner left
       return { ...initial, screen: "roleplay", roleplay: a.roleplay, jake: a.jake ?? null, phase: "loading" };
     case "lineLoaded":
       if (s.phase !== "loading") return s;

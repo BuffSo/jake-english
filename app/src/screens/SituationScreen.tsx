@@ -8,6 +8,7 @@ import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate } from "../flow/gate";
 import { whenSilent } from "../flow/whenSilent";
+import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { colors } from "../ui/theme";
 import { messageOf, styles as common, Waiting } from "./common";
@@ -25,20 +26,46 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const rec = useRecorder();
   const gate = useRef(createGate()).current; // a double tap or the auto-stop must not send the recording twice
+  const gen = useRef(0); // bumped by going back (or leaving): an answer to an earlier request is dropped
+
+  useEffect(
+    () => () => {
+      gen.current += 1;
+    },
+    [],
+  );
 
   useEffect(() => {
     sounds.clear();
     sounds.enqueue(api.audioSource(home.lines.ask_situation.audio));
   }, [sounds, home]);
 
+  // Back: the step before on this screen, or the home screen from the first step. Sounds stop, a recording
+  // in progress is deleted without being sent, and a script or transcript still on its way is dropped.
+  function back() {
+    gen.current += 1;
+    sounds.clear();
+    setError(null);
+    if (step === "input") {
+      rec.discard().finally(onBack);
+      return;
+    }
+    setJake(null);
+    setStep("input");
+  }
+  useBackKey(back);
+
   async function create(situation: string, jakeSaid: Said | null = null) {
+    const my = gen.current;
     setStep("working");
     setStatus("라이언이 대본을 만들고 있어요");
     setError(null);
     try {
       // the script is made while Jake (or Ryan) is still talking; the roleplay screen opens after they finish
-      onCreated(await whenSilent(sounds, api.createRoleplay(situation)), jakeSaid);
+      const rp = await whenSilent(sounds, api.createRoleplay(situation));
+      if (my === gen.current) onCreated(rp, jakeSaid);
     } catch (e) {
+      if (my !== gen.current) return;
       setError(messageOf(e));
       setStep("input");
     }
@@ -51,16 +78,19 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   }
 
   async function recommend() {
+    const my = gen.current;
     setStep("working");
     setStatus("라이언이 상황을 고르고 있어요");
     setError(null);
     try {
       const said = await api.recommend();
+      if (my !== gen.current) return;
       setJake(said.text);
       sounds.clear();
       sounds.enqueue(api.audioSource(said.audio)); // Jake asks for it, the way the learner would
       await create(said.text, said);
     } catch (e) {
+      if (my !== gen.current) return;
       setError(messageOf(e));
       setStep("input");
     }
@@ -87,16 +117,19 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
 
   async function doStopMic() {
     if (!rec.isRecording()) return; // already stopped (auto-stop and a tap)
+    const my = gen.current;
     let uri: string | null = null;
     try {
       uri = await rec.stop();
       setStep("working");
       setStatus("받아쓰고 있어요");
       const said = await api.transcribe(uri);
+      if (my !== gen.current) return;
       setText(said);
       if (WANTS_RECOMMEND.test(said)) askRecommend();
       else setStep("input");
     } catch (e) {
+      if (my !== gen.current) return;
       setError(messageOf(e));
       setStep("input");
     } finally {
@@ -112,6 +145,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
 
   return (
     <View style={styles.wrap}>
+      <BackButton onPress={back} floating />
       <Image source={api.imageSource(home.images.listening)} style={styles.face} resizeMode="cover" />
       <Text style={[common.body, styles.say]}>{home.lines.ask_situation.text}</Text>
       {step === "input" && (
@@ -127,7 +161,6 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
           <Button label={rec.recording ? "■ 말하기 끝" : "🎤 말로 하기"} onPress={rec.recording ? stopMic : startMic} kind="plain" />
           <Button label="시작" onPress={start} disabled={rec.recording} />
           <Button label="추천해 줘" onPress={askRecommend} kind="plain" disabled={rec.recording} />
-          <Button label="처음으로" onPress={onBack} kind="plain" small />
         </>
       )}
       {step === "askRecommend" && (

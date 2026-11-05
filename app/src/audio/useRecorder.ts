@@ -1,6 +1,7 @@
 // Records the learner. The file is uploaded to the Mac and then deleted from the phone (spec 「녹음과 기록」).
 import { RecordingPresets, requestRecordingPermissionsAsync, useAudioRecorder } from "expo-audio";
-import { useRef, useState } from "react";
+import { File } from "expo-file-system";
+import { useEffect, useRef, useState } from "react";
 
 import { RECORD_LIMIT_MS } from "../config";
 
@@ -10,6 +11,8 @@ export function useRecorder() {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // read through a ref: the auto-stop callback was created when recording started and sees old state
   const active = useRef(false);
+
+  useEffect(() => () => clearTimeout(timer.current), []); // the auto-stop must not fire after the screen is gone
 
   async function start(onAutoStop: () => void): Promise<void> {
     const perm = await requestRecordingPermissionsAsync();
@@ -30,5 +33,23 @@ export function useRecorder() {
     return recorder.uri;
   }
 
-  return { start, stop, recording, isRecording: () => active.current };
+  // leaving the screen while recording (back button): stop and delete, nothing is sent
+  async function discard(): Promise<void> {
+    if (!active.current) return;
+    clearTimeout(timer.current);
+    active.current = false;
+    try {
+      await recorder.stop();
+    } catch {
+      // already stopped
+    }
+    setRecording(false);
+    try {
+      if (recorder.uri) new File(recorder.uri).delete();
+    } catch {
+      // already gone
+    }
+  }
+
+  return { start, stop, discard, recording, isRecording: () => active.current };
 }
