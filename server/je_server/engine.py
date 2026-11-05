@@ -384,10 +384,19 @@ class Engine:
             self.schedule(rp_id, i)
 
     def summary(self, rp_id: str) -> dict:
+        """The end screen: every line with the learner's tries made inside the roleplay (spec roleplay-practice 3).
+        Practice after the roleplay is left out: 「주고받은 말」 is what was said, and Ryan's reply to a line said
+        differently answers that try. The closing words go by the same tries."""
         rp = self.load(rp_id)
-        retry = [l.idx for l in rp.lines
-                 if l.speaker == "user" and rp.attempts.get(l.idx) and rp.attempts[l.idx][-1].issues]
-        return {"say": self.said("closing_retry" if retry else "closing_clean").model_dump(), "retry": retry}
+        lines, issues_left = [], False
+        for l in rp.lines:
+            tries = [a for a in rp.attempts.get(l.idx, []) if a.mode in ("turn", "retry")] if l.speaker == "user" else []
+            issues_left = issues_left or bool(tries and tries[-1].issues)
+            lines.append({"line": l.model_dump(mode="json"), "tries": [
+                {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
+                 "issues": [{"target": i.target, "heard": i.heard} for i in a.issues],
+                 "point_ko": "" if a.followed else a.say_ko} for a in tries]})
+        return {"say": self.said("closing_retry" if issues_left else "closing_clean").model_dump(), "lines": lines}
 
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
         async with self.lock(rp_id):
