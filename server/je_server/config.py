@@ -16,6 +16,9 @@ SERVER_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = SERVER_DIR.parent
 DEFAULT_DATA_DIR = "~/Library/Application Support/jake-english"
 MIN_TOKEN = 32
+# Without JE_CLAUDE_WRITER / JE_CLAUDE_QUICK the server runs the spec's models (keys of claude.WRITERS, claude.QUICKS)
+DEFAULT_WRITER = "sonnet"
+DEFAULT_QUICK = "haiku"
 
 
 @dataclass(frozen=True)
@@ -31,8 +34,8 @@ class Settings:
     port: int = 8787
     whisper_exe: str = "whisper-server"
     whisper_port: int = 8788
-    claude_writer: str = "sonnet"  # a key of claude.WRITERS
-    claude_quick: str = "haiku"  # a key of claude.QUICKS
+    claude_writer: str = DEFAULT_WRITER
+    claude_quick: str = DEFAULT_QUICK
 
 
 def _model_name(env: Mapping[str, str], key: str, choices: Mapping[str, object], default: str) -> str:
@@ -75,6 +78,6 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         port=int(env.get("JE_PORT", "8787")),
         whisper_exe=env.get("JE_WHISPER_SERVER", "whisper-server"),
         whisper_port=int(env.get("JE_WHISPER_PORT", "8788")),
-        claude_writer=_model_name(env, "JE_CLAUDE_WRITER", WRITERS, "sonnet"),
-        claude_quick=_model_name(env, "JE_CLAUDE_QUICK", QUICKS, "haiku"),
+        claude_writer=_model_name(env, "JE_CLAUDE_WRITER", WRITERS, DEFAULT_WRITER),
+        claude_quick=_model_name(env, "JE_CLAUDE_QUICK", QUICKS, DEFAULT_QUICK),
     )
