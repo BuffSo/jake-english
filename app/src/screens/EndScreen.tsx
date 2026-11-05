@@ -46,7 +46,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
       {summary && (
         <>
           <Text style={[common.body, styles.say]}>{summary.say.text}</Text>
-          {summary.retry.map((idx) => (
+          {summary.lines.filter((l) => l.tries.at(-1)?.issues.length).map(({ line: { idx } }) => (
             <Button
               key={idx}
               label={state.seen[idx]?.text ?? `${idx}번 대사`}

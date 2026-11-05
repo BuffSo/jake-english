@@ -15,9 +15,12 @@ export type ScriptLine = {
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };
 export type Issue = { target: string; heard: string; sound: [string, string]; explain: string };
+// turn and retry happen inside the roleplay; practice (the learner's lines again) and shadow (following Ryan's
+// lines) after it, from the end screen
+export type AttemptMode = "turn" | "retry" | "practice" | "shadow";
 export type Attempt = {
   n: number;
-  mode: "turn" | "retry";
+  mode: AttemptMode;
   heard: string;
   followed: boolean;
   issues: Issue[];
@@ -39,7 +42,19 @@ export type Home = {
   lines: { greeting: Said; ask_mode: Said; ask_situation: Said; ask_recommend: Said };
   images: { front: string; listening: string };
 };
-export type Summary = { say: Said; retry: number[] };
+export type Progress = { no: number; total: number }; // 「내 대사 no/total」
+export type LineWithProgress = ScriptLine & { progress: Progress };
+// One try at a line inside the roleplay, as the end screen shows it (server Engine.summary)
+export type Try = {
+  n: number;
+  mode: "turn" | "retry";
+  heard: string;
+  followed: boolean;
+  issues: { target: string; heard: string }[];
+  point_ko: string;
+};
+export type TranscriptLine = { line: ScriptLine; tries: Try[] };
+export type Summary = { say: Said; lines: TranscriptLine[] };
 export type AttemptEvent =
   | { type: "heard"; text: string; followed: boolean }
   | { type: "text"; delta: string }
@@ -53,6 +68,8 @@ export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "a
 export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "reply", "error", "done"] as const;
+export const SUMMARY_KEYS = ["say", "lines"] as const;
+export const TRY_KEYS = ["n", "mode", "heard", "followed", "issues", "point_ko"] as const;
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 export const KEYS_MATCH: [
@@ -60,4 +77,6 @@ export const KEYS_MATCH: [
   Same<keyof ScriptLine, (typeof LINE_KEYS)[number]>,
   Same<keyof Syllable, (typeof SYLLABLE_KEYS)[number]>,
   Same<AttemptEvent["type"], (typeof EVENT_TYPES)[number]>,
-] = [true, true, true, true];
+  Same<keyof Summary, (typeof SUMMARY_KEYS)[number]>,
+  Same<keyof Try, (typeof TRY_KEYS)[number]>,
+] = [true, true, true, true, true, true];
