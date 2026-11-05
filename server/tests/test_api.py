@@ -144,3 +144,10 @@ def test_audio_without_services_is_not_ready(settings, auth):
     c = TestClient(create_app(settings, None), headers=auth)
     r = c.get("/audio/" + "a" * 64)
     assert r.status_code == 503 and r.json()["code"] == "not_ready"
+
+
+def test_copy_route(client):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    new = client.post(f"/roleplays/{rp['id']}/copy").json()
+    assert new["id"] != rp["id"] and [l["text"] for l in new["lines"]] == [l["text"] for l in rp["lines"]]
+    assert client.post("/roleplays/000000000000/copy").status_code == 404

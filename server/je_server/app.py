@@ -165,6 +165,13 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         except ClaudeUnavailable:
             raise claude_down() from None
 
+    @router.post("/roleplays/{rp_id}/copy")
+    async def copy(rp_id: str = PathParam(pattern=ID)) -> dict:
+        try:
+            return (await engine().copy(rp_id)).model_dump(mode="json")
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
     @router.get("/roleplays/{rp_id}/lines/{idx}")
     async def line(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
         try:

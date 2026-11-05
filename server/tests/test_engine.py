@@ -110,3 +110,29 @@ async def test_progress_never_passes_total(engine, fake_claude, fake_whisper, sp
     [e async for e in engine.attempt(rp.id, 1, speech_bytes, "turn")]
     await engine.line(rp.id, 3)
     assert engine.progress(rp.id, 3) == {"no": 1, "total": 1}
+
+
+async def test_copy_starts_fresh_with_the_same_script(engine_with_rp, speech_bytes, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    for i in range(7):  # let background preparation finish, so the record stops changing
+        await engine.line(rp_id, i)
+    [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
+    old = engine.store.load(rp_id)
+    calls = len(fake_claude.calls)
+    new = await engine.copy(rp_id)
+    assert new.id != rp_id and new.lines == old.lines and new.attempts == {} and new.pos == 0
+    assert new.situation == old.situation and new.frame == old.frame
+    assert engine.store.load(rp_id) == old  # the old record is untouched
+    assert ("make_script", (old.situation,)) not in fake_claude.calls[calls:]
+
+
+async def test_copy_keeps_reply_lines_in_order(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "I have no idea at all."
+    [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
+    new = await engine.copy(rp_id)  # waits for the rebuild
+    assert [l.idx for l in new.lines] == list(range(len(new.lines)))
+    assert new.lines[user_idx + 1].kind == "reply"
+    # text only: background preparation may still add notes and sounds to either record
+    shape = lambda lines: [(l.idx, l.speaker, l.text, l.kind) for l in lines]  # noqa: E731
+    assert shape(new.lines) == shape(engine.store.load(rp_id).lines)

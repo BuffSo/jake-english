@@ -94,6 +94,21 @@ class Engine:
             self.schedule(rp.id, line.idx)
         return rp
 
+    async def copy(self, rp_id: str) -> Roleplay:
+        """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
+        sounds are reused, so it starts at once; the old record and its tries stay as they are."""
+        task = self.continuing.get(rp_id)
+        if task is not None and not task.done():
+            await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
+        old = self.load(rp_id)
+        rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
+                      situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines])
+        self.store.save(rp)
+        for line in rp.lines:
+            if not self.ready(line):
+                self.schedule(rp.id, line.idx)
+        return rp
+
     def schedule(self, rp_id: str, idx: int) -> asyncio.Task:
         key = (rp_id, idx)
         task = self.tasks.get(key)
