@@ -65,7 +65,7 @@ async def test_unknown_line_is_not_found(engine):
 
 async def test_recommend_is_jake_korean(engine, fake_voice, fake_claude):
     said = await engine.recommend()
-    assert said.text.endswith("싶어.") and (said.text, "jake", "korean", True) in fake_voice.calls
+    assert said.text.endswith("싶어요.") and (said.text, "jake", "korean", True) in fake_voice.calls
     assert said.text in fake_voice.checked  # heard back: its end was once swallowed (2026-11-05)
 
 

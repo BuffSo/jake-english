@@ -63,7 +63,7 @@ def test_upload_size_limited(client):
 
 def test_recommend_route(client):
     j = client.post("/recommend").json()
-    assert j["text"].endswith("싶어.") and len(j["audio"]) == 64
+    assert j["text"].endswith("싶어요.") and len(j["audio"]) == 64
 
 
 def _app(settings, engine, fake_voice, fake_whisper):
