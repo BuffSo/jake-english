@@ -29,5 +29,6 @@ AI가 처음 추천한 안과 사용자가 정한 것. 둘이 다르면 그 차�
 
 - [ADR-0001 계산은 맥에서 하고, 앱과는 API로 나눈다](0001-mac-does-the-computing.md) (채택)
 - [ADR-0002 앱은 리액트 네이티브와 Expo로 만들고, 맥에서 빌드해 직접 설치한다](0002-app-build-and-install.md) (채택)
-- [ADR-0003 연습 자료는 저작권 걱정이 없는 것만 쓴다](0003-copyright-free-practice-material.md) (채택)
+- [ADR-0003 연습 자료는 저작권 걱정이 없는 것만 쓴다](0003-copyright-free-practice-material.md) (대체됨(ADR-0005))
 - [ADR-0004 라이언의 말은 외부 API(Claude)로 만든다](0004-ryan-ai-on-claude-api.md) (채택)
+- [ADR-0005 연습 자료는 혼자 공부하는 범위에서 쓴다](0005-practice-material-for-private-study.md) (채택)
