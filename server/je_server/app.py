@@ -194,5 +194,12 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
 
+    @router.get("/roleplays/{rp_id}/summary")
+    def summary(rp_id: str = PathParam(pattern=ID)) -> dict:
+        try:
+            return engine().summary(rp_id)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
     app.include_router(router)
     return app

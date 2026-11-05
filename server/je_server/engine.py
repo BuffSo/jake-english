@@ -12,8 +12,9 @@ from typing import Literal
 
 from . import audio
 from .claude import ClaudeUnavailable
-from .compare import FOLLOW_MIN, find_issues, praise_candidates, similarity, words
-from .models import Attempt, Issue, Roleplay, Said, ScriptLine, ThreeLine
+from . import sounds
+from .compare import FOLLOW_MIN, find_issues, praise_candidates, similarity, sound_pairs, words
+from .models import Attempt, Draft, Issue, Roleplay, Said, ScriptLine, ThreeLine
 from .sentences import SentenceBuffer
 from .tts import VoiceError
 from .phrases import PHRASES
@@ -23,6 +24,7 @@ from .tts import audio_key
 log = logging.getLogger("je_server")
 LINE_WAIT = 120
 MAX_SECONDS = 60
+CLOSING_EN = "Thanks for your help! Have a good day."
 
 
 class NotFound(Exception):
@@ -39,6 +41,7 @@ class Engine:
         self.tasks: dict[tuple[str, int], asyncio.Task] = {}
         self.locks: dict[str, asyncio.Lock] = {}
         self.sem = asyncio.Semaphore(3)
+        self.continuing: dict[str, asyncio.Task] = {}
 
     # --- fixed phrases ------------------------------------------------------------------------
 
@@ -116,6 +119,9 @@ class Engine:
             await self.update_line(rp_id, idx, line.text, audio=key)
 
     async def line(self, rp_id: str, idx: int) -> ScriptLine:
+        task = self.continuing.get(rp_id)
+        if task is not None and not task.done():
+            await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
         _, line = self.get_line(rp_id, idx)
         if self.ready(line):
             return line
@@ -199,20 +205,44 @@ class Engine:
         said: list[str] = []
         keys: list[str] = []
         failed = False
+        reply: ScriptLine | None = None
         if followed:
             issues = find_issues(line.text, heard, limit=2)
             text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard), issues)
-        else:
+            nxt = idx + 1 if mode == "turn" else idx
+        elif mode == "retry":
             text = _one(self.said("retry_offscript").text)
-        async for ev in self.speak(text, said, keys, timings, t0):
-            if ev["type"] == "error":
-                failed = True
-            yield ev
+            nxt = idx
+        else:
+            try:
+                out = await self.claude.offscript(self.load(rp_id).frame, self.history(self.load(rp_id), idx),
+                                                  line.text, heard)
+            except ClaudeUnavailable:
+                out = None
+            if out is None:
+                text, failed = None, True
+                yield self.error("claude_unavailable", "claude_down")
+            else:
+                point, issues = self.point(out)
+                text = _one(point) if point else None
+                reply = ScriptLine(idx=idx + 1, speaker="ryan", text=out.reply_en.strip(), kind="reply")
+            nxt = idx + 2
+        if text is not None:
+            async for ev in self.speak(text, said, keys, timings, t0):
+                if ev["type"] == "error":
+                    failed = True
+                yield ev
+        if reply is not None:
+            try:
+                reply.audio = await self.voice.say(reply.text, "ryan", "english", urgent=True)
+            except VoiceError:
+                log.info("reply voice failed")
+            await self.add_reply(rp_id, idx, heard, reply)
+            yield {"type": "reply", "line": reply.model_dump(mode="json")}
         timings["total"] = time.perf_counter() - t0
-        nxt = idx + 1 if (followed and mode == "turn") else idx
         await self.save_attempt(rp_id, idx, Attempt(n=n, mode=mode, heard=heard, followed=followed, issues=issues,
                                                     say_ko="".join(said), audio=keys, timings=timings),
-                                pos=nxt if mode == "turn" else None)
+                                pos=nxt if (mode == "turn" and not failed) else None)
         log.info("attempt %s/%d n=%d followed=%s issues=%d transcribed=%.2f first_text=%.2f first_audio=%.2f "
                  "total=%.2f", rp_id, idx, n, followed, len(issues), timings.get("transcribed", 0),
                  timings.get("first_text", 0), timings.get("first_audio", 0), timings["total"])
@@ -267,6 +297,68 @@ class Engine:
         finally:
             reader.cancel()
             maker.cancel()
+
+    @staticmethod
+    def history(rp: Roleplay, upto: int) -> Draft:
+        """The conversation as it went: for a line said differently, what the learner actually said."""
+        out: Draft = []
+        for l in rp.lines[:upto]:
+            text = l.text
+            if l.speaker == "user":
+                turns = [a for a in rp.attempts.get(l.idx, []) if a.mode == "turn"]
+                if turns and not turns[-1].followed:
+                    text = turns[-1].heard
+            out.append((l.speaker, text))
+        return out
+
+    @staticmethod
+    def point(out) -> tuple[str, list[Issue]]:
+        """One thing to say before the reply. A pronunciation guess counts only for a listed sound, and then the
+        list's explanation is used, not Claude's (spec 「평가」 맞댈 문장이 없을 때)."""
+        if out.point_kind == "pronunciation":
+            for a, b in sound_pairs(out.meant, out.heard_word):
+                s = sounds.find(a, b)
+                if s:
+                    issue = Issue(target=out.meant, heard=out.heard_word, sound=(a, b), explain=s.explain)
+                    return f"{out.meant}, {out.heard_word}처럼 들렸어요. {s.explain}", [issue]
+            return "", []
+        if out.point_kind == "expression" and out.point_ko.strip():
+            return out.point_ko.strip(), []
+        return "", []
+
+    async def add_reply(self, rp_id: str, idx: int, heard: str, reply: ScriptLine) -> None:
+        """Puts Ryan's reply after the line, drops the old rest of the script and rebuilds it in the background."""
+        async with self.lock(rp_id):
+            rp = self.store.load(rp_id)
+            left = sum(1 for l in rp.lines[idx + 1:] if l.speaker == "user")
+            rp.lines = rp.lines[:idx + 1] + [reply]
+            self.store.save(rp)
+        for key in [k for k in self.tasks if k[0] == rp_id and k[1] > idx]:
+            self.tasks.pop(key).cancel()
+        if left:
+            history = self.history(rp, idx) + [("user", heard), ("ryan", reply.text)]
+            task = asyncio.create_task(self._continue(rp_id, rp.frame, history, left))
+            task.add_done_callback(_quiet)
+            self.continuing[rp_id] = task
+
+    async def _continue(self, rp_id: str, frame, history: Draft, user_turns: int) -> None:
+        try:
+            draft = await self.claude.continue_script(frame, history, user_turns)
+        except ClaudeUnavailable:
+            draft = [("ryan", CLOSING_EN)]  # cannot rebuild now: close the roleplay instead of hanging
+        async with self.lock(rp_id):
+            rp = self.store.load(rp_id)
+            start = len(rp.lines)
+            rp.lines += [ScriptLine(idx=start + i, speaker=sp, text=t) for i, (sp, t) in enumerate(draft)]
+            self.store.save(rp)
+        for i in range(start, start + len(draft)):
+            self.schedule(rp_id, i)
+
+    def summary(self, rp_id: str) -> dict:
+        rp = self.load(rp_id)
+        retry = [l.idx for l in rp.lines
+                 if l.speaker == "user" and rp.attempts.get(l.idx) and rp.attempts[l.idx][-1].issues]
+        return {"say": self.said("closing_retry" if retry else "closing_clean").model_dump(), "retry": retry}
 
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
         async with self.lock(rp_id):

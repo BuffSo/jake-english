@@ -101,3 +101,37 @@ async def test_feedback_connection_error_is_unavailable():
     fake = FakeAnthropic([connection_error()])
     with pytest.raises(ClaudeUnavailable):
         [t async for t in Claude(fake).feedback("a", "b", [], [])]
+
+
+async def test_offscript_uses_sonnet_and_sends_what_was_said():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
+                                      "reply_en": "No problem!"})])
+    out = await Claude(fake).offscript(Frame(**FRAME), [("ryan", "Where is it?")], "It's there.", "I don't know.")
+    assert out.reply_en == "No problem!" and fake.requests[0]["model"] == "claude-sonnet-5-5"
+    body = json.loads(fake.requests[0]["messages"][0]["content"])
+    assert body["학습자가 한 말(받아쓴 글)"] == "I don't know." and body["대본의 대사"] == "It's there."
+
+
+async def test_offscript_empty_reply_is_unavailable():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
+                                      "reply_en": " "})])
+    with pytest.raises(ClaudeUnavailable):
+        await Claude(fake).offscript(Frame(**FRAME), [], "a", "b")
+
+
+async def test_continue_script_retries_wrong_shape():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    bad = json.dumps({"lines": [{"speaker": "ryan", "text": "Hi."}]})
+    good = json.dumps({"lines": [{"speaker": "user", "text": "Thanks."}, {"speaker": "ryan", "text": "Bye!"}]})
+    fake = FakeAnthropic([bad, good])
+    draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 1)
+    assert draft == [("user", "Thanks."), ("ryan", "Bye!")] and len(fake.requests) == 2
+    assert "start with the learner" in fake.requests[1]["messages"][0]["content"]

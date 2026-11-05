@@ -9,7 +9,7 @@ import anthropic
 from pydantic import ValidationError
 
 from . import prompts
-from .models import Draft, Frame, Issue, ThreeLine
+from .models import Draft, Frame, Issue, Offscript, ThreeLine
 from .threeline import Problem, check, degrade, plain
 
 # Spec 「기다리는 시간과 모델」: Haiku with thinking off for quick wording, Sonnet with thinking off and low
@@ -139,6 +139,47 @@ class Claude:
         if not text:
             raise ClaudeUnavailable("empty recommendation")
         return text
+
+    # --- the learner said something else -------------------------------------------------------
+
+    @staticmethod
+    def _talk(frame: Frame, history: Draft) -> dict:
+        return {"상황": frame.model_dump(), "지금까지 대화": [{"speaker": s, "text": t} for s, t in history]}
+
+    async def offscript(self, frame: Frame, history: Draft, expected: str, heard: str) -> Offscript:
+        body = {**self._talk(frame, history), "대본의 대사": expected, "학습자가 한 말(받아쓴 글)": heard}
+        data = await self._json(self.writer, prompts.OFFSCRIPT_SYSTEM, json.dumps(body, ensure_ascii=False),
+                                prompts.OFFSCRIPT_SCHEMA, 1000)
+        try:
+            out = Offscript.model_validate(data)
+        except ValidationError as e:
+            raise ClaudeUnavailable("bad off-script answer") from e
+        if not out.reply_en.strip():
+            raise ClaudeUnavailable("empty reply")
+        return out
+
+    async def continue_script(self, frame: Frame, history: Draft, user_turns: int) -> Draft:
+        body = json.dumps({**self._talk(frame, history), "학습자 대사 수": user_turns}, ensure_ascii=False)
+        problems: list[str] = []
+        for _ in range(2):
+            content = body if not problems else f"{body}\n\nThe last answer had problems. Fix them:\n{_problems_text(problems)}"
+            data = await self._json(self.writer, prompts.CONTINUE_SYSTEM, content, prompts.CONTINUE_SCHEMA, 3000)
+            try:
+                draft: Draft = [(l["speaker"], l["text"].strip()) for l in data["lines"]]
+            except (TypeError, KeyError):
+                problems = ["the answer did not follow the JSON format"]
+                continue
+            problems = []
+            if not draft or draft[0][0] != "user" or draft[-1][0] != "ryan":
+                problems.append("start with the learner and end with Ryan")
+            if any(a[0] == b[0] for a, b in zip(draft, draft[1:])):
+                problems.append("lines must alternate")
+            turns = sum(1 for sp, _ in draft if sp == "user")
+            if not max(1, user_turns - 1) <= turns <= user_turns + 1:
+                problems.append(f"the learner must have {user_turns} lines, not {turns}")
+            if not problems:
+                return draft
+        raise ClaudeUnavailable("could not continue the script")
 
     # --- feedback on a followed line ----------------------------------------------------------
 

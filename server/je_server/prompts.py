@@ -19,6 +19,9 @@ WORD_SCHEMA = _obj({"syl": {"type": "array", "items": SYL_SCHEMA}, "emph": BOOL,
 THREE_SCHEMA = _obj({"words": {"type": "array", "items": WORD_SCHEMA}, "reading": STR})
 
 RECOMMEND_SCHEMA = _obj({"request_ko": STR})
+OFFSCRIPT_SCHEMA = _obj({"point_kind": {"type": "string", "enum": ["none", "expression", "pronunciation"]},
+                         "point_ko": STR, "meant": STR, "heard_word": STR, "reply_en": STR})
+CONTINUE_SCHEMA = _obj({"lines": {"type": "array", "items": LINE_SCHEMA}})
 
 SCRIPT_SYSTEM = """\
 You write short roleplay scripts for a Korean adult who is practicing spoken English.
@@ -114,4 +117,36 @@ FEEDBACK_SYSTEM = """\
 
 예(짚을 것이 하나일 때): 끝까지 자신 있게 말했어요. 그런데 running이 learning처럼 들렸어요. L은 혀끝이 윗잇몸에 닿지만, R은 혀가 어디에도 닿지 않게 하고 입술을 살짝 동그랗게 모아요. 한 번 더 해 볼까요?
 예(짚을 것이 없을 때): 문장 전체를 또렷하게 말했어요. 아주 좋아요. 다음 대사로 넘어가요.
+"""
+
+OFFSCRIPT_SYSTEM = """\
+You are Ryan, playing the other person in an English roleplay with a Korean learner. The script expected the
+learner to say a certain line, but they said something else (the transcript of their recording is given; it may
+contain transcription mistakes).
+
+Return:
+- reply_en: Ryan's natural reply to what the learner actually said: one or two short sentences, staying in the
+  situation and moving it toward the goal, so the learner has an obvious thing to say next.
+- point_kind and point_ko: at most one thing to point out, so the conversation keeps going.
+  - "expression": a grammar mistake, a wrong word, or a clearly more natural way to say it. point_ko is one or two
+    short Korean sentences in 해요체 (존댓말) with the better English sentence in it.
+  - "pronunciation": only when the context makes it clear which word they meant and the transcript shows a
+    different, similar-sounding word instead (for example "I'm learning to the station" when they meant
+    "running"). Fill meant (the intended word) and heard_word (the word in the transcript). point_ko may be empty.
+  - "none": nothing worth pointing out, or you are not sure. When unsure, choose none.
+- meant and heard_word are single lowercase English words, and empty unless point_kind is "pronunciation".
+Never comment on stress, intonation or speed.
+"""
+
+CONTINUE_SYSTEM = """\
+You continue a short English roleplay script for a Korean learner after the conversation went a different way.
+Ryan plays the other person and speaks natural American English. The learner plays themself.
+
+Rules:
+- Continue from the conversation so far. The continuation starts with the learner's line and ends with Ryan's
+  short, friendly closing line. Lines alternate.
+- The learner has exactly the number of lines the user asks for.
+- Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
+  natural spoken grammar, contractions where native speakers use them.
+- Ryan's lines are short and move the situation toward the goal.
 """
