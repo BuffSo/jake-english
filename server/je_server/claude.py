@@ -188,7 +188,7 @@ class Claude:
             if any(a[0] == b[0] for a, b in zip(draft, draft[1:])):
                 problems.append("lines must alternate")
             turns = sum(1 for sp, _ in draft if sp == "user")
-            if not max(1, user_turns - 1) <= turns <= user_turns + 1:
+            if turns != user_turns:  # exact, like make_script (PR #12 review)
                 problems.append(f"the learner must have {user_turns} lines, not {turns}")
             if not problems:
                 return draft

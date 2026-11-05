@@ -162,3 +162,18 @@ async def test_live_turn_calls_give_up_before_the_app_does():
     [t async for t in c.feedback("a", "b", [], [])]
     await c.offscript(Frame(**FRAME), [], "a", "b")
     assert fake.options == [LIVE_OPTIONS, LIVE_OPTIONS]
+
+
+async def test_continue_script_needs_the_exact_number_of_learner_lines():
+    # PR #12 review: ±1 let a rebuild after line 1 add 3 learner lines, 4 in total (the user chose 3)
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    three = json.dumps({"lines": [{"speaker": s, "text": t} for s, t in
+                                  [("user", "a"), ("ryan", "b"), ("user", "c"), ("ryan", "d"), ("user", "e"),
+                                   ("ryan", "f")]]})
+    two = json.dumps({"lines": [{"speaker": s, "text": t} for s, t in
+                                [("user", "a"), ("ryan", "b"), ("user", "c"), ("ryan", "d")]]})
+    fake = FakeAnthropic([three, two])
+    draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 2)
+    assert sum(1 for s, _ in draft if s == "user") == 2 and len(fake.requests) == 2
