@@ -1,7 +1,7 @@
 """Ryan and Jake voices through a worker process on the Mac's existing TTS setup (ADR-0009).
 
 One worker, one queue: urgent jobs (Ryan's live feedback) go before prepared ones (model audio for
-later lines). Sounds are cached by sha256(voice|lang|text), so the same line is made once.
+later lines). Sounds are cached by sha256(voice|lang|rate|text), so the same line is made once.
 """
 from __future__ import annotations
 
@@ -17,10 +17,17 @@ from .audio import with_rate
 
 WORKER = Path(__file__).with_name("tts_worker.py")
 RATES = (0.6, 0.8, 1.0)
-# Speaking rate baked into each sound, kept in pitch. Ryan's Korean (greeting, feedback) at 1x sounded drawn
-# out on the phone (2026-11-05); the reply reader plays Korean at 1.3x since the user found 1x too slow
-# (2026-11-03). English model lines stay at 1x: they are what the learner copies.
-SPEAK_RATE = {"korean": 1.3, "english": 1.0}
+# Speaking rate baked into each sound, kept in pitch, by voice and language. Ryan's Korean (greeting,
+# feedback) at 1x sounded drawn out on the phone (2026-11-05); the reply reader plays Korean at 1.3x since
+# the user found 1x too slow (2026-11-03). After trying it on the phone the user set Jake's Korean (the
+# recommended situation) to 1.1x and kept Ryan at 1.3x (2026-11-05). English model lines stay at 1x: they
+# are what the learner copies.
+SPEAK_RATE = {
+    ("ryan", "korean"): 1.3,
+    ("ryan", "english"): 1.0,
+    ("jake", "korean"): 1.1,
+    ("jake", "english"): 1.0,
+}
 
 
 class VoiceError(Exception):
@@ -28,7 +35,8 @@ class VoiceError(Exception):
 
 
 def audio_key(voice: str, lang: str, text: str) -> str:
-    return hashlib.sha256(f"{voice}|{lang}|{SPEAK_RATE[lang]}|{text}".encode()).hexdigest()
+    # the rate is in the key, so a sound made before a rate change is never served for the new rate
+    return hashlib.sha256(f"{voice}|{lang}|{SPEAK_RATE[voice, lang]}|{text}".encode()).hexdigest()
 
 
 class Voice:
@@ -95,7 +103,7 @@ class Voice:
         if self.proc is None or self.proc.returncode is not None:
             await self._spawn()
         tmp = self.tmp_dir / f"{key}.m4a"
-        req = {"id": next(self.ids), "text": text, "voice": voice, "lang": lang, "rate": SPEAK_RATE[lang],
+        req = {"id": next(self.ids), "text": text, "voice": voice, "lang": lang, "rate": SPEAK_RATE[voice, lang],
                "out": str(tmp)}
         self.proc.stdin.write((json.dumps(req, ensure_ascii=False) + "\n").encode())
         await self.proc.stdin.drain()

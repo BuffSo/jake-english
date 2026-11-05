@@ -11,7 +11,7 @@ for line in sys.stdin:
     with open(log, "a", encoding="utf-8") as f:
         f.write(req["text"] + "\n")
     with open(os.path.join(os.path.dirname(req["out"]), "rates.txt"), "a", encoding="utf-8") as f:
-        f.write(f"{req['lang']} {req.get('rate')}\n")
+        f.write(f"{req['voice']} {req['lang']} {req.get('rate')}\n")
     time.sleep(0.05)
     if req["text"] == "FAIL":
         print(json.dumps({"id": req["id"], "ok": False, "error": "RuntimeError"}), flush=True)
