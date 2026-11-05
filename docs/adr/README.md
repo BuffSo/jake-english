@@ -31,3 +31,4 @@ AI가 처음 추천한 안과 사용자가 정한 것. 둘이 다르면 그 차�
 - [ADR-0002 앱은 리액트 네이티브와 Expo로 만들고, 맥에서 빌드해 직접 설치한다](0002-app-build-and-install.md) (채택)
 - [ADR-0003 연습 자료는 저작권 걱정이 없는 것만 쓴다](0003-copyright-free-practice-material.md) (채택)
 - [ADR-0004 라이언의 말은 외부 API(Claude)로 만든다](0004-ryan-ai-on-claude-api.md) (채택)
+- [ADR-0006 맥 서버는 파이썬(FastAPI)으로 만들고, 앱과 한 저장소에 둔다](0006-mac-server-in-python.md) (채택)
