@@ -106,11 +106,14 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   const stopMic = () => gate.run(doStopMic);
 
   async function doStartMic() {
+    const my = gen.current;
     setError(null);
     sounds.clear();
     try {
       await rec.start(stopMic);
+      if (my !== gen.current) await rec.discard(); // went back while the mic was starting (permission prompt)
     } catch {
+      if (my !== gen.current) return;
       setError("마이크를 쓸 수 없어요. 앱의 마이크 권한을 확인해 주세요.");
     }
   }
@@ -121,6 +124,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     let uri: string | null = null;
     try {
       uri = await rec.stop();
+      if (my !== gen.current) return; // went back while the recorder was stopping; `finally` deletes it unsent
       setStep("working");
       setStatus("받아쓰고 있어요");
       const said = await api.transcribe(uri);

@@ -29,7 +29,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const rec = useRecorder();
   const line = state.line;
   const gate = useRef(createGate()).current; // one start or stop (and its upload) at a time
-  const mounted = useRef(true);
+  const mounted = useRef(true); // false once the learner leaves: set by leave() at once, and on unmount
 
   useEffect(() => {
     mounted.current = true;
@@ -92,6 +92,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // stream still answering is dropped by `mounted`. There is no resume yet, so a roleplay in progress asks
   // first; a line retried from the end screen has nothing to lose.
   async function leave(a: "back" | "home") {
+    // set before anything is awaited: a stop or start still finishing sees it (PR #13 review)
+    mounted.current = false;
     sounds.clear();
     await rec.discard();
     dispatch({ type: a });
@@ -143,6 +145,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     dispatch({ type: "recordStart" });
     try {
       await rec.start(stopRecording);
+      if (!mounted.current) await rec.discard(); // left while the mic was starting (permission prompt)
     } catch {
       dispatch({ type: "recordCancel" });
     }
@@ -155,6 +158,15 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       uri = await rec.stop();
     } catch {
       dispatch({ type: "recordCancel" });
+      return;
+    }
+    if (!mounted.current) {
+      // left while the recorder was stopping: `discard()` found it already stopped, so delete it here unsent
+      try {
+        new File(uri).delete();
+      } catch {
+        // already gone
+      }
       return;
     }
     dispatch({ type: "recordStop" });
