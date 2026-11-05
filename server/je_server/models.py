@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Mark = Literal["s", "w", "n"]  # s: yellow (strong), w: small gray (weak), n: as is
+Mark = Literal["s", "w", "n"]  # s: strong (bold dark orange on screen), w: small gray (weak), n: as is
 
 
 class Syllable(BaseModel):
