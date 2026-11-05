@@ -1,7 +1,7 @@
 // Screen flow as a reducer, so taps that arrive at the wrong moment (double taps, taps while Ryan is
 // still talking) are ignored in one place.
 import type { ErrorCode } from "../api/client";
-import type { AttemptEvent, Roleplay, ScriptLine } from "../api/types";
+import type { AttemptEvent, Roleplay, Said, ScriptLine } from "../api/types";
 
 export type Screen = "home" | "situation" | "roleplay" | "end";
 export type Phase = "loading" | "ryan" | "ready" | "recording" | "evaluating" | "evaluated" | "error";
@@ -10,6 +10,7 @@ export type Bubble = { kind: "ryan" | "user" | "feedback"; text: string; idx?: n
 export type State = {
   screen: Screen;
   roleplay: Roleplay | null;
+  jake: Said | null; // the recommended situation in Jake's voice, shown on top of the roleplay to hear again
   idx: number;
   mode: "turn" | "retry";
   phase: Phase;
@@ -27,8 +28,9 @@ export type State = {
 
 export type Action =
   | { type: "home" }
+  | { type: "back" }
   | { type: "chooseRoleplay" }
-  | { type: "created"; roleplay: Roleplay }
+  | { type: "created"; roleplay: Roleplay; jake?: Said | null }
   | { type: "lineLoaded"; line: ScriptLine }
   | { type: "lineMissing" }
   | { type: "ryanDone" }
@@ -45,6 +47,7 @@ export type Action =
 export const initial: State = {
   screen: "home",
   roleplay: null,
+  jake: null,
   idx: 0,
   mode: "turn",
   phase: "loading",
@@ -69,6 +72,12 @@ function messageFor(code: ErrorCode, say?: { text: string }): string {
   return "문제가 생겼어요. 다시 해 볼까요?";
 }
 
+// The learner's own turn with nothing playing for the flow: replaying a sound (Jake's line) may clear the
+// queue then. In Ryan's turn the queue's idle callback moves the roleplay on, and clearing would drop it.
+export function canReplay(p: Phase): boolean {
+  return p === "ready" || p === "evaluated";
+}
+
 const freshTurn = { heard: null, feedback: "", reply: null, message: null, errorFrom: null } as const;
 
 // What was said in this turn, as conversation bubbles (what the learner said, Ryan's feedback, Ryan's reply).
@@ -84,10 +93,17 @@ export function reduce(s: State, a: Action): State {
   switch (a.type) {
     case "home":
       return { ...initial };
+    case "back":
+      // the on-screen back button and the phone's back key: the screen before this one
+      if (s.screen === "situation") return { ...initial };
+      if (s.screen === "roleplay" && s.returnToEnd) return { ...s, ...freshTurn, screen: "end", returnToEnd: false, mode: "turn" };
+      if (s.screen === "roleplay" || s.screen === "end") return { ...initial, screen: "situation" };
+      return s;
     case "chooseRoleplay":
       return { ...initial, screen: "situation" };
     case "created":
-      return { ...initial, screen: "roleplay", roleplay: a.roleplay, phase: "loading" };
+      if (s.screen !== "situation") return s; // a script that comes back after the learner left
+      return { ...initial, screen: "roleplay", roleplay: a.roleplay, jake: a.jake ?? null, phase: "loading" };
     case "lineLoaded":
       if (s.phase !== "loading") return s;
       return {

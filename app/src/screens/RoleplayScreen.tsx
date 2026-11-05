@@ -1,6 +1,6 @@
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState, type ComponentRef, type Dispatch } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { api } from "../api";
 import { ApiError } from "../api/client";
@@ -8,7 +8,8 @@ import type { AttemptEvent, ThreeLine } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate } from "../flow/gate";
-import type { Action, State } from "../flow/state";
+import { canReplay, type Action, type State } from "../flow/state";
+import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { colors, top } from "../ui/theme";
@@ -28,7 +29,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const rec = useRecorder();
   const line = state.line;
   const gate = useRef(createGate()).current; // one start or stop (and its upload) at a time
-  const mounted = useRef(true);
+  const mounted = useRef(true); // false once the learner leaves: set by leave() at once, and on unmount
 
   useEffect(() => {
     mounted.current = true;
@@ -87,6 +88,37 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     sounds.enqueue(api.audioSource(line.audio, r));
   }
 
+  // Leaving (back or 「처음으로」): sounds stop, a recording in progress is deleted without being sent, and a
+  // stream still answering is dropped by `mounted`. There is no resume yet, so a roleplay in progress asks
+  // first; a line retried from the end screen has nothing to lose.
+  async function leave(a: "back" | "home") {
+    // set before anything is awaited: a stop or start still finishing sees it (PR #13 review)
+    mounted.current = false;
+    sounds.clear();
+    await rec.discard();
+    dispatch({ type: a });
+  }
+
+  function askLeave(a: "back" | "home") {
+    if (state.returnToEnd) return void leave(a);
+    Alert.alert(
+      "역할극을 그만둘까요?",
+      "하던 역할극은 아직 이어 할 수 없어요.",
+      [
+        { text: "계속하기", style: "cancel" },
+        { text: "그만두기", style: "destructive", onPress: () => void leave(a) },
+      ],
+      { cancelable: true },
+    );
+  }
+  useBackKey(() => askLeave("back"));
+
+  function replayJake() {
+    if (!state.jake || !canReplay(state.phase)) return;
+    sounds.clear();
+    sounds.enqueue(api.audioSource(state.jake.audio));
+  }
+
   async function toggleThree(idx: number) {
     if (open[idx]) return setOpen({ ...open, [idx]: false });
     setOpen({ ...open, [idx]: true });
@@ -113,6 +145,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     dispatch({ type: "recordStart" });
     try {
       await rec.start(stopRecording);
+      if (!mounted.current) await rec.discard(); // left while the mic was starting (permission prompt)
     } catch {
       dispatch({ type: "recordCancel" });
     }
@@ -125,6 +158,15 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       uri = await rec.stop();
     } catch {
       dispatch({ type: "recordCancel" });
+      return;
+    }
+    if (!mounted.current) {
+      // left while the recorder was stopping: `discard()` found it already stopped, so delete it here unsent
+      try {
+        new File(uri).delete();
+      } catch {
+        // already gone
+      }
       return;
     }
     dispatch({ type: "recordStop" });
@@ -166,12 +208,19 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
+        <BackButton onPress={() => askLeave("back")} />
         <Text style={common.title}>{rp.frame.title_ko}</Text>
         <Text style={common.sub}>
           나: {rp.frame.user_role_ko} · 라이언: {rp.frame.ryan_role_ko} · {rp.frame.place_ko}
         </Text>
       </View>
       <ScrollView ref={scroll} contentContainerStyle={styles.scroll}>
+        {state.jake && (
+          <Pressable onPress={replayJake} style={[styles.bubble, styles.user]}>
+            <Text style={styles.plainText}>제이크: {state.jake.text}</Text>
+            <Text style={styles.hint}>눌러서 다시 듣기</Text>
+          </Pressable>
+        )}
         {state.history.map((b, i) =>
           b.kind === "ryan" ? (
             <RyanBubble key={i} idx={b.idx} text={b.text} />
@@ -227,7 +276,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           </>
         )}
         {state.phase === "error" && <Button label="다시 시도" onPress={() => dispatch({ type: "retry" })} />}
-        <Button label="처음으로" onPress={() => dispatch({ type: "home" })} kind="plain" small />
+        <Button label="처음으로" onPress={() => askLeave("home")} kind="plain" small />
       </View>
     </View>
   );
