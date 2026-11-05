@@ -12,7 +12,6 @@ import { messageOf, styles as common } from "./common";
 type Props = { sounds: SoundQueue; home: Home | null; setHome: (h: Home) => void; onRoleplay: () => void };
 
 export function HomeScreen({ sounds, home, setHome, onRoleplay }: Props) {
-  const [face, setFace] = useState<"front" | "listening">("front");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -20,11 +19,9 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay }: Props) {
     try {
       const h = await api.getHome();
       setHome(h);
-      setFace("front");
       sounds.clear();
       sounds.enqueue(api.audioSource(h.lines.greeting.audio));
       sounds.enqueue(api.audioSource(h.lines.ask_mode.audio));
-      sounds.onIdle(() => setFace("listening")); // listening face until the learner chooses (PRD 「첫 화면」)
     } catch (e) {
       setError(messageOf(e));
     }
@@ -38,7 +35,8 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay }: Props) {
     <View style={styles.wrap}>
       {home && (
         <View style={styles.face}>
-          <RyanPortrait source={api.imageSource(home.images[face])} />
+          {/* the front picture stays after Ryan has spoken (2026-11-05 user; it used to turn to the listening one) */}
+          <RyanPortrait source={api.imageSource(home.images.front)} />
         </View>
       )}
       {home && (
