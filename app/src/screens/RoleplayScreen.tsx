@@ -11,6 +11,7 @@ import { createGate } from "../flow/gate";
 import { canReplay, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
+import { LineToSay } from "../ui/LineToSay";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { colors, top } from "../ui/theme";
 import { codeOf, styles as common, Waiting } from "./common";
@@ -231,7 +232,6 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     : state.progress && state.progress.total > 0
       ? `내 대사 ${state.progress.no}/${state.progress.total}`
       : null;
-  const shadowThree = shadow && line ? (line.three ?? threes[line.idx]) : undefined;
   const before = practice?.kind === "mine" && line ? state.seen[line.idx - 1] : undefined;
 
   return (
@@ -278,10 +278,14 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             <Text style={styles.beforeText}>라이언: {before.text}</Text>
           </Pressable>
         )}
-        {myTurn && shadow && line && <Text style={styles.bigText}>{line.text}</Text>}
-        {myTurn && shadow && shadowThree === "loading" && <Text style={common.sub}>세 줄을 만들고 있어요…</Text>}
-        {myTurn && shadowThree && shadowThree !== "loading" && <ThreeLineView three={shadowThree} />}
-        {myTurn && !shadow && line?.three && <ThreeLineView three={line.three} />}
+        {myTurn && line && (
+          <LineToSay
+            text={line.text}
+            three={shadow ? (line.three ?? threes[line.idx] ?? null) : line.three}
+            open={state.reading}
+            onToggle={() => dispatch({ type: "toggleReading" })}
+          />
+        )}
         {state.heard && <Text style={styles.heard}>들린 말: {state.heard}</Text>}
         {state.feedback !== "" && (
           <View style={[styles.bubble, styles.feedback]}>
@@ -339,7 +343,6 @@ const styles = StyleSheet.create({
   count: { fontSize: 14, fontWeight: "700", color: colors.text, backgroundColor: colors.strong, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   label: { fontSize: 12, color: colors.sub },
   gap: { marginTop: 6 },
-  bigText: { fontSize: 22, color: colors.text, lineHeight: 30, marginBottom: 8 },
   before: { alignSelf: "flex-start", marginBottom: 8 },
   beforeText: { fontSize: 15, color: colors.sub },
   scroll: { padding: 16, paddingBottom: 32 },
