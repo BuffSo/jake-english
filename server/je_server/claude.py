@@ -20,7 +20,7 @@ HAIKU: dict[str, Any] = {"model": "claude-haiku-5-5", "thinking": {"type": "disa
 SONNET: dict[str, Any] = {"model": "claude-sonnet-5-5", "thinking": {"type": "between_tools"}, "effort": "low"}
 
 log = logging.getLogger("je_server")
-USER_TURNS = (4, 6)
+USER_TURNS = (3, 3)  # 2026-11-05 the user tried 5 on the phone, found it too many, chose 3
 USER_MAX_WORDS = 14
 ANNOTATE_TRIES = 3
 
@@ -89,7 +89,8 @@ class Claude:
             out.append("lines must alternate between Ryan and the learner")
         turns = sum(1 for s, _ in draft if s == "user")
         if not USER_TURNS[0] <= turns <= USER_TURNS[1]:
-            out.append(f"the learner must have {USER_TURNS[0]} to {USER_TURNS[1]} lines, not {turns}")
+            want = str(USER_TURNS[0]) if USER_TURNS[0] == USER_TURNS[1] else f"{USER_TURNS[0]} to {USER_TURNS[1]}"
+            out.append(f"the learner must have {want} lines, not {turns}")
         if any(s == "user" and len(t.split()) > USER_MAX_WORDS for s, t in draft):
             out.append(f"learner lines must be at most {USER_MAX_WORDS - 2} words")
         return out

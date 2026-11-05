@@ -23,8 +23,8 @@ async def test_offscript_reply_then_new_script(engine_with_rp, speech_bytes, fak
     assert nxt.speaker == "user" and nxt.three is not None and nxt.audio is not None
     rp = engine.store.load(rp_id)
     assert rp.lines[user_idx].text == "It's right over there."  # past lines stay as they were
-    assert sum(1 for l in rp.lines[user_idx + 2:] if l.speaker == "user") == 3  # 4 user lines, 1 used
-    assert [l.idx for l in rp.lines] == list(range(len(rp.lines))) and len(rp.lines) == user_idx + 2 + 2 * 3
+    assert sum(1 for l in rp.lines[user_idx + 2:] if l.speaker == "user") == 2  # 3 user lines, 1 used
+    assert [l.idx for l in rp.lines] == list(range(len(rp.lines))) and len(rp.lines) == user_idx + 2 + 2 * 2
     assert rp.lines[-1].speaker == "ryan"
 
 

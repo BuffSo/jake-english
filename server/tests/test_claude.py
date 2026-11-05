@@ -16,23 +16,24 @@ def anyio_backend():
 
 
 async def test_make_script_retries_when_turns_are_wrong():
-    fake = FakeAnthropic([script_json(user_turns=3), script_json(user_turns=5)])
+    # 2026-11-05 the user found 5 learner lines too many and chose 3
+    fake = FakeAnthropic([script_json(user_turns=5), script_json(user_turns=3)])
     frame, draft = await Claude(fake).make_script("길 묻기")
-    assert sum(1 for s, _ in draft if s == "user") == 5 and len(fake.requests) == 2
+    assert sum(1 for s, _ in draft if s == "user") == 3 and len(fake.requests) == 2
     assert draft[0][0] == "ryan" and draft[-1][0] == "ryan"
     assert all(a[0] != b[0] for a, b in zip(draft, draft[1:]))
     assert frame.title_ko == "길 묻기"
-    assert "4" in fake.requests[1]["messages"][0]["content"]  # the retry says what was wrong
+    assert "not 5" in fake.requests[1]["messages"][0]["content"]  # the retry says what was wrong
 
 
 async def test_make_script_gives_up_after_second_bad_script():
-    fake = FakeAnthropic([script_json(user_turns=2), script_json(user_turns=7)])
+    fake = FakeAnthropic([script_json(user_turns=2), script_json(user_turns=4)])
     with pytest.raises(ClaudeUnavailable):
         await Claude(fake).make_script("길 묻기")
 
 
 async def test_requests_use_spec_model_settings():
-    fake = FakeAnthropic([script_json(user_turns=4)])
+    fake = FakeAnthropic([script_json(user_turns=3)])
     await Claude(fake).make_script("길 묻기")
     r = fake.requests[0]
     assert r["model"] == "claude-sonnet-5-5" and r["thinking"] == {"type": "between_tools"}

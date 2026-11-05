@@ -29,7 +29,7 @@ Ryan plays the other person in the situation and speaks natural American English
 
 Rules:
 - Lines alternate between Ryan and the learner. Ryan speaks first and Ryan speaks last.
-- The learner has 4 to 6 lines. Ryan's last line is a short, friendly closing.
+- The learner has exactly 3 lines. Ryan's last line is a short, friendly closing.
 - Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
   natural spoken grammar, contractions where native speakers use them.
 - Ryan's lines are short (one or two sentences) and move the situation forward, so the learner always has an

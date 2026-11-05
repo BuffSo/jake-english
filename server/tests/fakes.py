@@ -131,7 +131,7 @@ class FakeClaude:
     async def make_script(self, situation):
         self.calls.append(("make_script", (situation,)))
         self._maybe_fail()
-        draft = [(l["speaker"], l["text"]) for l in script_lines(4)]
+        draft = [(l["speaker"], l["text"]) for l in script_lines(3)]
         return Frame(**FRAME), draft
 
     async def annotate(self, text, context):
