@@ -50,10 +50,12 @@ class ScriptLine(BaseModel):
 
 
 class Issue(BaseModel):
-    target: str
-    heard: str
-    sound: tuple[str, str]
-    explain: str
+    """One place the transcript differs from the line (spec 「평가」 3)."""
+
+    target: str  # the line's words here, joined by spaces; "" when words were added
+    heard: str  # what was heard instead; "" when the line's words were not heard
+    sound: tuple[str, str] | None = None  # (line phoneme, heard phoneme), only for a sound on the sound list
+    explain: str = ""  # that sound's explanation from the list
 
 
 # turn: the roleplay's first try at a line; retry: 「다시 해 보기」 inside the roleplay; practice: the learner's lines
