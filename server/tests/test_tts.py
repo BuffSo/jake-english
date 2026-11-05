@@ -62,3 +62,10 @@ async def test_worker_restarts_after_dying(voice):
     with pytest.raises(VoiceError):
         await voice.say("DIE", "ryan", "english", urgent=True)
     assert voice.path(await voice.say("After.", "ryan", "english", urgent=True)).exists()
+
+
+async def test_prepared_jobs_go_in_rank_order(voice, tmp_path):
+    jobs = [asyncio.create_task(voice.say(f"rank {r}", "ryan", "english", urgent=False, rank=r)) for r in (5, 3, 9, 1)]
+    await asyncio.gather(*jobs)
+    # all four are queued before the worker takes one, so it takes them by rank
+    assert calls(tmp_path) == ["rank 1", "rank 3", "rank 5", "rank 9"]

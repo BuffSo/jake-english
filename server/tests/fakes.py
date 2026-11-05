@@ -187,7 +187,7 @@ class FakeVoice:
     def path(self, key):
         return self.audio_dir / f"{key}.m4a"
 
-    async def say(self, text, voice, lang, urgent):
+    async def say(self, text, voice, lang, urgent, rank=0):
         from je_server.tts import VoiceError, audio_key
 
         self.calls.append((text, voice, lang, urgent))

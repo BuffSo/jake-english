@@ -58,7 +58,8 @@ class Voice:
             raise VoiceError("voice worker did not start")
 
     async def say(self, text: str, voice: Literal["ryan", "jake"], lang: Literal["english", "korean"],
-                  urgent: bool) -> str:
+                  urgent: bool, rank: int = 0) -> str:
+        """rank orders prepared jobs (the line number), so the next line's sound is not stuck behind later lines."""
         key = audio_key(voice, lang, text)
         if self.path(key).exists():
             return key
@@ -67,13 +68,13 @@ class Voice:
             fut = asyncio.get_running_loop().create_future()
             self.inflight[key] = fut
         # an urgent ask for a queued prepared job queues it again in front; the consumer skips duplicates
-        self.queue.put_nowait((0 if urgent else 1, next(self.seq), key, text, voice, lang))
+        self.queue.put_nowait((0 if urgent else 1, 0 if urgent else rank, next(self.seq), key, text, voice, lang))
         await asyncio.shield(fut)
         return key
 
     async def _consume(self) -> None:
         while True:
-            _, _, key, text, voice, lang = await self.queue.get()
+            _, _, _, key, text, voice, lang = await self.queue.get()
             fut = self.inflight.get(key)
             if fut is None or fut.done():
                 continue

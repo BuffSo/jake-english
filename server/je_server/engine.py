@@ -108,15 +108,21 @@ class Engine:
         return line.audio is not None and (line.speaker == "ryan" or line.three is not None)
 
     async def _prepare(self, rp_id: str, idx: int) -> None:
+        """Notes and model sound are made at the same time; the sound does not need the notes."""
         rp, line = self.get_line(rp_id, idx)
-        three, key = line.three, line.audio
-        if line.speaker == "user" and three is None:
-            async with self.sem:
-                three = await self.claude.annotate(line.text, self.context(rp, idx))
-            await self.update_line(rp_id, idx, line.text, three=three)
-        if key is None:
-            key = await self.voice.say(line.text, "ryan", "english", urgent=False)
-            await self.update_line(rp_id, idx, line.text, audio=key)
+
+        async def notes():
+            if line.speaker == "user" and line.three is None:
+                async with self.sem:
+                    three = await self.claude.annotate(line.text, self.context(rp, idx))
+                await self.update_line(rp_id, idx, line.text, three=three)
+
+        async def sound():
+            if line.audio is None:
+                key = await self.voice.say(line.text, "ryan", "english", urgent=False, rank=idx)
+                await self.update_line(rp_id, idx, line.text, audio=key)
+
+        await asyncio.gather(notes(), sound())
 
     async def line(self, rp_id: str, idx: int) -> ScriptLine:
         task = self.continuing.get(rp_id)

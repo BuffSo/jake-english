@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -17,6 +19,7 @@ from .threeline import Problem, check, degrade, plain
 HAIKU: dict[str, Any] = {"model": "claude-haiku-5-5", "thinking": {"type": "disabled"}}
 SONNET: dict[str, Any] = {"model": "claude-sonnet-5-5", "thinking": {"type": "between_tools"}, "effort": "low"}
 
+log = logging.getLogger("je_server")
 USER_TURNS = (4, 6)
 USER_MAX_WORDS = 14
 ANNOTATE_TRIES = 3
@@ -114,7 +117,8 @@ class Claude:
         base = f"Line: {text}\nContext: {context or '-'}"
         last: ThreeLine | None = None
         problems: list[Problem] = []
-        for _ in range(ANNOTATE_TRIES):
+        t0 = time.perf_counter()
+        for tries in range(1, ANNOTATE_TRIES + 1):
             content = base if last is None else (
                 f"{base}\n\nThe last answer failed these checks. Fix them:\n"
                 + _problems_text([f"{p.kind}: {p.detail}" for p in problems]))
@@ -125,8 +129,11 @@ class Claude:
                 continue
             problems = check(text, three)
             if not problems:
+                log.info("three-line note: %d tries, %.1fs", tries, time.perf_counter() - t0)
                 return three
             last = three
+        log.info("three-line note degraded after %d tries, %.1fs: %s", ANNOTATE_TRIES, time.perf_counter() - t0,
+                 ",".join(sorted({p.kind for p in problems})))
         return degrade(text, last, problems) if last is not None else plain(text)
 
     # --- recommendation -----------------------------------------------------------------------

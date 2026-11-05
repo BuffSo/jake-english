@@ -66,3 +66,21 @@ async def test_unknown_line_is_not_found(engine):
 async def test_recommend_is_jake_korean(engine, fake_voice, fake_claude):
     said = await engine.recommend()
     assert said.text.endswith("싶어.") and (said.text, "jake", "korean", True) in fake_voice.calls
+
+
+async def test_model_audio_starts_before_notes_finish(engine, fake_claude, fake_voice):
+    import asyncio
+
+    gate = asyncio.Event()
+    real = fake_claude.annotate
+
+    async def slow(text, context):
+        await gate.wait()
+        return await real(text, context)
+
+    fake_claude.annotate = slow
+    rp = await engine.create("길 묻기")
+    await asyncio.sleep(0.05)
+    assert any(c[0] == rp.lines[1].text for c in fake_voice.calls)  # audio asked for while notes still wait
+    gate.set()
+    assert (await engine.line(rp.id, 1)).three is not None
