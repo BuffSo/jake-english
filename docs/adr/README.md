@@ -32,3 +32,6 @@ AI가 처음 추천한 안과 사용자가 정한 것. 둘이 다르면 그 차�
 - [ADR-0003 연습 자료는 저작권 걱정이 없는 것만 쓴다](0003-copyright-free-practice-material.md) (대체됨(ADR-0005))
 - [ADR-0004 라이언의 말은 외부 API(Claude)로 만든다](0004-ryan-ai-on-claude-api.md) (채택)
 - [ADR-0005 연습 자료는 사용자가 맥에 넣은 영상으로, 혼자 공부하는 범위에서 쓴다](0005-practice-material-for-private-study.md) (채택)
+- [ADR-0006 맥 서버는 파이썬(FastAPI)으로 만들고, 앱과 한 저장소에 둔다](0006-mac-server-in-python.md) (채택)
+- [ADR-0007 집 밖에서는 Tailscale로 폰을 집의 맥에 잇는다](0007-remote-access-over-tailscale.md) (채택)
+- [ADR-0008 앱 고유 ID는 dev.jakeso.english로 한다](0008-android-application-id.md) (채택)
