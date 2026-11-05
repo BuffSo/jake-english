@@ -110,3 +110,20 @@ async def test_same_slow_copy_made_twice_at_once(voice, tmp_path):
     shutil.copy(make_m4a(tmp_path, "sine=f=220:r=24000", 2), voice.path(key))
     paths = await asyncio.gather(*[voice.rate_file(key, 0.8) for _ in range(3)])
     assert len(set(paths)) == 1 and paths[0].exists() and paths[0].stat().st_size > 0
+
+
+async def test_a_worker_too_slow_to_start_is_not_kept(tmp_path):
+    # PR #12 review: a restart that timed out left the half-started worker in place; the next job read its
+    # late {"ready": true} as the answer and failed, and the answers stayed one job behind after that
+    v = Voice(sys.executable, f"slow-second:{tmp_path / 'launches'}", tmp_path, worker=FAKE_WORKER)
+    v.start_timeout = 0.3
+    await v.start()
+    try:
+        with pytest.raises(VoiceError):
+            await v.say("DIE", "ryan", "english", urgent=True)
+        with pytest.raises(VoiceError):
+            await v.say("Slow start.", "ryan", "english", urgent=True)  # the restart times out
+        for text in ("After.", "And after."):
+            assert v.path(await v.say(text, "ryan", "english", urgent=True)).exists()
+    finally:
+        await v.stop()

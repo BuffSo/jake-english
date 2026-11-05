@@ -40,6 +40,8 @@ def audio_key(voice: str, lang: str, text: str) -> str:
 
 
 class Voice:
+    start_timeout = 300  # seconds for the worker to load the model and say it is ready
+
     def __init__(self, python: str, module: str, audio_dir: Path, worker: Path = WORKER):
         self.python, self.module, self.worker = python, module, worker
         self.audio_dir = audio_dir
@@ -66,9 +68,18 @@ class Voice:
             self.python, "-I", str(self.worker), self.module,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
             limit=1 << 20)
-        line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=300)
-        if not line or not json.loads(line).get("ready"):
-            raise VoiceError("voice worker did not start")
+        try:
+            line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=self.start_timeout)
+            if not line or not json.loads(line).get("ready"):
+                raise VoiceError("voice worker did not start")
+        except BaseException:
+            # a half-started worker must not stay: the next job would read its late {"ready": true} as the
+            # answer, and every answer after that would belong to the job before (PR #12 review)
+            if self.proc.returncode is None:
+                self.proc.kill()
+            await self.proc.wait()
+            self.proc = None
+            raise
 
     async def say(self, text: str, voice: Literal["ryan", "jake"], lang: Literal["english", "korean"],
                   urgent: bool, rank: int = 0) -> str:

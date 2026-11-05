@@ -4,6 +4,15 @@ import os
 import sys
 import time
 
+# argv[1] stands for the TTS module path. "slow-second:<file>" makes the second launch slow to get ready,
+# counting launches in <file>, for the restart that times out.
+if sys.argv[1].startswith("slow-second:"):
+    count = sys.argv[1].split(":", 1)[1]
+    n = (int(open(count).read()) if os.path.exists(count) else 0) + 1
+    with open(count, "w") as f:
+        f.write(str(n))
+    if n == 2:
+        time.sleep(1.0)
 print(json.dumps({"ready": True}), flush=True)
 for line in sys.stdin:
     req = json.loads(line)
