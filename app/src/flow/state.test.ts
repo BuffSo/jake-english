@@ -84,10 +84,10 @@ test("a missing line ends the roleplay", () => {
   expect(reduce(at("loading"), { type: "lineMissing" }).screen).toBe("end");
 });
 
-test("retry from end comes back to end", () => {
-  let s = reduce({ ...at("loading"), screen: "end" }, { type: "retryFromEnd", idx: 1 });
+test("one line from the end comes back to end", () => {
+  let s = reduce({ ...at("loading"), screen: "end" }, { type: "startPractice", kind: "mine", order: [1] });
   expect(s.screen).toBe("roleplay");
-  expect(s.mode).toBe("retry");
+  expect(s.mode).toBe("practice");
   s = reduce(reduce(s, { type: "lineLoaded", line: userLine }), { type: "recordStart" });
   s = reduce(reduce(s, { type: "recordStop" }), { type: "event", e: { type: "done", next: 1, issues: 0 } });
   expect(reduce(s, { type: "next" }).screen).toBe("end");
@@ -174,11 +174,11 @@ describe("back goes to the screen before", () => {
   });
 
   test("a line retried from the end goes back to the end", () => {
-    let s = reduce({ ...at("loading"), screen: "end" }, { type: "retryFromEnd", idx: 1 });
+    let s = reduce({ ...at("loading"), screen: "end" }, { type: "startPractice", kind: "mine", order: [1] });
     s = reduce(reduce(s, { type: "lineLoaded", line: userLine }), { type: "back" });
     expect(s.screen).toBe("end");
     expect(s.roleplay).toBe(rp);
-    expect(s.returnToEnd).toBe(false);
+    expect(s.practice).toBeNull();
     expect(s.mode).toBe("turn");
   });
 
@@ -191,4 +191,77 @@ describe("back goes to the screen before", () => {
   test("home has nothing before it", () => {
     expect(reduce(initial, { type: "back" })).toBe(initial);
   });
+});
+
+// --- practice after the roleplay (spec roleplay-practice 1, 2, 4, 5, 6) --------------------------------------------
+
+const end = (extra: Partial<State> = {}): State => ({ ...at("evaluated"), screen: "end", ...extra });
+
+test("line progress is kept for the header", () => {
+  const s = reduce(reduce(situation, { type: "created", roleplay: rp }), {
+    type: "lineLoaded",
+    line: ryanLine,
+    progress: { no: 1, total: 3 },
+  });
+  expect(s.progress).toEqual({ no: 1, total: 3 });
+});
+
+test("the learner's bubble keeps the script line and what was heard", () => {
+  let s = at("evaluating");
+  s = reduce(s, { type: "event", e: { type: "heard", text: "I like a cup of copy", followed: true } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 0 } });
+  s = reduce(s, { type: "next" });
+  expect(s.history[0]).toEqual({ kind: "user", text: "I like a cup of copy", script: userLine.text });
+});
+
+test("practice of my lines goes through the order and back to the end", () => {
+  let s = reduce(end(), { type: "startPractice", kind: "mine", order: [1, 3] });
+  expect([s.screen, s.mode, s.idx, s.phase, s.history]).toEqual(["roleplay", "practice", 1, "loading", []]);
+  s = reduce(reduce(s, { type: "lineLoaded", line: userLine }), { type: "recordStart" });
+  s = reduce(reduce(s, { type: "recordStop" }), { type: "event", e: { type: "done", next: 1, issues: 0 } });
+  s = reduce(s, { type: "again" });
+  expect([s.mode, s.phase]).toEqual(["practice", "ready"]);
+  s = { ...s, phase: "evaluated" };
+  s = reduce(s, { type: "next" });
+  expect([s.idx, s.practice?.at, s.history]).toEqual([3, 1, []]);
+  s = reduce({ ...s, phase: "evaluated" }, { type: "next" });
+  expect([s.screen, s.practice, s.mode]).toEqual(["end", null, "turn"]);
+});
+
+test("back from practice returns to the end screen", () => {
+  const s = reduce(reduce(end(), { type: "startPractice", kind: "shadow", order: [0, 2] }), { type: "back" });
+  expect([s.screen, s.practice, s.mode]).toEqual(["end", null, "turn"]);
+});
+
+test("a Ryan line in shadow practice is the learner's to say", () => {
+  const s = reduce(reduce(end(), { type: "startPractice", kind: "shadow", order: [0] }), { type: "lineLoaded", line: ryanLine });
+  expect([s.mode, s.phase]).toEqual(["shadow", "ready"]);
+});
+
+test("shadow line without audio is ready", () => {
+  const s = reduce(reduce(end(), { type: "startPractice", kind: "shadow", order: [0] }), {
+    type: "lineLoaded",
+    line: { ...ryanLine, audio: null },
+  });
+  expect(s.phase).toBe("ready");
+});
+
+test("practice starts only from the end screen with lines", () => {
+  const s = at("ready");
+  expect(reduce(s, { type: "startPractice", kind: "mine", order: [1] })).toBe(s);
+  const e = end();
+  expect(reduce(e, { type: "startPractice", kind: "mine", order: [] })).toBe(e);
+});
+
+test("restarted opens the copied roleplay and keeps Jake's line", () => {
+  const jake = { text: "카페에서 주문하는 상황으로 연습해 보면 어때요?", audio: "a".repeat(64) };
+  const copy = { ...rp, id: "b".repeat(12) };
+  const s = reduce(end({ jake, closingPlayed: true }), { type: "restarted", roleplay: copy });
+  expect([s.screen, s.roleplay?.id, s.jake, s.idx, s.closingPlayed]).toEqual(["roleplay", copy.id, jake, 0, false]);
+  const playing = at("ready");
+  expect(reduce(playing, { type: "restarted", roleplay: copy })).toBe(playing); // only from the end screen
+});
+
+test("closing is marked as played", () => {
+  expect(reduce(end(), { type: "closingPlayed" }).closingPlayed).toBe(true);
 });

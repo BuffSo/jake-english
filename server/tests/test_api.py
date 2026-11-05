@@ -40,6 +40,7 @@ def test_create_roleplay_and_get_lines(client):
     assert rp["lines"][0]["speaker"] == "ryan"
     line = client.get(f"/roleplays/{rp['id']}/lines/1").json()
     assert line["three"]["words"] and len(line["audio"]) == 64
+    assert line["progress"] == {"no": 1, "total": 3}
     audio = client.get(f"/audio/{line['audio']}?rate=0.8")
     assert audio.status_code == 200 and audio.headers["content-type"] == "audio/mp4"
     assert client.get(f"/roleplays/{rp['id']}/lines/0/three").json()["words"]
@@ -63,7 +64,7 @@ def test_upload_size_limited(client):
 
 def test_recommend_route(client):
     j = client.post("/recommend").json()
-    assert j["text"].endswith("싶어.") and len(j["audio"]) == 64
+    assert j["text"].endswith("어때요?") and len(j["audio"]) == 64
 
 
 def _app(settings, engine, fake_voice, fake_whisper):
@@ -98,3 +99,55 @@ def test_bad_content_length_is_400(client):
     r = client.post("/roleplays", content=b"{}", headers={"Content-Type": "application/json",
                                                            "Content-Length": "abc"})
     assert r.status_code == 400
+
+
+def test_attempt_route_modes(client, speech_bytes):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    client.get(f"/roleplays/{rp['id']}/lines/0")
+    ok = client.post(f"/roleplays/{rp['id']}/lines/0/attempts?mode=shadow", content=speech_bytes)
+    assert ok.status_code == 200 and ok.text.strip().splitlines()
+    assert client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=shadow", content=speech_bytes).status_code == 404
+    assert client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=bogus", content=speech_bytes).status_code == 422
+
+
+def test_recording_is_served_after_an_attempt(client, speech_bytes):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    client.get(f"/roleplays/{rp['id']}/lines/1")
+    client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=turn", content=speech_bytes)
+    r = client.get(f"/roleplays/{rp['id']}/lines/1/attempts/1/recording")
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mp4" and r.content == speech_bytes
+
+
+def test_recording_missing_is_404_and_creates_nothing(client, settings):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    assert client.get(f"/roleplays/{rp['id']}/lines/1/attempts/9/recording").status_code == 404
+    assert client.get("/roleplays/000000000000/lines/1/attempts/1/recording").status_code == 404
+    assert client.get(f"/roleplays/{rp['id']}/lines/1/attempts/0/recording").status_code == 422
+    assert client.get("/roleplays/..%2Fx/lines/1/attempts/1/recording").status_code in (404, 422)
+    assert not (settings.data_dir / "roleplays" / rp["id"] / "rec").exists()
+
+
+def test_recording_needs_token(settings, engine, fake_voice, fake_whisper):
+    from fastapi.testclient import TestClient
+
+    from je_server.app import Services, create_app
+
+    c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
+    assert c.get("/roleplays/000000000000/lines/1/attempts/1/recording").status_code == 401
+
+
+def test_audio_without_services_is_not_ready(settings, auth):
+    from fastapi.testclient import TestClient
+
+    from je_server.app import create_app
+
+    c = TestClient(create_app(settings, None), headers=auth)
+    r = c.get("/audio/" + "a" * 64)
+    assert r.status_code == 503 and r.json()["code"] == "not_ready"
+
+
+def test_copy_route(client):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    new = client.post(f"/roleplays/{rp['id']}/copy").json()
+    assert new["id"] != rp["id"] and [l["text"] for l in new["lines"]] == [l["text"] for l in rp["lines"]]
+    assert client.post("/roleplays/000000000000/copy").status_code == 404

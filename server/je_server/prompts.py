@@ -96,8 +96,8 @@ they must say something in English right away. Examples of the kind: a tourist o
 somewhere, ordering at a cafe abroad, a hotel front desk, helping a lost foreigner on the subway, small talk with
 a coworker from abroad.
 
-Write request_ko as one Korean sentence in 반말, the way the learner would ask for it, ending with
-"상황으로 연습하고 싶어." Example: "길에서 외국인이 케이블카 타는 곳을 물어보는 상황으로 연습하고 싶어."
+Jake suggests it to the learner. Write request_ko as one polite Korean sentence (해요체) in Jake's words,
+ending with "상황으로 연습해 보면 어때요?" Example: "길에서 외국인이 케이블카 타는 곳을 물어보는 상황으로 연습해 보면 어때요?"
 Pick something different from the recent situations listed by the user.
 """
 

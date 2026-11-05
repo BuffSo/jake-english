@@ -12,7 +12,6 @@ from fastapi import Path as PathParam
 from fastapi import Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +19,7 @@ from .auth import RequestGuard, token_checker
 from .claude import ClaudeUnavailable
 from .config import Settings
 from .engine import Engine, NotFound, TooLong
+from .models import Mode
 
 log = logging.getLogger("je_server")
 MAX_UPLOAD = 5 * 1024 * 1024
@@ -53,8 +53,8 @@ def build_services(settings: Settings) -> Services:
     from .tts import Voice
 
     store = Store(settings.data_dir)
-    voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir)
     whisper = Whisper(settings.whisper_exe, settings.whisper_model, settings.whisper_port)
+    voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir, hear=whisper.hear)
     writer, quick = WRITERS[settings.claude_writer], QUICKS[settings.claude_quick]
     log.info("claude models: writer %s, quick %s", writer["model"], quick["model"])
     claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30),
@@ -138,9 +138,10 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     async def sound(key: str = PathParam(pattern=KEY), rate: float = Query(1.0)):
         if rate not in (0.6, 0.8, 1.0):
             raise ApiError(422, "bad_request")
-        if not services.voice.path(key).is_file():
+        voice = engine().voice  # through engine(): 503 not_ready when started without services (todo 11, 4번)
+        if not voice.path(key).is_file():
             raise ApiError(404, "not_found")
-        return FileResponse(await services.voice.rate_file(key, rate), media_type="audio/mp4")
+        return FileResponse(await voice.rate_file(key, rate), media_type="audio/mp4")
 
     @router.post("/transcribe")
     async def transcribe(request: Request) -> dict:
@@ -164,10 +165,18 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         except ClaudeUnavailable:
             raise claude_down() from None
 
+    @router.post("/roleplays/{rp_id}/copy")
+    async def copy(rp_id: str = PathParam(pattern=ID)) -> dict:
+        try:
+            return (await engine().copy(rp_id)).model_dump(mode="json")
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
     @router.get("/roleplays/{rp_id}/lines/{idx}")
     async def line(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
         try:
-            return (await engine().line(rp_id, idx)).model_dump(mode="json")
+            line = await engine().line(rp_id, idx)  # waits for a rebuild, so the count is of the whole script
+            return {**line.model_dump(mode="json"), "progress": engine().progress(rp_id, idx)}
         except NotFound:
             raise ApiError(404, "not_found") from None
         except ClaudeUnavailable:
@@ -184,10 +193,10 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
 
     @router.post("/roleplays/{rp_id}/lines/{idx}/attempts")
     async def attempt(request: Request, rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0),
-                      mode: Literal["turn", "retry"] = Query("turn")):
+                      mode: Mode = Query("turn")):
         body = await read_body(request)
         try:
-            engine().user_line(rp_id, idx)
+            engine().target_line(rp_id, idx, mode)
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -196,6 +205,14 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
                 yield json.dumps(ev, ensure_ascii=False) + "\n"
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+    @router.get("/roleplays/{rp_id}/lines/{idx}/attempts/{n}/recording")
+    def recording(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0), n: int = PathParam(ge=1)):
+        # found by a checked ID and two integers only, inside the roleplay's rec folder (REVIEW.md 「맥 서버 보안」)
+        try:
+            return FileResponse(engine().recording(rp_id, idx, n), media_type="audio/mp4")
+        except NotFound:
+            raise ApiError(404, "not_found") from None
 
     @router.get("/roleplays/{rp_id}/summary")
     def summary(rp_id: str = PathParam(pattern=ID)) -> dict:

@@ -39,3 +39,27 @@ async def test_bracket_only_text_is_empty(tmp_path):
     wav.write_bytes(b"RIFF")
     w = whisper_with(lambda r: httpx.Response(200, json={"text": " (silence) "}))
     assert await w.transcribe(wav, "auto") == ""
+
+
+async def test_hear_a_made_sound_in_korean(tmp_path):
+    # the voice's end check hears an m4a it just made; the WAV made for whisper does not stay behind
+    from audiotools import make_m4a
+
+    seen = {}
+
+    def handler(request: httpx.Request):
+        seen["body"] = request.read()
+        return httpx.Response(200, json={"text": " 연습하고 싶어.\n"})
+
+    sound = make_m4a(tmp_path, "sine=f=220:r=24000", 1)
+    before = set(tmp_path.iterdir())
+    assert await whisper_with(handler).hear(sound, "ko") == "연습하고 싶어."
+    assert b"\r\n\r\nko\r\n" in seen["body"] and b"RIFF" in seen["body"]
+    assert set(tmp_path.iterdir()) == before
+
+
+def test_the_voice_hears_with_whisper(settings):
+    from je_server.app import build_services
+
+    services = build_services(settings)
+    assert services.voice.hear == services.whisper.hear

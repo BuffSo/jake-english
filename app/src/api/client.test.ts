@@ -82,3 +82,25 @@ test("attempt uploads bytes and passes events in order", async () => {
   expect((init.headers as Record<string, string>)["Content-Type"]).toBe("audio/mp4");
   expect(events.map((e) => (e as { type: string }).type)).toEqual(["heard", "text", "done"]);
 });
+
+test("copy posts to the roleplay's copy route", async () => {
+  const f = jest.fn(async () => json(200, { id: "b".repeat(12) }));
+  await makeApi(URL, TOKEN, f as never, noFile).copyRoleplay("a".repeat(12));
+  const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe(`${URL}/roleplays/${"a".repeat(12)}/copy`);
+  expect(init.method).toBe("POST");
+});
+
+test("recording source carries the token and the attempt number", () => {
+  const src = makeApi(URL, TOKEN, jest.fn() as never, noFile).recordingSource("a".repeat(12), 3, 2);
+  expect(src).toEqual({
+    uri: `${URL}/roleplays/${"a".repeat(12)}/lines/3/attempts/2/recording`,
+    headers: { Authorization: `Bearer ${TOKEN}` },
+  });
+});
+
+test("attempt sends the shadow mode", async () => {
+  const f = jest.fn(async () => streamOf(['{"type":"done","next":0,"issues":0}\n']));
+  await makeApi(URL, TOKEN, f as never, noFile).attempt("a".repeat(12), 0, "file://x.m4a", "shadow", () => {});
+  expect((f.mock.calls[0] as unknown as [string])[0]).toBe(`${URL}/roleplays/${"a".repeat(12)}/lines/0/attempts?mode=shadow`);
+});

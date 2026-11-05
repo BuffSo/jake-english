@@ -76,10 +76,14 @@ async def test_refusal_becomes_unavailable():
 
 
 async def test_recommend_uses_haiku_and_avoids_recent():
-    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황으로 연습하고 싶어."})])
+    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황으로 연습해 보면 어때요?"})])
     text = await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"])
-    assert text.endswith("싶어.")
+    assert text.endswith("어때요?")
     r = fake.requests[0]
+    # 존댓말: Jake's cloned voice swallowed the 반말 ending 「싶어.」 4 times in 5, 「싶어요.」 once (2026-11-05).
+    # Jake suggests the situation to the learner, he does not ask for it on the learner's behalf (user, same day).
+    system = str(r["system"])
+    assert "연습해 보면 어때요?" in system and "반말" not in system and "싶어" not in system
     assert r["model"] == "claude-haiku-5-5" and r["thinking"] == {"type": "disabled"}
     assert "effort" not in r.get("output_config", {})
     assert "케이블카" in r["messages"][0]["content"]

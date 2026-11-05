@@ -12,6 +12,8 @@ from typing import Literal
 
 import httpx
 
+from . import audio
+
 BRACKETS = re.compile(r"\[[^\]]*\]|\([^)]*\)")
 
 
@@ -36,7 +38,16 @@ class Whisper:
             await asyncio.sleep(0.25)
         raise RuntimeError("whisper-server did not start")
 
-    async def transcribe(self, wav: Path, lang: Literal["en", "auto"]) -> str:
+    async def hear(self, sound: Path, lang: Literal["en", "ko"]) -> str:
+        """Transcribes a sound the voice just made (its end check). The WAV for whisper is deleted after."""
+        wav = sound.with_name(f"{sound.stem}-hear.wav")
+        try:
+            await audio.to_wav16k(sound, wav)
+            return await self.transcribe(wav, lang)
+        finally:
+            wav.unlink(missing_ok=True)
+
+    async def transcribe(self, wav: Path, lang: Literal["en", "ko", "auto"]) -> str:
         r = await self.client.post(
             "/inference",
             files={"file": ("audio.wav", wav.read_bytes(), "audio/wav")},

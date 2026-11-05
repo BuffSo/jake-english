@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Mark = Literal["s", "w", "n"]  # s: yellow (strong), w: small gray (weak), n: as is
+Mark = Literal["s", "w", "n"]  # s: strong (bold dark orange on screen), w: small gray (weak), n: as is
 
 
 class Syllable(BaseModel):
@@ -56,9 +56,14 @@ class Issue(BaseModel):
     explain: str
 
 
+# turn: the roleplay's first try at a line; retry: 「다시 해 보기」 inside the roleplay; practice: the learner's lines
+# again after the roleplay (spec roleplay-practice 4); shadow: following Ryan's lines after the roleplay (5)
+Mode = Literal["turn", "retry", "practice", "shadow"]
+
+
 class Attempt(BaseModel):
     n: int
-    mode: Literal["turn", "retry"]
+    mode: Mode
     heard: str
     followed: bool
     issues: list[Issue]

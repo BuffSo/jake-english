@@ -134,6 +134,7 @@ class FakeClaude:
                                        meant="", heard_word="", reply_en="Oh, no worries. Thanks anyway!")
         self.fail_continue = False
         self.continue_gate = None  # an asyncio.Event to hold continue_script until set
+        self.annotate_gate = None  # an asyncio.Event to hold annotate until set
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -148,13 +149,15 @@ class FakeClaude:
 
     async def annotate(self, text, context):
         self.calls.append(("annotate", (text, context)))
+        if self.annotate_gate is not None:
+            await self.annotate_gate.wait()
         self._maybe_fail()
         return plain(text)
 
     async def recommend(self, recent):
         self.calls.append(("recommend", (recent,)))
         self._maybe_fail()
-        return "카페에서 커피를 주문하는 상황으로 연습하고 싶어."
+        return "카페에서 커피를 주문하는 상황으로 연습해 보면 어때요?"
 
     async def feedback(self, line, heard, praise, issues):
         self.feedback_calls.append({"line": line, "heard": heard, "praise": praise,
@@ -190,6 +193,7 @@ class FakeVoice:
 
         self.audio_dir = Path(audio_dir)
         self.calls: list[tuple[str, str, str, bool]] = []
+        self.checked: list[str] = []  # texts asked to be heard back (check=True)
         self.fail_text: str | None = None
 
     async def start(self):
@@ -201,10 +205,12 @@ class FakeVoice:
     def path(self, key):
         return self.audio_dir / f"{key}.m4a"
 
-    async def say(self, text, voice, lang, urgent, rank=0):
+    async def say(self, text, voice, lang, urgent, rank=0, check=False):
         from je_server.tts import VoiceError, audio_key
 
         self.calls.append((text, voice, lang, urgent))
+        if check:
+            self.checked.append(text)
         if text == self.fail_text:
             raise VoiceError("fake")
         key = audio_key(voice, lang, text)

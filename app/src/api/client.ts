@@ -1,7 +1,7 @@
 // Talks to the Mac server. Every request carries the token. Fetch and file reading are passed in so the
 // tests need no native modules; src/api/index.ts wires in expo/fetch and expo-file-system.
 import { NdjsonSplitter } from "./ndjson";
-import type { AttemptEvent, Home, Roleplay, Said, ScriptLine, Summary, ThreeLine } from "./types";
+import type { AttemptEvent, AttemptMode, Home, LineWithProgress, Roleplay, Said, Summary, ThreeLine } from "./types";
 
 export type ErrorCode = "offline" | "claude_unavailable" | "no_speech" | "too_long" | "not_found" | "unknown";
 
@@ -75,15 +75,16 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
     recommend: () => post<Said>("/recommend"),
     transcribe: async (fileUri: string) => ((await (await upload("/transcribe", fileUri)).json()) as { text: string }).text,
     createRoleplay: (situation: string) => post<Roleplay>("/roleplays", { situation }, LONG),
-    getLine: (id: string, idx: number) => get<ScriptLine>(`/roleplays/${id}/lines/${idx}`, LONG),
+    getLine: (id: string, idx: number) => get<LineWithProgress>(`/roleplays/${id}/lines/${idx}`, LONG),
     getThree: (id: string, idx: number) => get<ThreeLine>(`/roleplays/${id}/lines/${idx}/three`, LONG),
     summary: (id: string) => get<Summary>(`/roleplays/${id}/summary`),
+    copyRoleplay: (id: string) => post<Roleplay>(`/roleplays/${id}/copy`, undefined, LONG),
 
     async attempt(
       id: string,
       idx: number,
       fileUri: string,
-      mode: "turn" | "retry",
+      mode: AttemptMode,
       onEvent: (e: AttemptEvent) => void,
     ): Promise<void> {
       const res = await upload(`/roleplays/${id}/lines/${idx}/attempts?mode=${mode}`, fileUri);
@@ -113,6 +114,11 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
 
     audioSource: (key: string, rate: 0.6 | 0.8 | 1 = 1) => ({ uri: `${base}/audio/${key}?rate=${rate}`, headers: auth }),
     imageSource: (path: string) => ({ uri: base + path, headers: auth }),
+    // the learner's own recording, streamed for replay and never saved on the phone
+    recordingSource: (id: string, idx: number, n: number) => ({
+      uri: `${base}/roleplays/${id}/lines/${idx}/attempts/${n}/recording`,
+      headers: auth,
+    }),
   };
 }
 

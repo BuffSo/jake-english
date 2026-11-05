@@ -65,7 +65,15 @@ async def test_unknown_line_is_not_found(engine):
 
 async def test_recommend_is_jake_korean(engine, fake_voice, fake_claude):
     said = await engine.recommend()
-    assert said.text.endswith("싶어.") and (said.text, "jake", "korean", True) in fake_voice.calls
+    assert said.text.endswith("어때요?") and (said.text, "jake", "korean", True) in fake_voice.calls
+    assert said.text in fake_voice.checked  # heard back: its end was once swallowed (2026-11-05)
+
+
+async def test_fixed_phrases_are_checked(engine, fake_voice):
+    from je_server.phrases import PHRASES
+
+    await engine.warm()
+    assert set(PHRASES.values()) <= set(fake_voice.checked)
 
 
 async def test_model_audio_starts_before_notes_finish(engine, fake_claude, fake_voice):
@@ -84,3 +92,92 @@ async def test_model_audio_starts_before_notes_finish(engine, fake_claude, fake_
     assert any(c[0] == rp.lines[1].text for c in fake_voice.calls)  # audio asked for while notes still wait
     gate.set()
     assert (await engine.line(rp.id, 1)).three is not None
+
+
+async def test_progress_counts_the_learners_lines(engine):
+    rp = await engine.create("길 묻기")  # lines: ryan 0, user 1, ryan 2, user 3, ryan 4, user 5, ryan 6
+    assert [engine.progress(rp.id, i) for i in (0, 1, 2, 3, 5, 6)] == [
+        {"no": 1, "total": 3}, {"no": 1, "total": 3}, {"no": 2, "total": 3},
+        {"no": 2, "total": 3}, {"no": 3, "total": 3}, {"no": 3, "total": 3}]
+
+
+async def test_progress_never_passes_total(engine, fake_claude, fake_whisper, speech_bytes):
+    # a rebuild that fails closes with Ryan's goodbye: lines become ryan 0, user 1, reply 2, closing 3
+    fake_claude.fail_continue = True
+    rp = await engine.create("길 묻기")
+    await engine.line(rp.id, 1)
+    fake_whisper.text = "I have no idea at all."
+    [e async for e in engine.attempt(rp.id, 1, speech_bytes, "turn")]
+    await engine.line(rp.id, 3)
+    assert engine.progress(rp.id, 3) == {"no": 1, "total": 1}
+
+
+async def test_copy_starts_fresh_with_the_same_script(engine_with_rp, speech_bytes, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    for i in range(7):  # let background preparation finish, so the record stops changing
+        await engine.line(rp_id, i)
+    [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
+    old = engine.store.load(rp_id)
+    calls = len(fake_claude.calls)
+    new = await engine.copy(rp_id)
+    assert new.id != rp_id and new.lines == old.lines and new.attempts == {} and new.pos == 0
+    assert new.situation == old.situation and new.frame == old.frame
+    assert engine.store.load(rp_id) == old  # the old record is untouched
+    assert ("make_script", (old.situation,)) not in fake_claude.calls[calls:]
+
+
+async def test_copy_keeps_reply_lines_in_order(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "I have no idea at all."
+    [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
+    new = await engine.copy(rp_id)  # waits for the rebuild
+    assert [l.idx for l in new.lines] == list(range(len(new.lines)))
+    assert new.lines[user_idx + 1].kind == "reply"
+    # text only: background preparation may still add notes and sounds to either record
+    shape = lambda lines: [(l.idx, l.speaker, l.text, l.kind) for l in lines]  # noqa: E731
+    assert shape(new.lines) == shape(engine.store.load(rp_id).lines)
+
+
+async def test_a_line_whose_sound_failed_comes_without_audio(engine, fake_voice):
+    # final review: a Ryan line whose voice fails must still come (shadow practice can record it, the roleplay
+    # moves on after its pause) instead of a 500
+    from fakes import DRAFT_RYAN
+
+    fake_voice.fail_text = DRAFT_RYAN[0]
+    rp = await engine.create("길 묻기")
+    line = await engine.line(rp.id, 0)
+    assert line.text == DRAFT_RYAN[0] and line.audio is None
+
+
+async def test_ryan_notes_asked_twice_at_once_are_made_once(engine, fake_claude):
+    # PR #15 review: the end screen asks for every Ryan line's notes and the shadow screen asks again; one
+    # Claude call per line must serve both
+    import asyncio
+
+    fake_claude.annotate_gate = asyncio.Event()
+    rp = await engine.create("길 묻기")
+    asks = [asyncio.create_task(engine.three(rp.id, 0)) for _ in range(2)]
+    for _ in range(5):
+        await asyncio.sleep(0)
+    fake_claude.annotate_gate.set()
+    a, b = await asyncio.gather(*asks)
+    assert a == b
+    assert sum(1 for name, args in fake_claude.calls if name == "annotate" and args[0] == rp.lines[0].text) == 1
+
+
+async def test_a_line_whose_sound_failed_still_has_its_notes(engine, fake_claude, fake_voice):
+    # PR #15 review: a sound that failed fast while the notes were still being made returned the line without
+    # notes, and the roleplay screen never asks for them again
+    import asyncio
+
+    from fakes import DRAFT_USER
+
+    fake_claude.annotate_gate = asyncio.Event()
+    fake_voice.fail_text = DRAFT_USER[0]
+    rp = await engine.create("길 묻기")
+    ask = asyncio.create_task(engine.line(rp.id, 1))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    fake_claude.annotate_gate.set()
+    line = await ask
+    assert line.audio is None and line.three is not None

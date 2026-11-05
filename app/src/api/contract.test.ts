@@ -2,9 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { NdjsonSplitter } from "./ndjson";
-import { EVENT_TYPES, LINE_KEYS, ROLEPLAY_KEYS, SYLLABLE_KEYS } from "./types";
+import { EVENT_TYPES, LINE_KEYS, ROLEPLAY_KEYS, SUMMARY_KEYS, SYLLABLE_KEYS, TRY_KEYS } from "./types";
 import roleplay from "../../../contract/roleplay.json";
 import lineUser from "../../../contract/line-user.json";
+import summary from "../../../contract/summary.json";
 
 const sorted = (a: readonly string[]) => [...a].sort();
 
@@ -23,4 +24,12 @@ test("every example event type is known", () => {
   const events = new NdjsonSplitter().push(text) as { type: string }[];
   expect(events.length).toBeGreaterThan(3);
   for (const e of events) expect(EVENT_TYPES).toContain(e.type);
+});
+
+test("summary example has the keys the end screen reads", () => {
+  expect(sorted(Object.keys(summary))).toEqual(sorted(SUMMARY_KEYS));
+  for (const l of summary.lines) {
+    expect(sorted(Object.keys(l.line))).toEqual(sorted(LINE_KEYS));
+    for (const t of l.tries) expect(sorted(Object.keys(t))).toEqual(sorted(TRY_KEYS));
+  }
 });

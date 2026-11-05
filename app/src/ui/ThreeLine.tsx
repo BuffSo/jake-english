@@ -1,4 +1,6 @@
-// Three lines: English, Korean pronunciation, how to read it. Yellow = strong, small gray = weak.
+// Three lines: English, Korean pronunciation, how to read it. Bold dark orange = strong, small gray = weak.
+// Strong used to be a yellow fill; on the light blue card it looked blocky, so the user chose colored bold text
+// (2026-11-06).
 import { StyleSheet, Text, View } from "react-native";
 
 import type { ThreeLine } from "../api/types";
@@ -16,7 +18,7 @@ function Pieces({ groups, size }: { groups: Seg[][]; size: number }) {
               key={j}
               style={
                 s.style === "strong"
-                  ? { backgroundColor: colors.strong }
+                  ? { color: colors.stress, fontWeight: "800" }
                   : s.style === "weak"
                     ? { fontSize: size * 0.78, color: colors.weak }
                     : undefined

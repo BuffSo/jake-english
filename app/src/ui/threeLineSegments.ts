@@ -1,4 +1,4 @@
-// Turns a three-line note into styled pieces: yellow (strong), small gray (weak), plain.
+// Turns a three-line note into styled pieces: strong (bold dark orange), small gray (weak), plain.
 // Rules: docs/guide/PRONUNCIATION_한글발음_세줄표시_20261105.md
 import type { Syllable, ThreeLine } from "../api/types";
 

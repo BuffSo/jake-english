@@ -1,6 +1,6 @@
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
-import { Image, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../api";
 import type { Home, Roleplay, Said } from "../api/types";
@@ -10,7 +10,8 @@ import { createGate } from "../flow/gate";
 import { whenSilent } from "../flow/whenSilent";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
-import { colors } from "../ui/theme";
+import { RyanCircle } from "../ui/RyanFace";
+import { colors, top } from "../ui/theme";
 import { messageOf, styles as common, Waiting } from "./common";
 
 type Props = { sounds: SoundQueue; home: Home; onCreated: (rp: Roleplay, jake: Said | null) => void; onBack: () => void };
@@ -80,7 +81,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   async function recommend() {
     const my = gen.current;
     setStep("working");
-    setStatus("라이언이 상황을 고르고 있어요");
+    setStatus("제이크가 상황을 고르고 있어요");
     setError(null);
     try {
       const said = await api.recommend();
@@ -150,7 +151,9 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   return (
     <View style={styles.wrap}>
       <BackButton onPress={back} floating />
-      <Image source={api.imageSource(home.images.listening)} style={styles.face} resizeMode="cover" />
+      <View style={styles.face}>
+        <RyanCircle source={api.imageSource(home.images.listening)} size={160} />
+      </View>
       <Text style={[common.body, styles.say]}>{home.lines.ask_situation.text}</Text>
       {step === "input" && (
         <>
@@ -186,8 +189,9 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 20, justifyContent: "center", backgroundColor: colors.bg },
-  face: { width: 120, height: 120, borderRadius: 60, alignSelf: "center", marginBottom: 12, backgroundColor: colors.ryan },
+  // from just below the floating back button: centring left a wide gap above the picture (2026-11-05, user)
+  wrap: { flex: 1, paddingTop: top + 44, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: colors.bg },
+  face: { marginBottom: 12 },
   say: { marginBottom: 10 },
   jake: { backgroundColor: colors.user, borderRadius: 12, padding: 12 },
   input: {

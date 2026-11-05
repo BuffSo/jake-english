@@ -1,0 +1,75 @@
+{
+ "say": {
+  "text": "역할극 끝! 수고했어요. 고칠 것이 남았던 대사를 다시 해 볼까요?",
+  "audio": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+ },
+ "lines": [
+  {
+   "line": {
+    "idx": 0,
+    "speaker": "ryan",
+    "text": "Hi there! What can I get you?",
+    "kind": "script",
+    "three": null,
+    "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "tries": []
+  },
+  {
+   "line": {
+    "idx": 1,
+    "speaker": "user",
+    "text": "I'd like a cup of coffee.",
+    "kind": "script",
+    "three": null,
+    "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   },
+   "tries": [
+    {
+     "n": 1,
+     "mode": "turn",
+     "heard": "I'd like a cup of copy.",
+     "followed": true,
+     "issues": [
+      {
+       "target": "coffee",
+       "heard": "copy"
+      }
+     ],
+     "point_ko": ""
+    }
+   ]
+  },
+  {
+   "line": {
+    "idx": 2,
+    "speaker": "ryan",
+    "text": "Sure. What size would you like?",
+    "kind": "script",
+    "three": null,
+    "audio": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   },
+   "tries": []
+  },
+  {
+   "line": {
+    "idx": 3,
+    "speaker": "user",
+    "text": "A large one, please.",
+    "kind": "script",
+    "three": null,
+    "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   },
+   "tries": [
+    {
+     "n": 1,
+     "mode": "turn",
+     "heard": "Big one.",
+     "followed": false,
+     "issues": [],
+     "point_ko": "이럴 때는 A large one, please처럼 말하면 더 자연스러워요."
+    }
+   ]
+  }
+ ]
+}

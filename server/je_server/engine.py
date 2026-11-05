@@ -8,13 +8,12 @@ import time
 from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 from . import audio
 from .claude import ClaudeUnavailable
 from . import sounds
 from .compare import FOLLOW_MIN, find_issues, praise_candidates, similarity, sound_pairs, words
-from .models import Attempt, Draft, Issue, Roleplay, Said, ScriptLine, ThreeLine
+from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, ScriptLine, ThreeLine
 from .sentences import SentenceBuffer
 from .tts import VoiceError
 from .phrases import PHRASES
@@ -43,6 +42,7 @@ class Engine:
         self.sem = asyncio.Semaphore(3)
         self.continuing: dict[str, asyncio.Task] = {}
         self.left: dict[str, int] = {}  # learner lines the running rebuild is writing
+        self.threes: dict[tuple[str, int], asyncio.Task] = {}  # notes asked for on demand, one call per line
 
     # --- fixed phrases ------------------------------------------------------------------------
 
@@ -51,8 +51,8 @@ class Engine:
         return Said(text=text, audio=audio_key("ryan", "korean", text))
 
     async def warm(self) -> None:
-        for text in PHRASES.values():
-            await self.voice.say(text, "ryan", "korean", urgent=False)
+        for text in PHRASES.values():  # made once and played many times, so heard back (check)
+            await self.voice.say(text, "ryan", "korean", urgent=False, check=True)
 
     # --- helpers ------------------------------------------------------------------------------
 
@@ -95,6 +95,21 @@ class Engine:
             self.schedule(rp.id, line.idx)
         return rp
 
+    async def copy(self, rp_id: str) -> Roleplay:
+        """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
+        sounds are reused, so it starts at once; the old record and its tries stay as they are."""
+        task = self.continuing.get(rp_id)
+        if task is not None and not task.done():
+            await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
+        old = self.load(rp_id)
+        rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
+                      situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines])
+        self.store.save(rp)
+        for line in rp.lines:
+            if not self.ready(line):
+                self.schedule(rp.id, line.idx)
+        return rp
+
     def schedule(self, rp_id: str, idx: int) -> asyncio.Task:
         key = (rp_id, idx)
         task = self.tasks.get(key)
@@ -123,7 +138,12 @@ class Engine:
                 key = await self.voice.say(line.text, "ryan", "english", urgent=False, rank=idx)
                 await self.update_line(rp_id, idx, line.text, audio=key)
 
-        await asyncio.gather(notes(), sound())
+        # both finish before either failure is raised: a sound that fails fast must not leave the line without
+        # its notes, since the roleplay screen does not ask for them again (PR #15 review)
+        results = await asyncio.gather(notes(), sound(), return_exceptions=True)
+        for r in results:
+            if isinstance(r, BaseException):
+                raise r
 
     async def line(self, rp_id: str, idx: int) -> ScriptLine:
         task = self.continuing.get(rp_id)
@@ -132,14 +152,48 @@ class Engine:
         _, line = self.get_line(rp_id, idx)
         if self.ready(line):
             return line
-        await asyncio.wait_for(asyncio.shield(self.schedule(rp_id, idx)), LINE_WAIT)
+        try:
+            await asyncio.wait_for(asyncio.shield(self.schedule(rp_id, idx)), LINE_WAIT)
+        except VoiceError:
+            # the line comes without its sound rather than as an error: the roleplay moves on after a pause and
+            # shadow practice can still record it (final review); the next request tries the sound again
+            log.info("line sound failed: %s/%d", rp_id, idx)
         return self.get_line(rp_id, idx)[1]
 
+    def recording(self, rp_id: str, idx: int, n: int) -> Path:
+        """The learner's recording of one try, for replay on the end screen. The phone plays it, never keeps it."""
+        path = self.store.find_rec(rp_id, idx, n)
+        if path is None:
+            raise NotFound(f"{rp_id}/{idx}/{n}")
+        return path
+
+    def progress(self, rp_id: str, idx: int) -> dict[str, int]:
+        """「내 대사 no/total」 for the roleplay header. On Ryan's line it is the learner's next line. A rebuild that
+        failed ends with Ryan's goodbye and fewer learner lines, so no is kept within total."""
+        rp = self.load(rp_id)
+        total = sum(1 for l in rp.lines if l.speaker == "user")
+        before = sum(1 for l in rp.lines if l.speaker == "user" and l.idx < idx)
+        return {"no": min(before + 1, total), "total": total}
+
     async def three(self, rp_id: str, idx: int) -> ThreeLine:
-        rp, line = self.get_line(rp_id, idx)
+        """Notes on demand (Ryan's lines). Asks for the same line at once share one Claude call (PR #15 review:
+        the end screen asks for every Ryan line and the shadow screen asks again)."""
+        _, line = self.get_line(rp_id, idx)
         if line.three is not None:
             return line.three
-        three = await self.claude.annotate(line.text, self.context(rp, idx))
+        key = (rp_id, idx)
+        task = self.threes.get(key)
+        if task is None or task.done():
+            task = asyncio.create_task(self._make_three(rp_id, idx))
+            task.add_done_callback(_quiet)
+            task.add_done_callback(lambda _: self.threes.pop(key, None))
+            self.threes[key] = task
+        return await asyncio.shield(task)
+
+    async def _make_three(self, rp_id: str, idx: int) -> ThreeLine:
+        rp, line = self.get_line(rp_id, idx)
+        async with self.sem:
+            three = await self.claude.annotate(line.text, self.context(rp, idx))
         await self.update_line(rp_id, idx, line.text, three=three)
         return three
 
@@ -147,7 +201,8 @@ class Engine:
 
     async def recommend(self) -> Said:
         text = await self.claude.recommend(self.store.recent_situations())
-        return Said(text=text, audio=await self.voice.say(text, "jake", "korean", urgent=True))
+        # heard back: its last sound was once swallowed (2026-11-05, 「…연습하고 싶~」)
+        return Said(text=text, audio=await self.voice.say(text, "jake", "korean", urgent=True, check=True))
 
     async def transcribe(self, body: bytes) -> str:
         """Situation input by voice: Korean or English, auto-detected. The recording is deleted after."""
@@ -168,20 +223,22 @@ class Engine:
 
     # --- a turn: the learner's recording ------------------------------------------------------
 
-    def user_line(self, rp_id: str, idx: int) -> ScriptLine:
+    def target_line(self, rp_id: str, idx: int, mode: Mode) -> ScriptLine:
+        """The line a recording is said against: Ryan's for shadow practice, the learner's for the rest."""
         _, line = self.get_line(rp_id, idx)
-        if line.speaker != "user":
+        if line.speaker != ("ryan" if mode == "shadow" else "user"):
             raise NotFound(f"{rp_id}/{idx}")
         return line
 
     def error(self, code: str, phrase: str | None = None) -> dict:
         return {"type": "error", "code": code, "say": self.said(phrase or code).model_dump()}
 
-    async def attempt(self, rp_id: str, idx: int, body: bytes,
-                      mode: Literal["turn", "retry"]) -> AsyncIterator[dict]:
+    async def attempt(self, rp_id: str, idx: int, body: bytes, mode: Mode) -> AsyncIterator[dict]:
+        """Only a roleplay turn said differently gets Ryan's reply and a new rest of the script; the other modes
+        ask to follow the line and leave the script and the position alone."""
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
-        line = self.user_line(rp_id, idx)
+        line = self.target_line(rp_id, idx, mode)
         n, rec = self.store.next_rec(rp_id, idx)
         rec.write_bytes(body)  # kept on the Mac (spec 「녹음과 기록」)
         wav = self.store.tmp_dir / f"{rp_id}-{idx}-{n}.wav"
@@ -217,7 +274,7 @@ class Engine:
             issues = find_issues(line.text, heard, limit=2)
             text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard), issues)
             nxt = idx + 1 if mode == "turn" else idx
-        elif mode == "retry":
+        elif mode != "turn":
             text = _one(self.said("retry_offscript").text)
             nxt = idx
         else:
@@ -374,10 +431,23 @@ class Engine:
             self.schedule(rp_id, i)
 
     def summary(self, rp_id: str) -> dict:
+        """The end screen: every line with the learner's tries made inside the roleplay (spec roleplay-practice 3).
+        Practice after the roleplay is left out: 「주고받은 말」 is what was said, and Ryan's reply to a line said
+        differently answers that try. The closing words go by the same tries."""
         rp = self.load(rp_id)
-        retry = [l.idx for l in rp.lines
-                 if l.speaker == "user" and rp.attempts.get(l.idx) and rp.attempts[l.idx][-1].issues]
-        return {"say": self.said("closing_retry" if retry else "closing_clean").model_dump(), "retry": retry}
+        lines, issues_left = [], False
+        for l in rp.lines:
+            tries = [a for a in rp.attempts.get(l.idx, []) if a.mode in ("turn", "retry")] if l.speaker == "user" else []
+            issues_left = issues_left or bool(tries and tries[-1].issues)
+            lines.append({"line": l.model_dump(mode="json"), "tries": [
+                {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
+                 "issues": [{"target": i.target, "heard": i.heard} for i in a.issues],
+                 # Ryan's one point for a roleplay turn said differently; a retry said differently only asked
+                 # to follow the line, which is not a point (final review)
+                 # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
+                 "point_ko": a.say_ko if a.mode == "turn" and not a.followed and not a.issues else ""}
+                for a in tries]})
+        return {"say": self.said("closing_retry" if issues_left else "closing_clean").model_dump(), "lines": lines}
 
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
         async with self.lock(rp_id):

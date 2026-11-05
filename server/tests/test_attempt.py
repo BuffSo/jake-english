@@ -96,3 +96,49 @@ def test_attempt_route_rejects_ryan_line_and_bad_mode(client, speech_bytes):
     rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
     assert client.post(f"/roleplays/{rp['id']}/lines/0/attempts", content=speech_bytes).status_code == 404
     assert client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=x", content=speech_bytes).status_code == 422
+
+
+# --- practice after the roleplay (spec 2026-11-05-roleplay-practice 4, 5, 7) ------------------------------------
+
+
+async def test_shadow_on_ryan_line_is_evaluated_like_a_followed_line(engine_with_rp, speech_bytes, fake_whisper,
+                                                                    fake_claude):
+    engine, rp_id, _ = engine_with_rp
+    ryan = engine.store.load(rp_id).lines[0]
+    fake_whisper.text = ryan.text
+    ev = await run(engine, rp_id, 0, speech_bytes, "shadow")
+    assert ev[0] == {"type": "heard", "text": ryan.text, "followed": True}
+    assert ev[-1] == {"type": "done", "next": 0, "issues": 0}
+    assert fake_claude.feedback_calls[0]["line"] == ryan.text
+    saved = engine.store.load(rp_id)
+    assert saved.attempts[0][0].mode == "shadow" and saved.pos == 0
+
+
+async def test_shadow_said_differently_asks_to_follow(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, _ = engine_with_rp
+    before = engine.store.load(rp_id).lines
+    fake_whisper.text = "I have no idea at all."
+    ev = await run(engine, rp_id, 0, speech_bytes, "shadow")
+    assert [e["delta"] for e in ev if e["type"] == "text"] == [engine.said("retry_offscript").text]
+    assert fake_claude.offscript_calls == [] and engine.store.load(rp_id).lines == before
+
+
+async def test_practice_keeps_pos_and_script(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    before = engine.store.load(rp_id).lines
+    fake_whisper.text = "I have no idea at all."
+    ev = await run(engine, rp_id, user_idx, speech_bytes, "practice")
+    assert ev[-1] == {"type": "done", "next": user_idx, "issues": 0}
+    assert fake_claude.offscript_calls == []
+    saved = engine.store.load(rp_id)
+    assert saved.lines == before and saved.pos == 0 and saved.attempts[user_idx][0].mode == "practice"
+
+
+async def test_mode_must_match_the_speaker(engine_with_rp):
+    from je_server.engine import NotFound
+
+    engine, rp_id, user_idx = engine_with_rp
+    with pytest.raises(NotFound):
+        engine.target_line(rp_id, 0, "turn")
+    with pytest.raises(NotFound):
+        engine.target_line(rp_id, user_idx, "shadow")
