@@ -4,6 +4,7 @@
 
 It loads that module the way the existing render script does and repeats its steps: language chunks,
 voice-likeness check with retries, optional pitch matching, even pauses, then WAV -> AAC (afconvert).
+Unlike the render script it makes one sentence at a time and cuts Korean pauses inside a sentence short.
 Protocol, one JSON object per line:
     -> {"ready": true}
     <- {"id": 1, "text": "...", "voice": "ryan" | "jake", "lang": "english" | "korean", "rate": 1.3,
@@ -14,10 +15,26 @@ Library output goes to stderr so stdout carries only the protocol. Texts are not
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import wave
+
+# Longest pause kept inside a sentence, in seconds before the speed change. 2026-11-05 Jake paused 0.4 s after
+# 「은행 창구에서」 and 0.3 s after 「외국인 고객이」 and the user heard the sentence as broken up. The module's
+# own cap (0.75 s) is meant for the reply reader and stays for English model lines. Pauses between sentences
+# are the voice's gap (0.6 s), since each sentence is made on its own.
+KOREAN_PAUSE_CAP = 0.15
+MODULE_PAUSE_CAP = 0.75
+
+
+def sentences(part: str) -> list[str]:
+    return [s for s in re.split(r"(?<=[.?!。])\s+", part.strip()) if s]
+
+
+def pause_cap(lang: str) -> float:
+    return KOREAN_PAUSE_CAP if lang == "korean" else MODULE_PAUSE_CAP
 
 
 def main() -> None:
@@ -41,7 +58,10 @@ def main() -> None:
         player.ensure_model(conf["model"])
         pieces, sr = [], 24000
         # Korean speech may quote English, so let the module split by language; script lines stay English.
-        for part, plang in srv.lang_chunks(text, "english" if lang == "english" else "auto"):
+        # Then one sentence at a time, so cutting pauses inside a sentence keeps the pause between sentences.
+        parts = [(s, plang) for chunk, plang in srv.lang_chunks(text, "english" if lang == "english" else "auto")
+                 for s in sentences(chunk)]
+        for part, plang in parts:
             audio, sr = player.make(conf, part, plang)
             if conf["model"] == "base":
                 name = srv.ref_name(conf, plang)
@@ -55,7 +75,8 @@ def main() -> None:
                         audio, score = audio2, score2
                 if conf.get("pitch", True):
                     audio, _ = player.match_pitch(audio, sr, name)
-            pieces.append(srv.even_pauses(audio, sr, gap=conf.get("gap") or 0.0, lead=srv.lead_ok(part)))
+            pieces.append(srv.even_pauses(audio, sr, cap=pause_cap(plang), gap=conf.get("gap") or 0.0,
+                                          lead=srv.lead_ok(part)))
             mx.clear_cache()
         audio = np.concatenate(pieces)
         if conf.get("gap"):

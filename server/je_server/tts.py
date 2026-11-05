@@ -2,6 +2,8 @@
 
 One worker, one queue: urgent jobs (Ryan's live feedback) go before prepared ones (model audio for
 later lines). Sounds are cached by sha256(voice|lang|rate|text), so the same line is made once.
+Sounds played as they are made once (Jake, Ryan's fixed phrases) can be heard back with whisper and made
+again when their last word is missing.
 """
 from __future__ import annotations
 
@@ -9,7 +11,10 @@ import asyncio
 import hashlib
 import itertools
 import json
+import logging
 import os
+import re
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Literal
 
@@ -31,20 +36,40 @@ SPEAK_RATE = {
 }
 
 
+# Korean sounds are made differently since 2026-11-05: pauses inside a sentence are cut short
+# (`tts_worker.pause_cap`) and Jake and the fixed phrases are heard back. The mark keeps older Korean files from
+# being served. English model lines did not change and keep their keys.
+MADE = {"korean": "2", "english": ""}
+END_RETRIES = 2  # takes made again when the last word is missing; the last take is kept after that
+WHISPER_LANG = {"korean": "ko", "english": "en"}
+
+log = logging.getLogger("je_server")
+Hear = Callable[[Path, str], Awaitable[str]]
+
+
 class VoiceError(Exception):
     pass
 
 
 def audio_key(voice: str, lang: str, text: str) -> str:
     # the rate is in the key, so a sound made before a rate change is never served for the new rate
-    return hashlib.sha256(f"{voice}|{lang}|{SPEAK_RATE[voice, lang]}|{text}".encode()).hexdigest()
+    made = f"{MADE[lang]}|" if MADE[lang] else ""
+    return hashlib.sha256(f"{voice}|{lang}|{SPEAK_RATE[voice, lang]}|{made}{text}".encode()).hexdigest()
+
+
+def ends_right(text: str, heard: str) -> bool:
+    """Whether the sound got to the end: the transcript ends with the text's last word, spaces and punctuation
+    aside. 2026-11-05 the voice model swallowed the last sound of 「…연습하고 싶어.」 and whisper heard 「싶다」."""
+    last = re.findall(r"\w+", text.lower())
+    return bool(last) and re.sub(r"\W", "", heard.lower()).endswith(last[-1])
 
 
 class Voice:
     start_timeout = 300  # seconds for the worker to load the model and say it is ready
 
-    def __init__(self, python: str, module: str, audio_dir: Path, worker: Path = WORKER):
+    def __init__(self, python: str, module: str, audio_dir: Path, worker: Path = WORKER, hear: Hear | None = None):
         self.python, self.module, self.worker = python, module, worker
+        self.hear = hear  # (sound file, whisper language) -> transcript, for check=True
         self.audio_dir = audio_dir
         self.tmp_dir = audio_dir / ".tmp"
         self.proc: asyncio.subprocess.Process | None = None
@@ -83,8 +108,10 @@ class Voice:
             raise
 
     async def say(self, text: str, voice: Literal["ryan", "jake"], lang: Literal["english", "korean"],
-                  urgent: bool, rank: int = 0) -> str:
-        """rank orders prepared jobs (the line number), so the next line's sound is not stuck behind later lines."""
+                  urgent: bool, rank: int = 0, check: bool = False) -> str:
+        """rank orders prepared jobs (the line number), so the next line's sound is not stuck behind later lines.
+        check hears the sound back and makes it again when its last word is missing; it adds a transcription
+        (about 0.4 s), so Ryan's live feedback does not use it."""
         key = audio_key(voice, lang, text)
         if self.path(key).exists():
             return key
@@ -93,28 +120,45 @@ class Voice:
             fut = asyncio.get_running_loop().create_future()
             self.inflight[key] = fut
         # an urgent ask for a queued prepared job queues it again in front; the consumer skips duplicates
-        self.queue.put_nowait((0 if urgent else 1, 0 if urgent else rank, next(self.seq), key, text, voice, lang))
+        self.queue.put_nowait((0 if urgent else 1, 0 if urgent else rank, next(self.seq), key, text, voice, lang,
+                               check))
         await asyncio.shield(fut)
         return key
 
     async def _consume(self) -> None:
         while True:
-            _, _, _, key, text, voice, lang = await self.queue.get()
+            _, _, _, key, text, voice, lang, check = await self.queue.get()
             fut = self.inflight.get(key)
             if fut is None or fut.done():
                 continue
             try:
-                await self._make(key, text, voice, lang)
+                await self._make(key, text, voice, lang, check)
                 fut.set_result(key)
             except Exception as e:  # noqa: BLE001 - every failure reaches the waiting caller
                 fut.set_exception(e if isinstance(e, VoiceError) else VoiceError(type(e).__name__))
             finally:
                 self.inflight.pop(key, None)
 
-    async def _make(self, key: str, text: str, voice: str, lang: str) -> None:
+    async def _make(self, key: str, text: str, voice: str, lang: str, check: bool = False) -> None:
+        tmp = self.tmp_dir / f"{key}.m4a"
+        checking = check and self.hear is not None
+        for take in range(1 + (END_RETRIES if checking else 0)):
+            await self._render(tmp, text, voice, lang)
+            if not checking or await self._ends_right(tmp, text, lang):
+                break
+            log.info("voice end missing: take %d of %d", take + 1, 1 + END_RETRIES)
+        os.replace(tmp, self.path(key))
+
+    async def _ends_right(self, sound: Path, text: str, lang: str) -> bool:
+        try:
+            return ends_right(text, await self.hear(sound, WHISPER_LANG[lang]))
+        except Exception as e:  # noqa: BLE001 - cannot hear it now: keep the sound rather than lose it
+            log.info("voice end check failed: %s", type(e).__name__)
+            return True
+
+    async def _render(self, tmp: Path, text: str, voice: str, lang: str) -> None:
         if self.proc is None or self.proc.returncode is not None:
             await self._spawn()
-        tmp = self.tmp_dir / f"{key}.m4a"
         req = {"id": next(self.ids), "text": text, "voice": voice, "lang": lang, "rate": SPEAK_RATE[voice, lang],
                "out": str(tmp)}
         self.proc.stdin.write((json.dumps(req, ensure_ascii=False) + "\n").encode())
@@ -127,7 +171,6 @@ class Voice:
         resp = json.loads(line)
         if not resp.get("ok"):
             raise VoiceError(resp.get("error", "voice worker failed"))
-        os.replace(tmp, self.path(key))
 
     async def rate_file(self, key: str, rate: float) -> Path:
         """A 0.6x/0.8x copy, made once. Requests for the same copy at the same time share one ffmpeg run

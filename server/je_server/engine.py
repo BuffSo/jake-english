@@ -51,8 +51,8 @@ class Engine:
         return Said(text=text, audio=audio_key("ryan", "korean", text))
 
     async def warm(self) -> None:
-        for text in PHRASES.values():
-            await self.voice.say(text, "ryan", "korean", urgent=False)
+        for text in PHRASES.values():  # made once and played many times, so heard back (check)
+            await self.voice.say(text, "ryan", "korean", urgent=False, check=True)
 
     # --- helpers ------------------------------------------------------------------------------
 
@@ -147,7 +147,8 @@ class Engine:
 
     async def recommend(self) -> Said:
         text = await self.claude.recommend(self.store.recent_situations())
-        return Said(text=text, audio=await self.voice.say(text, "jake", "korean", urgent=True))
+        # heard back: its last sound was once swallowed (2026-11-05, 「…연습하고 싶~」)
+        return Said(text=text, audio=await self.voice.say(text, "jake", "korean", urgent=True, check=True))
 
     async def transcribe(self, body: bytes) -> str:
         """Situation input by voice: Korean or English, auto-detected. The recording is deleted after."""

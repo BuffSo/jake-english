@@ -128,3 +128,88 @@ async def test_a_worker_too_slow_to_start_is_not_kept(tmp_path):
             assert v.path(await v.say(text, "ryan", "english", urgent=True)).exists()
     finally:
         await v.stop()
+
+
+# --- 2026-11-05: Jake's recommended situation came out as 「…연습하고 싶~」, its last sound swallowed by the
+# voice model (whisper heard 「싶다」; three new takes of the same sentence all ended clearly). Sounds made once and
+# played as they are (Jake, Ryan's fixed phrases) are heard back and made again when the last word is missing.
+
+
+def test_ends_right():
+    from je_server.tts import ends_right
+
+    assert not ends_right("은행 창구에서 서류를 물어보는 상황으로 연습하고 싶어.", "은행 창구에서 서류를 물어보는 상황으로 연습하고 싶다.")
+    assert ends_right("안녕하세요, 제이크! 오늘도 만나서 반가워요.", "안녕하세요 제이크 오늘도 만나서 반가워요")
+    assert ends_right("Thanks for your help! Have a good day.", "Thanks for your help. Have a good day!")
+    assert not ends_right("연습하고 싶어.", "")
+
+
+def heard_in_turn(*texts):
+    """A stand-in for whisper that hears these texts in turn (the last one again after that)."""
+    heard: list[tuple[str, str]] = []
+
+    async def hear(path, lang):
+        assert path.exists()
+        heard.append((path.name, lang))
+        return texts[min(len(heard) - 1, len(texts) - 1)]
+
+    return hear, heard
+
+
+async def test_checked_sound_is_made_again_when_its_end_is_missing(tmp_path):
+    hear, heard = heard_in_turn("상황으로 연습하고 싶다.", "상황으로 연습하고 싶어.")
+    v = Voice(sys.executable, "unused", tmp_path, worker=FAKE_WORKER, hear=hear)
+    await v.start()
+    try:
+        key = await v.say("상황으로 연습하고 싶어.", "jake", "korean", urgent=True, check=True)
+    finally:
+        await v.stop()
+    assert calls(tmp_path) == ["상황으로 연습하고 싶어."] * 2 and v.path(key).exists()
+    assert [lang for _, lang in heard] == ["ko", "ko"]
+
+
+async def test_check_keeps_the_last_take_after_retries(tmp_path):
+    hear, heard = heard_in_turn("연습하고 싶다.")
+    v = Voice(sys.executable, "unused", tmp_path, worker=FAKE_WORKER, hear=hear)
+    await v.start()
+    try:
+        key = await v.say("연습하고 싶어.", "jake", "korean", urgent=True, check=True)
+    finally:
+        await v.stop()
+    assert len(calls(tmp_path)) == 3 and len(heard) == 3 and v.path(key).exists()
+
+
+async def test_unchecked_sound_is_not_heard(tmp_path):
+    hear, heard = heard_in_turn("Nothing like it.")
+    v = Voice(sys.executable, "unused", tmp_path, worker=FAKE_WORKER, hear=hear)
+    await v.start()
+    try:
+        await v.say("좋아요, 잘했어요.", "ryan", "korean", urgent=True)
+    finally:
+        await v.stop()
+    assert heard == [] and calls(tmp_path) == ["좋아요, 잘했어요."]
+
+
+async def test_a_failing_check_does_not_lose_the_sound(tmp_path):
+    async def hear(path, lang):
+        raise RuntimeError("whisper down")
+
+    v = Voice(sys.executable, "unused", tmp_path, worker=FAKE_WORKER, hear=hear)
+    await v.start()
+    try:
+        key = await v.say("반가워요.", "ryan", "korean", urgent=False, check=True)
+    finally:
+        await v.stop()
+    assert v.path(key).exists() and calls(tmp_path) == ["반가워요."]
+
+
+async def test_korean_sounds_made_before_the_pause_fix_are_not_served():
+    # Korean sounds changed how they are made (shorter pauses inside a sentence, the end check), so the old
+    # files must not be served; English model lines did not change and keep their keys
+    from je_server import tts
+
+    def old_key(voice, lang, text):
+        return tts.hashlib.sha256(f"{voice}|{lang}|{tts.SPEAK_RATE[voice, lang]}|{text}".encode()).hexdigest()
+
+    assert audio_key("ryan", "korean", "반가워요.") != old_key("ryan", "korean", "반가워요.")
+    assert audio_key("ryan", "english", "Hello.") == old_key("ryan", "english", "Hello.")

@@ -66,6 +66,14 @@ async def test_unknown_line_is_not_found(engine):
 async def test_recommend_is_jake_korean(engine, fake_voice, fake_claude):
     said = await engine.recommend()
     assert said.text.endswith("싶어.") and (said.text, "jake", "korean", True) in fake_voice.calls
+    assert said.text in fake_voice.checked  # heard back: its end was once swallowed (2026-11-05)
+
+
+async def test_fixed_phrases_are_checked(engine, fake_voice):
+    from je_server.phrases import PHRASES
+
+    await engine.warm()
+    assert set(PHRASES.values()) <= set(fake_voice.checked)
 
 
 async def test_model_audio_starts_before_notes_finish(engine, fake_claude, fake_voice):
