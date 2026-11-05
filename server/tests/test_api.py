@@ -108,3 +108,39 @@ def test_attempt_route_modes(client, speech_bytes):
     assert ok.status_code == 200 and ok.text.strip().splitlines()
     assert client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=shadow", content=speech_bytes).status_code == 404
     assert client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=bogus", content=speech_bytes).status_code == 422
+
+
+def test_recording_is_served_after_an_attempt(client, speech_bytes):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    client.get(f"/roleplays/{rp['id']}/lines/1")
+    client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=turn", content=speech_bytes)
+    r = client.get(f"/roleplays/{rp['id']}/lines/1/attempts/1/recording")
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mp4" and r.content == speech_bytes
+
+
+def test_recording_missing_is_404_and_creates_nothing(client, settings):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    assert client.get(f"/roleplays/{rp['id']}/lines/1/attempts/9/recording").status_code == 404
+    assert client.get("/roleplays/000000000000/lines/1/attempts/1/recording").status_code == 404
+    assert client.get(f"/roleplays/{rp['id']}/lines/1/attempts/0/recording").status_code == 422
+    assert client.get("/roleplays/..%2Fx/lines/1/attempts/1/recording").status_code in (404, 422)
+    assert not (settings.data_dir / "roleplays" / rp["id"] / "rec").exists()
+
+
+def test_recording_needs_token(settings, engine, fake_voice, fake_whisper):
+    from fastapi.testclient import TestClient
+
+    from je_server.app import Services, create_app
+
+    c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
+    assert c.get("/roleplays/000000000000/lines/1/attempts/1/recording").status_code == 401
+
+
+def test_audio_without_services_is_not_ready(settings, auth):
+    from fastapi.testclient import TestClient
+
+    from je_server.app import create_app
+
+    c = TestClient(create_app(settings, None), headers=auth)
+    r = c.get("/audio/" + "a" * 64)
+    assert r.status_code == 503 and r.json()["code"] == "not_ready"

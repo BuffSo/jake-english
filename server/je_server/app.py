@@ -138,9 +138,10 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     async def sound(key: str = PathParam(pattern=KEY), rate: float = Query(1.0)):
         if rate not in (0.6, 0.8, 1.0):
             raise ApiError(422, "bad_request")
-        if not services.voice.path(key).is_file():
+        voice = engine().voice  # through engine(): 503 not_ready when started without services (todo 11, 4번)
+        if not voice.path(key).is_file():
             raise ApiError(404, "not_found")
-        return FileResponse(await services.voice.rate_file(key, rate), media_type="audio/mp4")
+        return FileResponse(await voice.rate_file(key, rate), media_type="audio/mp4")
 
     @router.post("/transcribe")
     async def transcribe(request: Request) -> dict:
@@ -197,6 +198,14 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
                 yield json.dumps(ev, ensure_ascii=False) + "\n"
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+    @router.get("/roleplays/{rp_id}/lines/{idx}/attempts/{n}/recording")
+    def recording(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0), n: int = PathParam(ge=1)):
+        # found by a checked ID and two integers only, inside the roleplay's rec folder (REVIEW.md 「맥 서버 보안」)
+        try:
+            return FileResponse(engine().recording(rp_id, idx, n), media_type="audio/mp4")
+        except NotFound:
+            raise ApiError(404, "not_found") from None
 
     @router.get("/roleplays/{rp_id}/summary")
     def summary(rp_id: str = PathParam(pattern=ID)) -> dict:

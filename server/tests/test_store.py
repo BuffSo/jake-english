@@ -42,3 +42,13 @@ def test_rec_path_is_inside_the_roleplay(tmp_path):
     s.save(r)
     p = s.rec_path(r.id, 3, 1)
     assert p.parent.exists() and p.name == "3-1.m4a" and r.id in str(p)
+
+
+def test_find_rec_does_not_create_folders(tmp_path):
+    s = Store(tmp_path)
+    r = rp(s)
+    s.save(r)
+    assert s.find_rec(r.id, 1, 1) is None and not (s.roleplays / r.id / "rec").exists()
+    assert s.find_rec("../etc", 1, 1) is None
+    s.rec_path(r.id, 1, 1).write_bytes(b"m4a")
+    assert s.find_rec(r.id, 1, 1).read_bytes() == b"m4a"

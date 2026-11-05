@@ -58,6 +58,14 @@ class Store:
             n += 1
         return n, self.rec_path(rp_id, idx, n)
 
+    def find_rec(self, rp_id: str, idx: int, n: int) -> Path | None:
+        """An existing recording, for replay. Unlike rec_path it creates no folder; a bad ID finds nothing."""
+        try:
+            path = self._dir(rp_id) / "rec" / f"{idx}-{n}.m4a"
+        except KeyError:
+            return None
+        return path if path.is_file() else None
+
     def rec_path(self, rp_id: str, idx: int, n: int) -> Path:
         d = self._dir(rp_id) / "rec"
         d.mkdir(parents=True, exist_ok=True)

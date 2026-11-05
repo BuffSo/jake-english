@@ -134,6 +134,13 @@ class Engine:
         await asyncio.wait_for(asyncio.shield(self.schedule(rp_id, idx)), LINE_WAIT)
         return self.get_line(rp_id, idx)[1]
 
+    def recording(self, rp_id: str, idx: int, n: int) -> Path:
+        """The learner's recording of one try, for replay on the end screen. The phone plays it, never keeps it."""
+        path = self.store.find_rec(rp_id, idx, n)
+        if path is None:
+            raise NotFound(f"{rp_id}/{idx}/{n}")
+        return path
+
     def progress(self, rp_id: str, idx: int) -> dict[str, int]:
         """「내 대사 no/total」 for the roleplay header. On Ryan's line it is the learner's next line. A rebuild that
         failed ends with Ryan's goodbye and fewer learner lines, so no is kept within total."""
