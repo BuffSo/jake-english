@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { NdjsonSplitter } from "./ndjson";
-import { EVENT_TYPES, LINE_KEYS, ROLEPLAY_KEYS, SUMMARY_KEYS, SYLLABLE_KEYS, TRY_KEYS } from "./types";
+import { EVENT_TYPES, ISSUE_KEYS, LINE_KEYS, ROLEPLAY_KEYS, SUMMARY_KEYS, SYLLABLE_KEYS, TRY_KEYS } from "./types";
 import roleplay from "../../../contract/roleplay.json";
 import lineUser from "../../../contract/line-user.json";
 import summary from "../../../contract/summary.json";
@@ -30,6 +30,9 @@ test("summary example has the keys the end screen reads", () => {
   expect(sorted(Object.keys(summary))).toEqual(sorted(SUMMARY_KEYS));
   for (const l of summary.lines) {
     expect(sorted(Object.keys(l.line))).toEqual(sorted(LINE_KEYS));
-    for (const t of l.tries) expect(sorted(Object.keys(t))).toEqual(sorted(TRY_KEYS));
+    for (const t of l.tries) {
+      expect(sorted(Object.keys(t))).toEqual(sorted(TRY_KEYS));
+      for (const i of t.issues) expect(sorted(Object.keys(i))).toEqual(sorted(ISSUE_KEYS));
+    }
   }
 });

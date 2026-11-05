@@ -12,7 +12,7 @@ from pathlib import Path
 from . import audio
 from .claude import ClaudeUnavailable
 from . import sounds
-from .compare import FOLLOW_MIN, find_issues, praise_candidates, similarity, sound_pairs, words
+from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, sound_pairs, words
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, ScriptLine, ThreeLine
 from .sentences import SentenceBuffer
 from .tts import VoiceError
@@ -445,7 +445,7 @@ class Engine:
             issues_left = issues_left or bool(tries and tries[-1].issues)
             lines.append({"line": l.model_dump(mode="json"), "tries": [
                 {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
-                 "issues": [{"target": i.target, "heard": i.heard} for i in a.issues],
+                 "issues": [{"target": i.target, "heard": i.heard, "say_ko": issue_ko(i)} for i in a.issues],
                  # Ryan's one point for a roleplay turn said differently; a retry said differently only asked
                  # to follow the line, which is not a point (final review)
                  # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
