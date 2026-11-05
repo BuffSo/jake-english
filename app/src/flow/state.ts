@@ -20,6 +20,8 @@ export type State = {
   progress: Progress | null; // 「내 대사 no/total」 from the server, roleplay only
   phase: Phase;
   line: ScriptLine | null;
+  // the line's three-line notes are open: each line starts plain and opens only when asked (spec roleplay-practice 8)
+  reading: boolean;
   seen: Record<number, ScriptLine>;
   heard: string | null;
   feedback: string;
@@ -50,7 +52,8 @@ export type Action =
   | { type: "next" }
   | { type: "startPractice"; kind: "mine" | "shadow"; order: number[] }
   | { type: "restarted"; roleplay: Roleplay }
-  | { type: "closingPlayed" };
+  | { type: "closingPlayed" }
+  | { type: "toggleReading" };
 
 export const initial: State = {
   screen: "home",
@@ -61,6 +64,7 @@ export const initial: State = {
   progress: null,
   phase: "loading",
   line: null,
+  reading: false,
   seen: {},
   heard: null,
   feedback: "",
@@ -125,6 +129,7 @@ export function reduce(s: State, a: Action): State {
         ...s,
         ...freshTurn,
         line: a.line,
+        reading: false,
         seen: { ...s.seen, [a.line.idx]: a.line },
         // in shadow practice Ryan's line is the learner's to say, with or without its sound
         phase: a.line.speaker === "ryan" && s.mode !== "shadow" ? "ryan" : "ready",
@@ -204,6 +209,7 @@ export function reduce(s: State, a: Action): State {
         idx: a.order[0],
         history: [],
         line: null,
+        reading: false,
         phase: "loading",
         progress: null,
       };
@@ -213,5 +219,7 @@ export function reduce(s: State, a: Action): State {
       return { ...initial, screen: "roleplay", roleplay: a.roleplay, jake: s.jake, phase: "loading" };
     case "closingPlayed":
       return { ...s, closingPlayed: true };
+    case "toggleReading":
+      return s.line ? { ...s, reading: !s.reading } : s;
   }
 }

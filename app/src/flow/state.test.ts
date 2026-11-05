@@ -265,3 +265,30 @@ test("restarted opens the copied roleplay and keeps Jake's line", () => {
 test("closing is marked as played", () => {
   expect(reduce(end(), { type: "closingPlayed" }).closingPlayed).toBe(true);
 });
+
+// --- notes start closed (spec roleplay-practice 8) ---------------------------------------------------------------
+
+describe("notes start closed (spec roleplay-practice 8)", () => {
+  test("a new line starts with its notes closed", () => {
+    expect(reduce({ ...at("loading"), reading: true }, { type: "lineLoaded", line: userLine }).reading).toBe(false);
+  });
+
+  test("toggleReading opens and closes", () => {
+    const s = reduce(at("ready"), { type: "toggleReading" });
+    expect(s.reading).toBe(true);
+    expect(reduce(s, { type: "toggleReading" }).reading).toBe(false);
+  });
+
+  test("again keeps the notes open on the same line", () => {
+    expect(reduce(at("evaluated", { reading: true }), { type: "again" }).reading).toBe(true);
+  });
+
+  test("the next line starts closed again", () => {
+    const s = reduce(at("evaluated", { reading: true, nextIdx: 2 }), { type: "next" });
+    expect(reduce(s, { type: "lineLoaded", line: ryanLine }).reading).toBe(false);
+  });
+
+  test("a practice line from the end starts closed", () => {
+    expect(reduce(end({ reading: true }), { type: "startPractice", kind: "mine", order: [1] }).reading).toBe(false);
+  });
+});
