@@ -124,7 +124,7 @@ PRD 「실패로 볼 것」 그대로다. 이 기능에서 특히 조심할 것:
 
 1. 맥이 녹음을 받아쓴다. 받아쓰기에는 대사를 힌트로 주지 않는다(AI 판단). 주면 받아쓰기가 틀린 소리를 대사대로 고쳐 적을 수 있다.
 2. 받아쓴 글과 대사의 표기를 맞춘 뒤 낱말 단위로 맞댄다. 받아쓰기가 표기만 다르게 적은 것은 차이로 보지 않는다(AI 판단). 짚는 범위를 넓히면 이것을 먼저 헛짚기 때문이다.
-   - 숫자: ten과 10, eleven a.m.과 11 a.m.
+   - 숫자: ten과 10, eleven a.m.과 11 a.m., nine o'clock과 9:00, five oh five와 5:05, one thousand의 1,000. 받아쓰기는 o'clock을 9:00으로 적기도 해서, o'clock을 빼고 말해도 짚지 않는다(AI 판단, 2026-11-06 리뷰).
    - 줄여 적은 말: want to와 wanna, going to와 gonna, okay와 OK
    - 문장부호와 대소문자, a.m.과 am
    - 붙여 쓰기와 띄어 쓰기: check-in과 check in, checkout과 check out
