@@ -1,7 +1,7 @@
 """Things Ryan always says the same way. Made once in Ryan's Korean voice when the server starts."""
 
 PHRASES: dict[str, str] = {
-    "greeting": "안녕하세요, 제이크! 오늘도 만나서 반가워요.",
+    "greeting": "안녕하세요, 라이언입니다. 오늘도 만나서 반가워요.",
     "ask_mode": "오늘은 어떤 방식으로 대화해 볼까요?",
     "ask_situation": "어떤 상황으로 연습해 볼까요? 말하거나 써 주세요. 정하기 어려우면 제이크가 추천해 줄 거예요.",
     "ask_recommend": "제이크에게 상황을 하나 추천받아 볼까요?",
