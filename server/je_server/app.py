@@ -1,6 +1,7 @@
 """FastAPI app. Every route sits behind the token check (REVIEW.md 「맥 서버 보안」)."""
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -10,7 +11,9 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi import Path as PathParam
 from fastapi import Query
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from .auth import token_checker
@@ -175,6 +178,21 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             raise ApiError(404, "not_found") from None
         except ClaudeUnavailable:
             raise claude_down() from None
+
+    @router.post("/roleplays/{rp_id}/lines/{idx}/attempts")
+    async def attempt(request: Request, rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0),
+                      mode: Literal["turn", "retry"] = Query("turn")):
+        body = await read_body(request)
+        try:
+            engine().user_line(rp_id, idx)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
+        async def lines():
+            async for ev in engine().attempt(rp_id, idx, body, mode):
+                yield json.dumps(ev, ensure_ascii=False) + "\n"
+
+        return StreamingResponse(lines(), media_type="application/x-ndjson")
 
     app.include_router(router)
     return app

@@ -52,6 +52,12 @@ class Store:
                 found.append((rp.created, rp.situation))
         return [s for _, s in sorted(found, reverse=True)[:n]]
 
+    def next_rec(self, rp_id: str, idx: int) -> tuple[int, Path]:
+        n = 1
+        while self.rec_path(rp_id, idx, n).exists():
+            n += 1
+        return n, self.rec_path(rp_id, idx, n)
+
     def rec_path(self, rp_id: str, idx: int, n: int) -> Path:
         d = self._dir(rp_id) / "rec"
         d.mkdir(parents=True, exist_ok=True)

@@ -72,3 +72,25 @@ def client(settings, auth, engine, fake_voice, fake_whisper):
     app = create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper))
     with TestClient(app, headers=auth) as c:
         yield c
+
+
+@pytest.fixture
+def speech_bytes(tmp_path):
+    from audiotools import make_m4a
+
+    return make_m4a(tmp_path, "sine=f=220:r=44100", 2).read_bytes()
+
+
+@pytest.fixture
+def silent_bytes(tmp_path):
+    from audiotools import make_m4a
+
+    return make_m4a(tmp_path, "anullsrc=r=44100:cl=mono", 2).read_bytes()
+
+
+@pytest.fixture
+async def engine_with_rp(engine):
+    rp = await engine.create("길 묻기")
+    user_idx = next(l.idx for l in rp.lines if l.speaker == "user")
+    await engine.line(rp.id, user_idx)
+    return engine, rp.id, user_idx

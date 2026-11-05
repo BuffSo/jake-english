@@ -112,9 +112,12 @@ def three_json_with_wrong_stress(text: str = "I like coffee.") -> str:
 class FakeClaude:
     """Same methods as je_server.claude.Claude with fixed answers."""
 
+    feedback_pieces = ["끝까지 자신 있게 ", "말했어요. 다음 대사로 ", "넘어가요."]
+
     def __init__(self):
         self.fail_next = False
         self.calls: list[tuple[str, tuple]] = []
+        self.feedback_calls: list[dict] = []
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -136,6 +139,13 @@ class FakeClaude:
         self.calls.append(("recommend", (recent,)))
         self._maybe_fail()
         return "카페에서 커피를 주문하는 상황으로 연습하고 싶어."
+
+    async def feedback(self, line, heard, praise, issues):
+        self.feedback_calls.append({"line": line, "heard": heard, "praise": praise,
+                                    "issues": [i.model_dump() for i in issues]})
+        self._maybe_fail()
+        for piece in self.feedback_pieces:
+            yield piece
 
 
 class FakeVoice:
@@ -188,3 +198,4 @@ class FakeWhisper:
         self.calls += 1
         self.langs.append(lang)
         return self.text
+

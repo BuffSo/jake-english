@@ -4,11 +4,18 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
+from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from . import audio
-from .models import Roleplay, Said, ScriptLine, ThreeLine
+from .claude import ClaudeUnavailable
+from .compare import FOLLOW_MIN, find_issues, praise_candidates, similarity, words
+from .models import Attempt, Issue, Roleplay, Said, ScriptLine, ThreeLine
+from .sentences import SentenceBuffer
+from .tts import VoiceError
 from .phrases import PHRASES
 from .store import Store
 from .tts import audio_key
@@ -144,6 +151,134 @@ class Engine:
             for p in (src, wav):
                 with contextlib.suppress(FileNotFoundError):
                     p.unlink()
+
+
+    # --- a turn: the learner's recording ------------------------------------------------------
+
+    def user_line(self, rp_id: str, idx: int) -> ScriptLine:
+        _, line = self.get_line(rp_id, idx)
+        if line.speaker != "user":
+            raise NotFound(f"{rp_id}/{idx}")
+        return line
+
+    def error(self, code: str, phrase: str | None = None) -> dict:
+        return {"type": "error", "code": code, "say": self.said(phrase or code).model_dump()}
+
+    async def attempt(self, rp_id: str, idx: int, body: bytes,
+                      mode: Literal["turn", "retry"]) -> AsyncIterator[dict]:
+        t0 = time.perf_counter()
+        timings: dict[str, float] = {}
+        line = self.user_line(rp_id, idx)
+        n, rec = self.store.next_rec(rp_id, idx)
+        rec.write_bytes(body)  # kept on the Mac (spec 「녹음과 기록」)
+        wav = self.store.tmp_dir / f"{rp_id}-{idx}-{n}.wav"
+        try:
+            try:
+                seconds = await audio.to_wav16k(rec, wav)
+            except audio.AudioError:
+                yield self.error("no_speech")
+                return
+            if seconds > MAX_SECONDS:
+                yield self.error("too_long")
+                return
+            if not await audio.has_speech(wav):
+                yield self.error("no_speech")
+                return
+            heard = await self.whisper.transcribe(wav, "en")
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                wav.unlink()
+        timings["transcribed"] = time.perf_counter() - t0
+        if not words(heard):
+            yield self.error("no_speech")
+            return
+        followed = similarity(line.text, heard) >= FOLLOW_MIN
+        yield {"type": "heard", "text": heard, "followed": followed}
+
+        issues: list[Issue] = []
+        said: list[str] = []
+        keys: list[str] = []
+        failed = False
+        if followed:
+            issues = find_issues(line.text, heard, limit=2)
+            text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard), issues)
+        else:
+            text = _one(self.said("retry_offscript").text)
+        async for ev in self.speak(text, said, keys, timings, t0):
+            if ev["type"] == "error":
+                failed = True
+            yield ev
+        timings["total"] = time.perf_counter() - t0
+        nxt = idx + 1 if (followed and mode == "turn") else idx
+        await self.save_attempt(rp_id, idx, Attempt(n=n, mode=mode, heard=heard, followed=followed, issues=issues,
+                                                    say_ko="".join(said), audio=keys, timings=timings),
+                                pos=nxt if mode == "turn" else None)
+        log.info("attempt %s/%d n=%d followed=%s issues=%d transcribed=%.2f first_text=%.2f first_audio=%.2f "
+                 "total=%.2f", rp_id, idx, n, followed, len(issues), timings.get("transcribed", 0),
+                 timings.get("first_text", 0), timings.get("first_audio", 0), timings["total"])
+        if not failed:
+            yield {"type": "done", "next": nxt, "issues": len(issues)}
+
+    async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
+                    timings: dict[str, float], t0: float) -> AsyncIterator[dict]:
+        """Streams text events as they come and an audio event per finished sentence, in order."""
+        out: asyncio.Queue = asyncio.Queue()
+        sentences: asyncio.Queue = asyncio.Queue()
+
+        async def read_text():
+            buf = SentenceBuffer()
+            try:
+                async for delta in text:
+                    timings.setdefault("first_text", time.perf_counter() - t0)
+                    said.append(delta)
+                    await out.put({"type": "text", "delta": delta})
+                    for s in buf.feed(delta):
+                        await sentences.put(s)
+                for s in buf.flush():
+                    await sentences.put(s)
+            except ClaudeUnavailable:
+                await out.put(self.error("claude_unavailable", "claude_down"))
+            finally:
+                await sentences.put(None)
+
+        async def make_audio():
+            while (s := await sentences.get()) is not None:
+                try:
+                    key = await self.voice.say(s, "ryan", "korean", urgent=True)
+                except VoiceError:
+                    log.info("feedback sentence voice failed")
+                    continue
+                timings.setdefault("first_audio", time.perf_counter() - t0)
+                keys.append(key)
+                await out.put({"type": "audio", "key": key})
+            await out.put(None)
+
+        reader = asyncio.create_task(read_text())
+        maker = asyncio.create_task(make_audio())
+        try:
+            while (ev := await out.get()) is not None:
+                yield ev
+            # an error from the reader may land after the last audio event
+            await reader
+            while not out.empty():
+                ev = out.get_nowait()
+                if ev is not None:
+                    yield ev
+        finally:
+            reader.cancel()
+            maker.cancel()
+
+    async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
+        async with self.lock(rp_id):
+            rp = self.store.load(rp_id)
+            rp.attempts.setdefault(idx, []).append(attempt)
+            if pos is not None:
+                rp.pos = max(rp.pos, pos)
+            self.store.save(rp)
+
+
+async def _one(text: str) -> AsyncIterator[str]:
+    yield text
 
 
 def _quiet(task: asyncio.Task) -> None:

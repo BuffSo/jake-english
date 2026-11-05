@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 import anthropic
 from pydantic import ValidationError
 
 from . import prompts
-from .models import Draft, Frame, ThreeLine
+from .models import Draft, Frame, Issue, ThreeLine
 from .threeline import Problem, check, degrade, plain
 
 # Spec 「기다리는 시간과 모델」: Haiku with thinking off for quick wording, Sonnet with thinking off and low
@@ -19,6 +20,9 @@ SONNET: dict[str, Any] = {"model": "claude-sonnet-5-5", "thinking": {"type": "be
 USER_TURNS = (4, 6)
 USER_MAX_WORDS = 14
 ANNOTATE_TRIES = 3
+
+
+ERRORS = (anthropic.APIConnectionError, anthropic.RateLimitError)
 
 
 class ClaudeUnavailable(Exception):
@@ -135,3 +139,28 @@ class Claude:
         if not text:
             raise ClaudeUnavailable("empty recommendation")
         return text
+
+    # --- feedback on a followed line ----------------------------------------------------------
+
+    async def feedback(self, line: str, heard: str, praise: list[str], issues: list[Issue]) -> AsyncIterator[str]:
+        """Streams Ryan's Korean feedback. Only the line, the transcript and the Mac's findings go out."""
+        found = {
+            "대사": line,
+            "들린 말": heard,
+            "잘한 점 후보": praise,
+            "짚을 것": [{"대사 낱말": i.target, "들린 낱말": i.heard, "소리 내는 법": i.explain} for i in issues],
+        }
+        kw = {k: v for k, v in self.quick.items() if k != "effort"}
+        try:
+            async with self.client.messages.stream(
+                **kw, max_tokens=800, system=prompts.FEEDBACK_SYSTEM,
+                messages=[{"role": "user", "content": json.dumps(found, ensure_ascii=False)}],
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield text
+        except ERRORS as e:
+            raise ClaudeUnavailable(type(e).__name__) from e
+        except anthropic.APIStatusError as e:
+            if e.status_code >= 500:
+                raise ClaudeUnavailable(f"status {e.status_code}") from e
+            raise

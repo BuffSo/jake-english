@@ -82,3 +82,22 @@ async def test_recommend_uses_haiku_and_avoids_recent():
     assert r["model"] == "claude-haiku-5-5" and r["thinking"] == {"type": "disabled"}
     assert "effort" not in r.get("output_config", {})
     assert "케이블카" in r["messages"][0]["content"]
+
+
+async def test_feedback_streams_with_haiku_and_sends_findings():
+    from je_server.models import Issue
+
+    fake = FakeAnthropic([["끝까지 ", "잘했어요."]])
+    issue = Issue(target="running", heard="learning", sound=("R", "L"), explain="R은 혀가 어디에도 닿지 않게")
+    out = [t async for t in Claude(fake).feedback("I'm running.", "I'm learning.", ["끝까지 말했어요"], [issue])]
+    assert "".join(out) == "끝까지 잘했어요."
+    r = fake.requests[0]
+    assert r["model"] == "claude-haiku-5-5" and r["thinking"] == {"type": "disabled"} and "temperature" not in r
+    body = json.loads(r["messages"][0]["content"])
+    assert body["짚을 것"][0]["소리 내는 법"] == "R은 혀가 어디에도 닿지 않게"
+
+
+async def test_feedback_connection_error_is_unavailable():
+    fake = FakeAnthropic([connection_error()])
+    with pytest.raises(ClaudeUnavailable):
+        [t async for t in Claude(fake).feedback("a", "b", [], [])]
