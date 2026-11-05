@@ -1,7 +1,8 @@
 """Ryan and Jake voices through a worker process on the Mac's existing TTS setup (ADR-0009).
 
 One worker, one queue: urgent jobs (Ryan's live feedback) go before prepared ones (model audio for
-later lines). Sounds are cached by sha256(voice|lang|rate|text), so the same line is made once.
+later lines). Sounds are cached by sha256(voice|lang|rate|text), with Korean keys also carrying how they were
+made (`MADE`), so the same line is made once.
 Sounds played as they are made once (Jake, Ryan's fixed phrases) can be heard back with whisper and made
 again when their last word is missing.
 """

@@ -622,7 +622,7 @@ test("closing is marked as played", () => {
 
 ### Task 10: 폰에서 확인하고 마무리
 
-- [ ] **Step 1: 서버를 이 worktree에서 다시 띄운다.** 끄기 전에 사용자에게 알린다(다른 카드도 서버를 쓴다). 로그 `~/Library/Logs/jake-english/server.log`에서 `ready`를 본다.
+- [ ] **Step 1: 서버를 이 worktree에서 다시 띄운다.** 끄기 전에 사용자에게 알린다(다른 카드도 서버를 쓴다). 서버 로그(위치는 비공개 메모 참고)에서 `ready`를 본다.
 - [ ] **Step 2: APK를 빌드해 깐다** — `app/README.md`대로(`JAVA_HOME`은 JDK 17, `ANDROID_HOME`은 SDK, `-PreactNativeArchitectures=arm64-v8a`), `adb install -r`.
 - [ ] **Step 3: 사용자와 폰에서 본다** (PR 본문의 테스트 체크리스트로 옮긴다)
   - 역할극 중 「내 대사 n/m」, 지나간 내 말풍선의 대본과 들린 말.
