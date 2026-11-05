@@ -1,5 +1,4 @@
-from je_server.compare import (FOLLOW_MIN, compare, find_issues, issue_ko, praise_candidates, similarity, sound_pairs,
-                                word_pairs)
+from je_server.compare import FOLLOW_MIN, compare, find_issues, issue_ko, praise_candidates, similarity, sound_pairs
 from je_server.models import Issue
 
 
@@ -102,15 +101,29 @@ def test_unknown_word_has_no_sound_pairs():
     assert sound_pairs("namsan", "namsang") == []
 
 
-def test_word_pairs_only_one_to_one():
-    assert word_pairs("I'm running to the station.", "I'm learning to the station") == [("running", "learning")]
-    assert word_pairs("go to the station", "go station") == []
+def test_praise_only_what_was_checked():
+    assert praise_candidates("Turn right at the corner.", "turn right at the corner", []) == ["대사를 빠짐없이 알아듣게 말했어요"]
+    assert praise_candidates("Turn right at the corner.", "turn light at the corner", []) == ["나머지 낱말은 다 알아들었어요"]
 
 
-def test_praise_names_a_listed_sound_heard_right():
-    praise = praise_candidates("Turn right at the corner.", "turn right at the corner")
-    assert any("right" in p and "R" in p for p in praise)
+def test_praise_when_not_every_difference_was_named():
+    line = "Go left, then right, then left again."
+    assert praise_candidates(line, "Go lift, then light, then lift again.", []) == ["대사의 낱말 대부분을 알아들었어요"]
+    assert praise_candidates("Red and blue and green.", "Bed an glue and green.", []) == ["대사 5낱말 가운데 2낱말을 알아들었어요"]
 
 
-def test_praise_always_has_something():
-    assert praise_candidates("Hello.", "Yellow.")
+def test_improvement_names_the_listed_sound_or_the_word():
+    before = [Issue(target="right", heard="light", sound=("R", "L"), explain="…")]
+    assert praise_candidates("Turn right here.", "Turn right here.", before)[0] == "이번에는 right의 R 소리가 제대로 났어요"
+    before = [Issue(target="on", heard="")]
+    assert praise_candidates("It's on the left.", "It's on the left.", before)[0] == "이번에는 on, 대사대로 들렸어요"
+
+
+def test_improvement_needs_the_same_issue_gone():
+    line = "This is for you. This is for you."
+    before = [Issue(target="for", heard="")]
+    assert not any(p.startswith("이번에는") for p in praise_candidates(line, "This is for you. This is you.", before))
+
+
+def test_praise_can_be_empty():
+    assert praise_candidates("Hello.", "Yellow.", []) == []

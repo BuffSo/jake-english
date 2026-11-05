@@ -38,6 +38,21 @@ async def test_misheard_word_is_sent_as_issue(engine_with_rp, speech_bytes, fake
     assert fake_whisper.langs == ["en"]
 
 
+async def test_praise_never_claims_unchecked_things(engine_with_rp, speech_bytes, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    await run(engine, rp_id, user_idx, speech_bytes)
+    assert fake_claude.feedback_calls[0]["praise"] == ["대사를 빠짐없이 알아듣게 말했어요"]
+
+
+async def test_fixed_word_from_last_try_is_praised(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's light over there."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    fake_whisper.text = "It's right over there."
+    await run(engine, rp_id, user_idx, speech_bytes, "retry")
+    assert fake_claude.feedback_calls[1]["praise"][0] == "이번에는 right의 R 소리가 제대로 났어요"
+
+
 async def test_silent_recording_says_no_speech_and_keeps_script(engine_with_rp, silent_bytes, fake_whisper):
     engine, rp_id, user_idx = engine_with_rp
     before = engine.store.load(rp_id).lines

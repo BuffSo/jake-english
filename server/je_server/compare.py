@@ -14,9 +14,8 @@ from . import cmu, sounds
 from .models import Issue
 
 FOLLOW_MIN = 0.6  # word-level similarity at or above this counts as following the line
-PRAISE_PHONES = {"R": "R", "L": "L", "F": "F", "V": "V", "TH": "TH", "DH": "TH", "Z": "Z"}
-FUNCTION_WORDS = {"a", "an", "the", "of", "to", "for", "and", "or", "in", "on", "at", "is", "are", "was", "it",
-                  "this", "that", "there", "their", "they", "them", "with", "from", "as", "be", "i", "you", "we"}
+SOUND_LETTERS = {"R": "R", "L": "L", "F": "F", "P": "P", "V": "V", "B": "B", "TH": "TH", "DH": "TH", "S": "S",
+                 "D": "D", "Z": "Z", "JH": "J"}  # CMUdict phoneme → how Ryan names it
 
 
 FILLERS = frozenset({"um", "uh", "uhm", "umm", "er", "erm", "hmm", "mm"})
@@ -58,15 +57,6 @@ def similarity(target: str, heard: str) -> float:
     if not a or not b:
         return 0.0
     return SequenceMatcher(None, a, b, autojunk=False).ratio()
-
-
-def word_pairs(target: str, heard: str) -> list[tuple[str, str]]:
-    a, b = words(target), words(heard)
-    out = []
-    for tag, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
-        if tag == "replace" and i2 - i1 == j2 - j1:
-            out += list(zip(a[i1:i2], b[j1:j2]))
-    return out
 
 
 def sound_pairs(target_word: str, heard_word: str) -> list[tuple[str, str]]:
@@ -172,23 +162,27 @@ def issue_ko(i: Issue) -> str:
     return f"「{i.target}」 → 「{i.heard}」처럼 들렸어요"
 
 
-def praise_candidates(target: str, heard: str) -> list[str]:
-    a, b = words(target), words(heard)
-    sm = SequenceMatcher(None, a, b, autojunk=False)
-    out = []
-    for tag, i1, i2, _, _ in sm.get_opcodes():
-        if tag != "equal":
+def praise_candidates(target: str, heard: str, before: list[Issue], limit: int = 2) -> list[str]:
+    """Only what the Mac checked (spec 「잘한 점 후보」): a point from the last followed try at this line that is
+    gone now, then what matching the line showed. Never a sound just because the word was written right."""
+    c = compare(target, heard)
+    out: list[str] = []
+    now = {i.target for i in c.diffs}
+    for i in before:
+        if not i.target or i.target in now or not set(i.target.split()) <= c.matched_words:
             continue
-        for w in a[i1:i2]:
-            if w in FUNCTION_WORDS:
-                continue
-            phones = {p for pron in cmu.prons(w)[:1] for p in cmu.strip_stress(pron)}
-            hit = next((PRAISE_PHONES[p] for p in PRAISE_PHONES if p in phones), None)
-            if hit and len(out) < 2:
-                out.append(f"{w}의 {hit} 소리를 알아듣게 냈어요")
-    if not word_pairs(target, heard) and similarity(target, heard) == 1.0:
-        out.append("문장 전체를 또렷하게 말했어요")
-    elif similarity(target, heard) >= 0.8:
-        out.append("대사를 거의 다 알아듣게 말했어요")
-    out.append("끝까지 자신 있게 말했어요")
+        if i.sound:
+            out.append(f"이번에는 {i.target}의 {SOUND_LETTERS.get(i.sound[0], i.sound[0])} 소리가 제대로 났어요")
+        else:
+            out.append(f"이번에는 {i.target}, 대사대로 들렸어요")
+    if not c.diffs:
+        out.append("대사를 빠짐없이 알아듣게 말했어요")
+    elif c.matched == 0:
+        pass
+    elif len(c.diffs) <= limit:
+        out.append("나머지 낱말은 다 알아들었어요")
+    elif c.matched * 2 > c.total:
+        out.append("대사의 낱말 대부분을 알아들었어요")
+    else:
+        out.append(f"대사 {c.total}낱말 가운데 {c.matched}낱말을 알아들었어요")
     return out

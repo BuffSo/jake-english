@@ -272,7 +272,11 @@ class Engine:
         reply: ScriptLine | None = None
         if followed:
             issues = find_issues(line.text, heard, limit=2)
-            text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard), issues)
+            # 「나아진 점」: what the last followed try at this line pointed out, in any mode; a copied roleplay keeps
+            # its own record (spec 「잘한 점 후보」)
+            earlier = [a for a in self.load(rp_id).attempts.get(idx, []) if a.followed]
+            before = earlier[-1].issues if earlier else []
+            text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard, before), issues)
             nxt = idx + 1 if mode == "turn" else idx
         elif mode != "turn":
             text = _one(self.said("retry_offscript").text)
