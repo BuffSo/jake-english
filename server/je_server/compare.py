@@ -35,17 +35,23 @@ def _number(n: int) -> str:
 
 def words(text: str) -> list[str]:
     """Lowercase words with the transcriber's notation evened out: 10 and ten, $5 and five dollars, 11 AM and
-    eleven a.m., wanna and want to, OK and okay are the same words."""
+    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, wanna and want to, OK and okay are the same words."""
     t = text.lower().replace("’", "'")
+    t = re.sub(r"(?<=\d),(?=\d{3})", "", t)  # 1,000 is one number
     t = re.sub(r"\b([ap])\.?m\b\.?", r"\1m", t)
     t = re.sub(r"\$(\d+)", lambda m: f"{m[1]} dollar" + ("" if m[1] == "1" else "s"), t)
     t = re.sub(r"(\d+)%", r"\1 percent", t)
+    t = re.sub(r"\b(\d{1,2}):00\b", r"\1", t)  # 9:00 is nine (o'clock is dropped below)
     out: list[str] = []
     for w in re.findall(r"[a-z0-9']+", t):
         w = w.strip("'")
         if not w:
             continue
-        if w.isdigit() and int(w) < 100:
+        if w == "o'clock":
+            continue
+        if w.isdigit() and len(w) == 2 and w[0] == "0":  # the 05 of 5:05 is "oh five"
+            out += ["oh", _ONES[int(w[1])]]
+        elif w.isdigit() and int(w) < 100:
             out += _number(int(w)).split()
         else:
             out += _SHORT.get(w, w).split()
@@ -167,9 +173,12 @@ def praise_candidates(target: str, heard: str, before: list[Issue], limit: int =
     gone now, then what matching the line showed. Never a sound just because the word was written right."""
     c = compare(target, heard)
     out: list[str] = []
-    now = {i.target for i in c.diffs}
+    now = {w for d in c.diffs for w in d.target.split()}
     for i in before:
-        if not i.target or i.target in now or not set(i.target.split()) <= c.matched_words:
+        words_then = set(i.target.split())
+        # gone only if no current difference touches these words; matched_words alone ignores position, and a
+        # word can appear twice in the line
+        if not words_then or words_then & now or not words_then <= c.matched_words:
             continue
         if i.sound:
             out.append(f"이번에는 {i.target}의 {SOUND_LETTERS.get(i.sound[0], i.sound[0])} 소리가 제대로 났어요")

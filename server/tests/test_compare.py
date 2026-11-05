@@ -1,4 +1,5 @@
-from je_server.compare import FOLLOW_MIN, compare, find_issues, issue_ko, praise_candidates, similarity, sound_pairs
+from je_server.compare import (FOLLOW_MIN, compare, find_issues, issue_ko, praise_candidates, similarity, sound_pairs,
+                                words)
 from je_server.models import Issue
 
 
@@ -127,3 +128,18 @@ def test_improvement_needs_the_same_issue_gone():
 
 def test_praise_can_be_empty():
     assert praise_candidates("Hello.", "Yellow.", []) == []
+
+
+def test_improvement_skipped_when_the_word_is_inside_a_current_difference():
+    before = [Issue(target="to", heard="")]
+    praise = praise_candidates("I need to go to the bank.", "I need to goat the bank.", before)
+    assert not any(p.startswith("이번에는") for p in praise)
+
+
+def test_clock_times_are_not_differences():
+    for line, heard in [("Let's meet at nine.", "Let's meet at 9:00."),
+                        ("See you at nine o'clock.", "See you at 9:00."),
+                        ("Check-in starts at ten a.m.", "Check-in starts at 10:00 AM."),
+                        ("The bus leaves at five oh five.", "The bus leaves at 5:05.")]:
+        assert compare(line, heard).diffs == [], (line, heard)
+    assert "zero" not in words("It costs $1,000.")
