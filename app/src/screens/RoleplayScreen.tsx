@@ -100,7 +100,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
 
   function askLeave(a: "back" | "home") {
-    if (state.returnToEnd) return void leave(a);
+    if (state.practice) return void leave(a);
     Alert.alert(
       "역할극을 그만둘까요?",
       "하던 역할극은 아직 이어 할 수 없어요.",

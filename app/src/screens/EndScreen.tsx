@@ -50,7 +50,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
             <Button
               key={idx}
               label={state.seen[idx]?.text ?? `${idx}번 대사`}
-              onPress={() => dispatch({ type: "retryFromEnd", idx })}
+              onPress={() => dispatch({ type: "startPractice", kind: "mine", order: [idx] })}
               kind="plain"
             />
           ))}
