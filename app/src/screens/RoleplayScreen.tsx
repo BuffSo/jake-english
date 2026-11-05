@@ -8,7 +8,7 @@ import type { AttemptEvent, ThreeLine } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
-import { createGate } from "../flow/gate";
+import { createGate, stopThenSend } from "../flow/gate";
 import { askFirst, canReplay, leavesScreen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
@@ -163,7 +163,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
 
   const startRecording = () => gate.run(doStart);
-  const stopRecording = () => gate.run(doStop);
+  const stopRecording = () => stopThenSend(gate, stopRec, sendRec);
 
   async function doStart() {
     if (state.phase !== "ready" && state.phase !== "evaluated") return;
@@ -179,27 +179,35 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     }
   }
 
-  async function doStop() {
-    if (!rec.isRecording()) return; // already stopped (auto-stop and a tap)
+  // Stops the recorder, inside the gate. Gives the recording and the leave count it was made under, when it is to
+  // be sent; the sending happens outside the gate (`stopThenSend`).
+  async function stopRec(): Promise<{ uri: string; my: number } | undefined> {
+    if (!rec.isRecording()) return undefined; // already stopped (auto-stop and a tap)
     const my = epoch.current;
-    const live = () => mounted.current && epoch.current === my;
     let uri: string;
     try {
       uri = await rec.stop();
     } catch {
       dispatch({ type: "recordCancel" });
-      return;
+      return undefined;
     }
-    if (!live()) {
+    if (!mounted.current || epoch.current !== my) {
       // left while the recorder was stopping: `discard()` found it already stopped, so delete it here unsent
       try {
         new File(uri).delete();
       } catch {
         // already gone
       }
-      return;
+      return undefined;
     }
     dispatch({ type: "recordStop" });
+    return { uri, my };
+  }
+
+  // Sends the recording and plays Ryan's answer as it streams in. An answer to something the learner has left
+  // (another screen, or back from a practice to the roleplay) is dropped by `live`.
+  async function sendRec({ uri, my }: { uri: string; my: number }) {
+    const live = () => mounted.current && epoch.current === my;
     const onEvent = (e: AttemptEvent) => {
       if (!live()) return;
       if (e.type === "audio") sounds.enqueue(api.audioSource(e.key));
@@ -377,10 +385,12 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   );
 }
 
-// a small link under a past bubble: practise that line on its own (spec 9); dimmed while it cannot be pressed
+// A small link under a past bubble: practise that line on its own (spec 9). Dimmed while it cannot be used, but
+// still taking the tap (`practise` ignores it then): a disabled Pressable passes the tap to the Ryan bubble around
+// it, which opened the notes instead (final review).
 function PractiseLink({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} disabled={disabled} hitSlop={8} style={styles.practise}>
+    <Pressable onPress={onPress} hitSlop={8} style={styles.practise}>
       <Text style={[styles.practiseText, disabled && styles.off]}>{label}</Text>
     </Pressable>
   );
