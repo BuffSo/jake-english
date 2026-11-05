@@ -1,0 +1,19 @@
+[project]
+name = "je-server"
+version = "0.1.0"
+description = "Mac server for the jake-english speaking practice app"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "anthropic",
+    "cmudict",
+    "httpx",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

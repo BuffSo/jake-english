@@ -1,0 +1,98 @@
+import json
+
+import pytest
+
+pytestmark = pytest.mark.anyio
+
+
+async def run(engine, rp_id, idx, body, mode="turn"):
+    return [e async for e in engine.attempt(rp_id, idx, body, mode)]
+
+
+async def test_followed_attempt_streams_text_then_audio(engine_with_rp, speech_bytes):
+    engine, rp_id, user_idx = engine_with_rp
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    kinds = [e["type"] for e in ev]
+    assert kinds[0] == "heard" and ev[0]["followed"] is True
+    assert "text" in kinds and "audio" in kinds
+    assert ev[-1] == {"type": "done", "next": user_idx + 1, "issues": 0}
+    saved = engine.store.load(rp_id).attempts[user_idx][0]
+    assert saved.say_ko == "끝까지 자신 있게 말했어요. 다음 대사로 넘어가요."
+    assert saved.timings["first_text"] > 0 and len(saved.audio) == 2
+    assert engine.store.load(rp_id).pos == user_idx + 1
+
+
+async def test_feedback_audio_is_urgent_ryan_korean(engine_with_rp, speech_bytes, fake_voice):
+    engine, rp_id, user_idx = engine_with_rp
+    await run(engine, rp_id, user_idx, speech_bytes)
+    assert ("끝까지 자신 있게 말했어요.", "ryan", "korean", True) in fake_voice.calls
+
+
+async def test_misheard_word_is_sent_as_issue(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's light over there."
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[-1]["issues"] == 1
+    sent = fake_claude.feedback_calls[0]
+    assert sent["issues"][0]["target"] == "right" and set(sent["issues"][0]["sound"]) == {"R", "L"}
+    assert fake_whisper.langs == ["en"]
+
+
+async def test_silent_recording_says_no_speech_and_keeps_script(engine_with_rp, silent_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    before = engine.store.load(rp_id).lines
+    ev = await run(engine, rp_id, user_idx, silent_bytes)
+    assert ev == [{"type": "error", "code": "no_speech", "say": engine.said("no_speech").model_dump()}]
+    assert engine.store.load(rp_id).lines == before and fake_whisper.calls == 0
+    assert engine.store.rec_path(rp_id, user_idx, 1).exists()  # the recording itself is kept
+
+
+async def test_empty_transcript_is_no_speech(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = ""
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[-1]["code"] == "no_speech"
+
+
+async def test_feedback_prompt_gets_only_text(engine_with_rp, speech_bytes, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    await run(engine, rp_id, user_idx, speech_bytes)
+    sent = json.dumps(fake_claude.feedback_calls[0], ensure_ascii=False)
+    assert ".m4a" not in sent and ".wav" not in sent and str(engine.store.root) not in sent
+
+
+async def test_claude_down_during_feedback_still_ends(engine_with_rp, speech_bytes, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_claude.fail_next = True
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[-1]["type"] == "error" and ev[-1]["code"] == "claude_unavailable" and ev[-1]["say"]["audio"]
+
+
+async def test_recordings_are_numbered_and_kept(engine_with_rp, speech_bytes, silent_bytes):
+    engine, rp_id, user_idx = engine_with_rp
+    await run(engine, rp_id, user_idx, silent_bytes)
+    await run(engine, rp_id, user_idx, speech_bytes, "retry")
+    assert engine.store.rec_path(rp_id, user_idx, 1).exists() and engine.store.rec_path(rp_id, user_idx, 2).exists()
+    assert engine.store.load(rp_id).attempts[user_idx][0].n == 2
+
+
+async def test_retry_keeps_position(engine_with_rp, speech_bytes):
+    engine, rp_id, user_idx = engine_with_rp
+    ev = await run(engine, rp_id, user_idx, speech_bytes, "retry")
+    assert ev[-1]["next"] == user_idx
+
+
+def test_attempt_route_streams_ndjson(client, speech_bytes):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    client.get(f"/roleplays/{rp['id']}/lines/1")
+    r = client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=turn", content=speech_bytes,
+                    headers={"Content-Type": "audio/mp4"})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
+    events = [json.loads(l) for l in r.text.splitlines() if l]
+    assert events[0]["type"] == "heard" and events[-1]["type"] == "done"
+
+
+def test_attempt_route_rejects_ryan_line_and_bad_mode(client, speech_bytes):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    assert client.post(f"/roleplays/{rp['id']}/lines/0/attempts", content=speech_bytes).status_code == 404
+    assert client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=x", content=speech_bytes).status_code == 422

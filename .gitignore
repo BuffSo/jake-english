@@ -27,3 +27,16 @@ recordings/
 .claude/worktrees/
 .worktrees/
 .superpowers/
+
+# 맥 서버(파이썬)
+server/.venv/
+__pycache__/
+.pytest_cache/
+
+# 폰 앱(Expo). android/와 ios/는 prebuild가 만든다. APK는 커밋하지 않는다
+app/node_modules/
+app/android/
+app/ios/
+app/.expo/
+app/dist/
+*.apk
