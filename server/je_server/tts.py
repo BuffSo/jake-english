@@ -26,12 +26,12 @@ RATES = (0.6, 0.8, 1.0)
 # feedback) at 1x sounded drawn out on the phone (2026-11-05); the reply reader plays Korean at 1.3x since
 # the user found 1x too slow (2026-11-03). After trying it on the phone the user set Jake's Korean (the
 # recommended situation) to 1.1x and kept Ryan at 1.3x (2026-11-05). Later that day the user found Ryan's 1.3x
-# a bit fast and set him to 1.2x, and after the new pause handling asked for Jake at 1x. English model lines stay at 1x: they are what the learner
+# a bit fast and set him to 1.2x. After the new pause handling Jake was tried at 1x and set back to 1.1x. English model lines stay at 1x: they are what the learner
 # copies.
 SPEAK_RATE = {
     ("ryan", "korean"): 1.2,
     ("ryan", "english"): 1.0,
-    ("jake", "korean"): 1.0,
+    ("jake", "korean"): 1.1,
     ("jake", "english"): 1.0,
 }
 
