@@ -134,6 +134,7 @@ class FakeClaude:
                                        meant="", heard_word="", reply_en="Oh, no worries. Thanks anyway!")
         self.fail_continue = False
         self.continue_gate = None  # an asyncio.Event to hold continue_script until set
+        self.annotate_gate = None  # an asyncio.Event to hold annotate until set
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -148,6 +149,8 @@ class FakeClaude:
 
     async def annotate(self, text, context):
         self.calls.append(("annotate", (text, context)))
+        if self.annotate_gate is not None:
+            await self.annotate_gate.wait()
         self._maybe_fail()
         return plain(text)
 

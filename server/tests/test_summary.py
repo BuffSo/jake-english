@@ -68,3 +68,17 @@ async def test_retry_said_differently_has_no_point(engine_with_rp, speech_bytes,
     await run(engine, rp_id, user_idx, speech_bytes, "retry")
     [t] = tries(engine.summary(rp_id), user_idx)
     assert t["followed"] is False and t["point_ko"] == ""
+
+
+async def test_pronunciation_point_is_not_repeated(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    # PR #15 review: a turn said differently with a listed sound stored the point both as an issue and as
+    # Ryan's words; the end screen showed it twice
+    from je_server.models import Offscript
+
+    engine, rp_id, user_idx = engine_with_rp
+    fake_claude.offscript_out = Offscript(point_kind="pronunciation", point_ko="", meant="right",
+                                          heard_word="light", reply_en="Oh, I see. Thanks!")
+    fake_whisper.text = "I have no idea, it is light there."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    [t] = tries(engine.summary(rp_id), user_idx)
+    assert t["issues"] == [{"target": "right", "heard": "light"}] and t["point_ko"] == ""

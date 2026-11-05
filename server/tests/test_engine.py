@@ -147,3 +147,37 @@ async def test_a_line_whose_sound_failed_comes_without_audio(engine, fake_voice)
     rp = await engine.create("길 묻기")
     line = await engine.line(rp.id, 0)
     assert line.text == DRAFT_RYAN[0] and line.audio is None
+
+
+async def test_ryan_notes_asked_twice_at_once_are_made_once(engine, fake_claude):
+    # PR #15 review: the end screen asks for every Ryan line's notes and the shadow screen asks again; one
+    # Claude call per line must serve both
+    import asyncio
+
+    fake_claude.annotate_gate = asyncio.Event()
+    rp = await engine.create("길 묻기")
+    asks = [asyncio.create_task(engine.three(rp.id, 0)) for _ in range(2)]
+    for _ in range(5):
+        await asyncio.sleep(0)
+    fake_claude.annotate_gate.set()
+    a, b = await asyncio.gather(*asks)
+    assert a == b
+    assert sum(1 for name, args in fake_claude.calls if name == "annotate" and args[0] == rp.lines[0].text) == 1
+
+
+async def test_a_line_whose_sound_failed_still_has_its_notes(engine, fake_claude, fake_voice):
+    # PR #15 review: a sound that failed fast while the notes were still being made returned the line without
+    # notes, and the roleplay screen never asks for them again
+    import asyncio
+
+    from fakes import DRAFT_USER
+
+    fake_claude.annotate_gate = asyncio.Event()
+    fake_voice.fail_text = DRAFT_USER[0]
+    rp = await engine.create("길 묻기")
+    ask = asyncio.create_task(engine.line(rp.id, 1))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    fake_claude.annotate_gate.set()
+    line = await ask
+    assert line.audio is None and line.three is not None

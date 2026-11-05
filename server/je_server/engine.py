@@ -42,6 +42,7 @@ class Engine:
         self.sem = asyncio.Semaphore(3)
         self.continuing: dict[str, asyncio.Task] = {}
         self.left: dict[str, int] = {}  # learner lines the running rebuild is writing
+        self.threes: dict[tuple[str, int], asyncio.Task] = {}  # notes asked for on demand, one call per line
 
     # --- fixed phrases ------------------------------------------------------------------------
 
@@ -137,7 +138,12 @@ class Engine:
                 key = await self.voice.say(line.text, "ryan", "english", urgent=False, rank=idx)
                 await self.update_line(rp_id, idx, line.text, audio=key)
 
-        await asyncio.gather(notes(), sound())
+        # both finish before either failure is raised: a sound that fails fast must not leave the line without
+        # its notes, since the roleplay screen does not ask for them again (PR #15 review)
+        results = await asyncio.gather(notes(), sound(), return_exceptions=True)
+        for r in results:
+            if isinstance(r, BaseException):
+                raise r
 
     async def line(self, rp_id: str, idx: int) -> ScriptLine:
         task = self.continuing.get(rp_id)
@@ -170,10 +176,24 @@ class Engine:
         return {"no": min(before + 1, total), "total": total}
 
     async def three(self, rp_id: str, idx: int) -> ThreeLine:
-        rp, line = self.get_line(rp_id, idx)
+        """Notes on demand (Ryan's lines). Asks for the same line at once share one Claude call (PR #15 review:
+        the end screen asks for every Ryan line and the shadow screen asks again)."""
+        _, line = self.get_line(rp_id, idx)
         if line.three is not None:
             return line.three
-        three = await self.claude.annotate(line.text, self.context(rp, idx))
+        key = (rp_id, idx)
+        task = self.threes.get(key)
+        if task is None or task.done():
+            task = asyncio.create_task(self._make_three(rp_id, idx))
+            task.add_done_callback(_quiet)
+            task.add_done_callback(lambda _: self.threes.pop(key, None))
+            self.threes[key] = task
+        return await asyncio.shield(task)
+
+    async def _make_three(self, rp_id: str, idx: int) -> ThreeLine:
+        rp, line = self.get_line(rp_id, idx)
+        async with self.sem:
+            three = await self.claude.annotate(line.text, self.context(rp, idx))
         await self.update_line(rp_id, idx, line.text, three=three)
         return three
 
@@ -424,7 +444,9 @@ class Engine:
                  "issues": [{"target": i.target, "heard": i.heard} for i in a.issues],
                  # Ryan's one point for a roleplay turn said differently; a retry said differently only asked
                  # to follow the line, which is not a point (final review)
-                 "point_ko": a.say_ko if a.mode == "turn" and not a.followed else ""} for a in tries]})
+                 # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
+                 "point_ko": a.say_ko if a.mode == "turn" and not a.followed and not a.issues else ""}
+                for a in tries]})
         return {"say": self.said("closing_retry" if issues_left else "closing_clean").model_dump(), "lines": lines}
 
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
