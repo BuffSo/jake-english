@@ -54,3 +54,4 @@
 - [2026-11-05 집 밖에서 쓰도록 맥과 폰 준비하기](2026-11-05-env-setup.md)
 - [2026-11-05 상황 역할극 MVP를 폰에서 쓰기까지](2026-11-05-roleplay-mvp.md)
 - [2026-11-05 역할극을 폰에서 써 보고 고친 것](2026-11-05-roleplay-quick-fixes.md)
+- [2026-11-05 맥 서버의 Claude 모델을 .env에서 고르기](2026-11-05-server-claude-model-setting.md)
