@@ -7,6 +7,7 @@ import type { Home, Roleplay } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate } from "../flow/gate";
+import { whenSilent } from "../flow/whenSilent";
 import { Button } from "../ui/Button";
 import { colors } from "../ui/theme";
 import { messageOf, styles as common, Waiting } from "./common";
@@ -35,7 +36,8 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     setStatus("라이언이 대본을 만들고 있어요");
     setError(null);
     try {
-      onCreated(await api.createRoleplay(situation));
+      // the script is made while Jake (or Ryan) is still talking; the roleplay screen opens after they finish
+      onCreated(await whenSilent(sounds, api.createRoleplay(situation)));
     } catch (e) {
       setError(messageOf(e));
       setStep("input");
