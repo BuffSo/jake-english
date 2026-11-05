@@ -154,7 +154,7 @@ class FakeClaude:
     async def recommend(self, recent):
         self.calls.append(("recommend", (recent,)))
         self._maybe_fail()
-        return "카페에서 커피를 주문하는 상황으로 연습하고 싶어요."
+        return "카페에서 커피를 주문하는 상황으로 연습해 보면 어때요?"
 
     async def feedback(self, line, heard, praise, issues):
         self.feedback_calls.append({"line": line, "heard": heard, "praise": praise,
