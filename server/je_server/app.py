@@ -48,14 +48,17 @@ def build_services(settings: Settings) -> Services:
     import anthropic
 
     from .asr import Whisper
-    from .claude import Claude
+    from .claude import QUICKS, WRITERS, Claude
     from .store import Store
     from .tts import Voice
 
     store = Store(settings.data_dir)
     voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir)
     whisper = Whisper(settings.whisper_exe, settings.whisper_model, settings.whisper_port)
-    claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30))
+    writer, quick = WRITERS[settings.claude_writer], QUICKS[settings.claude_quick]
+    log.info("claude models: writer %s, quick %s", writer["model"], quick["model"])
+    claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30),
+                    writer=writer, quick=quick)
     return Services(engine=Engine(store, claude, voice, whisper), voice=voice, whisper=whisper)
 
 
