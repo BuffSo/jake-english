@@ -1,4 +1,4 @@
-import { createGate } from "./gate";
+import { createGate, stopThenSend } from "./gate";
 
 test("a second call while the first runs is ignored", async () => {
   // PR #12 review: a double tap on 「■ 말하기 끝」 uploaded the same recording twice
@@ -23,4 +23,35 @@ test("the gate opens again after a failure", async () => {
   const gate = createGate();
   await expect(gate.run(async () => Promise.reject(new Error("x")))).rejects.toThrow("x");
   expect(await gate.run(async () => 1)).toBe(1);
+});
+
+// final review: back from a practice in the middle of the answer keeps the roleplay screen (spec roleplay-practice 9);
+// with the stream inside the gate, the mic did nothing until the old answer had finished
+test("the answer is sent after the gate is free again", async () => {
+  const gate = createGate();
+  let release!: () => void;
+  const answering = new Promise<void>((r) => (release = r));
+  const run = stopThenSend(gate, async () => "file:///rec.m4a", () => answering);
+  await new Promise((r) => setTimeout(r, 0));
+  expect(gate.busy).toBe(false);
+  release();
+  await run;
+});
+
+test("nothing is sent when stopping gives nothing", async () => {
+  const gate = createGate();
+  const send = jest.fn(async () => {});
+  await stopThenSend(gate, async () => undefined, send);
+  expect(send).not.toHaveBeenCalled();
+});
+
+test("a stop that arrives while another runs sends nothing", async () => {
+  const gate = createGate();
+  const send = jest.fn(async () => {});
+  let finish!: () => void;
+  const first = gate.run(() => new Promise<void>((r) => (finish = r)));
+  await stopThenSend(gate, async () => "file:///rec.m4a", send);
+  finish();
+  await first;
+  expect(send).not.toHaveBeenCalled();
 });

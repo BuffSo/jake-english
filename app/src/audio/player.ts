@@ -10,6 +10,8 @@ export class SoundQueue {
   private playing = false;
   private idle: (() => void)[] = [];
   private watchdog: ReturnType<typeof setTimeout> | undefined;
+  // screens that wait for quiet before offering a button that would cut a speaker off (spec roleplay-practice 9)
+  private listeners = new Set<(playing: boolean) => void>();
 
   constructor() {
     this.player.addListener("playbackStatusUpdate", (status) => {
@@ -27,7 +29,7 @@ export class SoundQueue {
     this.idle = [];
     clearTimeout(this.watchdog);
     this.player.pause();
-    this.playing = false;
+    this.setPlaying(false);
   }
 
   onIdle(cb: () => void): void {
@@ -35,17 +37,35 @@ export class SoundQueue {
     else cb();
   }
 
+  isPlaying(): boolean {
+    return this.playing;
+  }
+
+  // called only when playing turns on or off; the returned function stops it
+  subscribe(cb: (playing: boolean) => void): () => void {
+    this.listeners.add(cb);
+    return () => {
+      this.listeners.delete(cb);
+    };
+  }
+
+  private setPlaying(v: boolean): void {
+    if (this.playing === v) return;
+    this.playing = v;
+    this.listeners.forEach((cb) => cb(v));
+  }
+
   private next(): void {
     clearTimeout(this.watchdog);
     const src = this.queue.shift();
     if (!src) {
-      this.playing = false;
+      this.setPlaying(false);
       const cbs = this.idle;
       this.idle = [];
       cbs.forEach((cb) => cb());
       return;
     }
-    this.playing = true;
+    this.setPlaying(true);
     this.player.replace(src);
     this.player.play();
     this.watchdog = setTimeout(() => this.next(), STUCK_MS);

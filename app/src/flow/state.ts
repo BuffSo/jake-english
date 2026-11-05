@@ -5,11 +5,13 @@ import type { AttemptEvent, AttemptMode, Progress, Roleplay, Said, ScriptLine } 
 
 export type Screen = "home" | "situation" | "roleplay" | "end";
 export type Phase = "loading" | "ryan" | "ready" | "recording" | "evaluating" | "evaluated" | "error";
-// a learner bubble keeps the script line next to what was heard (spec roleplay-practice 2)
+// a learner bubble keeps the script line next to what was heard (spec roleplay-practice 2), and its line number
+// for 「이 줄 다시」 (9)
 export type Bubble = { kind: "ryan" | "user" | "feedback"; text: string; idx?: number; script?: string };
-// Practice from the end screen: the learner's lines again (mine) or Ryan's lines to follow (shadow), in order.
+// Practice: the learner's lines again (mine) or Ryan's lines to follow (shadow), in order. From the end screen it
+// goes back to the end; from a past bubble in the roleplay (one line) it goes back to the roleplay (spec 9).
 // 「이 줄 다시」 is mine with one line.
-export type Practice = { kind: "mine" | "shadow"; order: number[]; at: number };
+export type Practice = { kind: "mine" | "shadow"; order: number[]; at: number; from: "end" | "roleplay" };
 
 export type State = {
   screen: Screen;
@@ -20,6 +22,8 @@ export type State = {
   progress: Progress | null; // 「내 대사 no/total」 from the server, roleplay only
   phase: Phase;
   line: ScriptLine | null;
+  // the line's three-line notes are open: each line starts plain and opens only when asked (spec roleplay-practice 8)
+  reading: boolean;
   seen: Record<number, ScriptLine>;
   heard: string | null;
   feedback: string;
@@ -28,6 +32,10 @@ export type State = {
   message: string | null;
   errorFrom: "loading" | "evaluating" | null;
   practice: Practice | null;
+  // the roleplay as it was when a past line was picked for practice; restored as it is when the practice ends
+  resume: State | null;
+  // counts practices, so the same line practised twice plays its model again (see `modelKey`)
+  practiceNo: number;
   closingPlayed: boolean; // the end screen's closing words are said once, not again after each practice
   history: Bubble[];
 };
@@ -50,7 +58,9 @@ export type Action =
   | { type: "next" }
   | { type: "startPractice"; kind: "mine" | "shadow"; order: number[] }
   | { type: "restarted"; roleplay: Roleplay }
-  | { type: "closingPlayed" };
+  | { type: "closingPlayed" }
+  | { type: "toggleReading" }
+  | { type: "practiseLine"; kind: "mine" | "shadow"; idx: number };
 
 export const initial: State = {
   screen: "home",
@@ -61,6 +71,7 @@ export const initial: State = {
   progress: null,
   phase: "loading",
   line: null,
+  reading: false,
   seen: {},
   heard: null,
   feedback: "",
@@ -69,6 +80,8 @@ export const initial: State = {
   message: null,
   errorFrom: null,
   practice: null,
+  resume: null,
+  practiceNo: 0,
   closingPlayed: false,
   history: [],
 };
@@ -90,15 +103,45 @@ export function canReplay(p: Phase): boolean {
 
 const freshTurn = { heard: null, feedback: "", reply: null, message: null, errorFrom: null } as const;
 
-// leaving a practice: back on the end screen, ready for the next one
-function toEnd(s: State): State {
+// Leaving a practice. From the end screen: back on the end screen, ready for the next one. From the roleplay: the
+// roleplay exactly as it was, so nothing is said again and the evaluation on screen stays (spec 9).
+function leavePractice(s: State): State {
+  if (s.practice?.from === "roleplay" && s.resume) return { ...s.resume, practiceNo: s.practiceNo };
   return { ...s, ...freshTurn, screen: "end", practice: null, mode: "turn" };
+}
+
+// The practice button a bubble in the roleplay gets (spec 9): Ryan's lines to follow, my lines to say again. Not the
+// line on screen (「다시 해 보기」 covers it), not a line the app has not loaded, and none inside a practice.
+export function practiceFor(s: State, b: Pick<Bubble, "kind" | "idx">): "mine" | "shadow" | null {
+  if (s.practice || b.idx === undefined || b.idx === s.line?.idx || !s.seen[b.idx]) return null;
+  if (b.kind === "ryan") return "shadow";
+  if (b.kind === "user") return "mine";
+  return null;
+}
+
+// Whether leaving needs 「역할극을 그만둘까요?」 first: only when a roleplay in progress would be lost.
+export function askFirst(s: State, a: "back" | "home"): boolean {
+  if (!s.practice) return true;
+  return s.practice.from === "roleplay" && a === "home";
+}
+
+// Whether the roleplay screen goes away. Back from a line practised mid-roleplay stays on it, so the screen must
+// drop only that practice's recording and stream, not everything after it.
+export function leavesScreen(s: State, a: "back" | "home"): boolean {
+  return !(s.practice?.from === "roleplay" && a === "back");
+}
+
+// What the screen remembers to play a line's model once. Inside a practice it carries the practice number: the
+// screen stays mounted for a practice from the roleplay, and the same line practised again must play it again.
+export function modelKey(s: State): string | null {
+  if (!s.line) return null;
+  return s.practice ? `${s.line.idx}:${s.mode}:${s.practiceNo}` : `${s.line.idx}:${s.mode}`;
 }
 
 // What was said in this turn, as conversation bubbles (what the learner said, Ryan's feedback, Ryan's reply).
 function exchange(s: State): Bubble[] {
   return [
-    ...(s.heard ? [{ kind: "user" as const, text: s.heard, script: s.line?.text }] : []),
+    ...(s.heard ? [{ kind: "user" as const, text: s.heard, script: s.line?.text, idx: s.line?.idx }] : []),
     ...(s.feedback ? [{ kind: "feedback" as const, text: s.feedback }] : []),
     ...(s.reply ? [{ kind: "ryan" as const, text: s.reply.text, idx: s.reply.idx }] : []),
   ];
@@ -111,7 +154,7 @@ export function reduce(s: State, a: Action): State {
     case "back":
       // the on-screen back button and the phone's back key: the screen before this one
       if (s.screen === "situation") return { ...initial };
-      if (s.screen === "roleplay" && s.practice) return toEnd(s);
+      if (s.screen === "roleplay" && s.practice) return leavePractice(s);
       if (s.screen === "roleplay" || s.screen === "end") return { ...initial, screen: "situation" };
       return s;
     case "chooseRoleplay":
@@ -125,6 +168,7 @@ export function reduce(s: State, a: Action): State {
         ...s,
         ...freshTurn,
         line: a.line,
+        reading: false,
         seen: { ...s.seen, [a.line.idx]: a.line },
         // in shadow practice Ryan's line is the learner's to say, with or without its sound
         phase: a.line.speaker === "ryan" && s.mode !== "shadow" ? "ryan" : "ready",
@@ -178,7 +222,7 @@ export function reduce(s: State, a: Action): State {
       if (s.phase !== "evaluated") return s;
       if (s.practice) {
         const at = s.practice.at + 1;
-        if (at >= s.practice.order.length) return toEnd(s);
+        if (at >= s.practice.order.length) return leavePractice(s);
         // one line at a time: the screen shows the line being practised, not what came before
         return { ...s, ...freshTurn, practice: { ...s.practice, at }, idx: s.practice.order[at], history: [], phase: "loading", line: null };
       }
@@ -200,18 +244,43 @@ export function reduce(s: State, a: Action): State {
         ...freshTurn,
         screen: "roleplay",
         mode: a.kind === "shadow" ? "shadow" : "practice",
-        practice: { kind: a.kind, order: a.order, at: 0 },
+        practice: { kind: a.kind, order: a.order, at: 0, from: "end" },
+        practiceNo: s.practiceNo + 1,
         idx: a.order[0],
         history: [],
         line: null,
+        reading: false,
         phase: "loading",
         progress: null,
       };
+    case "practiseLine": {
+      // a past line, straight from what the app already holds: asking the server could wait for a rebuild of the
+      // rest of the script after an off-script turn (spec 9)
+      const line = s.seen[a.idx];
+      if (s.screen !== "roleplay" || s.practice || !canReplay(s.phase) || !line || a.idx === s.line?.idx) return s;
+      if (line.speaker !== (a.kind === "shadow" ? "ryan" : "user")) return s;
+      return {
+        ...s,
+        ...freshTurn,
+        mode: a.kind === "shadow" ? "shadow" : "practice",
+        practice: { kind: a.kind, order: [a.idx], at: 0, from: "roleplay" },
+        practiceNo: s.practiceNo + 1,
+        resume: s,
+        idx: a.idx,
+        line,
+        reading: false,
+        nextIdx: null,
+        history: [],
+        phase: "ready",
+      };
+    }
     case "restarted":
       // the same script as a new roleplay (spec roleplay-practice 6); Jake's recommended situation stays on top
       if (s.screen !== "end") return s;
       return { ...initial, screen: "roleplay", roleplay: a.roleplay, jake: s.jake, phase: "loading" };
     case "closingPlayed":
       return { ...s, closingPlayed: true };
+    case "toggleReading":
+      return s.line ? { ...s, reading: !s.reading } : s;
   }
 }
