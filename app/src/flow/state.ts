@@ -71,6 +71,15 @@ function messageFor(code: ErrorCode, say?: { text: string }): string {
 
 const freshTurn = { heard: null, feedback: "", reply: null, message: null, errorFrom: null } as const;
 
+// What was said in this turn, as conversation bubbles (what the learner said, Ryan's feedback, Ryan's reply).
+function exchange(s: State): Bubble[] {
+  return [
+    ...(s.heard ? [{ kind: "user" as const, text: s.heard }] : []),
+    ...(s.feedback ? [{ kind: "feedback" as const, text: s.feedback }] : []),
+    ...(s.reply ? [{ kind: "ryan" as const, text: s.reply.text, idx: s.reply.idx }] : []),
+  ];
+}
+
 export function reduce(s: State, a: Action): State {
   switch (a.type) {
     case "home":
@@ -127,20 +136,16 @@ export function reduce(s: State, a: Action): State {
       if (s.phase !== "error") return s;
       return { ...s, phase: s.errorFrom === "loading" ? "loading" : "ready", message: null, errorFrom: null };
     case "again":
+      // keep the turn that just happened (an off-script reply included) before trying the line again
       if (s.phase !== "evaluated") return s;
-      return { ...s, ...freshTurn, mode: "retry", phase: "ready" };
+      return { ...s, ...freshTurn, history: [...s.history, ...exchange(s)], mode: "retry", phase: "ready" };
     case "next": {
       if (s.phase !== "evaluated") return s;
       if (s.returnToEnd) return { ...s, screen: "end", returnToEnd: false, mode: "turn" };
-      const said: Bubble[] = [
-        ...(s.heard ? [{ kind: "user" as const, text: s.heard }] : []),
-        ...(s.feedback ? [{ kind: "feedback" as const, text: s.feedback }] : []),
-        ...(s.reply ? [{ kind: "ryan" as const, text: s.reply.text, idx: s.reply.idx }] : []),
-      ];
       return {
         ...s,
         ...freshTurn,
-        history: [...s.history, ...said],
+        history: [...s.history, ...exchange(s)],
         idx: s.nextIdx ?? s.idx + 1,
         nextIdx: null,
         mode: "turn",

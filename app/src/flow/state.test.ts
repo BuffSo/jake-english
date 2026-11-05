@@ -105,3 +105,20 @@ test("loading error retries the load", () => {
   const s = reduce(reduce(at("loading"), { type: "failed", code: "offline" }), { type: "retry" });
   expect(s.phase).toBe("loading");
 });
+
+test("again after an off-script turn keeps Ryan's reply in the conversation", () => {
+  // final review: 「다시 해 보기」 cleared the reply, so it never reached the bubbles
+  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64) };
+  let s = at("evaluating");
+  s = reduce(s, { type: "event", e: { type: "heard", text: "I don't know", followed: false } });
+  s = reduce(s, { type: "event", e: { type: "reply", line: reply } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 3, issues: 0 } });
+  s = reduce(s, { type: "again" });
+  s = reduce(reduce(s, { type: "recordStart" }), { type: "recordStop" });
+  s = reduce(s, { type: "event", e: { type: "heard", text: "I'd like a cup of coffee", followed: true } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 1, issues: 0 } });
+  s = reduce(s, { type: "next" });
+  expect(s.idx).toBe(3);
+  expect(s.history.filter((b) => b.text === "No worries!")).toHaveLength(1);
+  expect(s.history.map((b) => b.text)).toEqual(["I don't know", "No worries!", "I'd like a cup of coffee"]);
+});
