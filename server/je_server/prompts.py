@@ -1,0 +1,99 @@
+"""Prompts and JSON schemas for the Claude calls (ADR-0004: only text goes out)."""
+from __future__ import annotations
+
+
+def _obj(props: dict, required: list[str] | None = None) -> dict:
+    return {"type": "object", "additionalProperties": False, "properties": props,
+            "required": required if required is not None else list(props)}
+
+
+STR = {"type": "string"}
+BOOL = {"type": "boolean"}
+
+FRAME_SCHEMA = _obj({k: STR for k in ("title_ko", "user_role_ko", "ryan_role_ko", "place_ko", "goal_ko")})
+LINE_SCHEMA = _obj({"speaker": {"type": "string", "enum": ["ryan", "user"]}, "text": STR})
+SCRIPT_SCHEMA = _obj({"frame": FRAME_SCHEMA, "lines": {"type": "array", "items": LINE_SCHEMA}})
+
+SYL_SCHEMA = _obj({"en": STR, "ko": STR, "m": {"type": "string", "enum": ["s", "w", "n"]}, "hi": STR})
+WORD_SCHEMA = _obj({"syl": {"type": "array", "items": SYL_SCHEMA}, "emph": BOOL, "link": BOOL})
+THREE_SCHEMA = _obj({"words": {"type": "array", "items": WORD_SCHEMA}, "reading": STR})
+
+RECOMMEND_SCHEMA = _obj({"request_ko": STR})
+
+SCRIPT_SYSTEM = """\
+You write short roleplay scripts for a Korean adult who is practicing spoken English.
+Ryan plays the other person in the situation and speaks natural American English. The learner plays themself.
+
+Rules:
+- Lines alternate between Ryan and the learner. Ryan speaks first and Ryan speaks last.
+- The learner has 4 to 6 lines. Ryan's last line is a short, friendly closing.
+- Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
+  natural spoken grammar, contractions where native speakers use them.
+- Ryan's lines are short (one or two sentences) and move the situation forward, so the learner always has an
+  obvious thing to say next.
+- No real brand names or real people.
+- The frame is in Korean: title_ko (a short title), user_role_ko (who the learner is), ryan_role_ko (who Ryan is),
+  place_ko (where), goal_ko (what the learner is trying to do).
+"""
+
+THREE_SYSTEM = """\
+You annotate one English line for a Korean learner as three lines: the English, its Korean pronunciation in
+Hangul, and a short Korean note on how to read it. American pronunciation is the standard (new → 누, water → 워러).
+
+Output format: words in order. Each word is a list of syllables. Each syllable has
+- en: the English letters of that syllable. The syllables of a word, joined, spell the word exactly as in the
+  line; punctuation goes on the last syllable of the word. Split longer words into syllables (cof-fee, sta-tion,
+  re-cord). Do not add, drop or reorder words.
+- ko: the Hangul for that syllable, as it actually sounds in this line (only Hangul letters).
+- m: "s" for a stressed syllable to highlight, "w" for a weak syllable to show small and gray, "n" otherwise.
+- hi: only when m is "s": the single Hangul letter in ko that carries the vowel. Otherwise "".
+Each word also has emph (true only when the context stresses the word for meaning, like "I DID say that")
+and link (true when this word's Korean runs into the next word without a space).
+
+Rules:
+1. Highlight ("s") the dictionary-stressed syllable of the content words that carry sentence stress (nouns,
+   main verbs, adjectives, adverbs, negatives). At most one "s" per word, always on the syllable the dictionary
+   stresses (coffee → COF, record as a noun → RE, as a verb → CORD).
+2. The highlight is one Hangul letter. Use a final consonant (받침) rather than two letters: object → 압 (not 아브),
+   did → 딛 (not 디드), for when stressed → 포 (not 포어). If a syllable's ko has more letters, hi is just the one
+   with the main vowel (station: sta → ko 스테이, hi 테).
+3. Mark "w" on the weak syllables of words you highlighted (coffee's 피, record noun's 커드) and on reduced
+   function words (a, an, the, of, to, for, and, can, at, it when reduced). Leave other syllables "n". Do not
+   make most of the line gray.
+4. Show linking: a final consonant moves to the next word (cup of → 커 + 퍼 with link true on cup; record it →
+   리코딧). Show the American flap t (water → 워러, get it → 게릿).
+5. reading: one or two short Korean sentences on what to stress and how the words link or reduce. Write every
+   pronunciation inside [[ ]] with hyphens between syllables, matching the syllables' ko exactly
+   (record it → [[리-코-딧]]). Use 「」 only for meanings, never for pronunciations.
+6. If emph is true, highlight that word and say why in reading (「정말 말했다니까요」 하는 느낌).
+
+Example: "I'd like a cup of coffee."
+{"words":[
+ {"syl":[{"en":"I'd","ko":"아잇","m":"n","hi":""}],"emph":false,"link":false},
+ {"syl":[{"en":"like","ko":"라이","m":"n","hi":""}],"emph":false,"link":true},
+ {"syl":[{"en":"a","ko":"커","m":"w","hi":""}],"emph":false,"link":false},
+ {"syl":[{"en":"cup","ko":"커","m":"n","hi":""}],"emph":false,"link":true},
+ {"syl":[{"en":"of","ko":"퍼","m":"w","hi":""}],"emph":false,"link":false},
+ {"syl":[{"en":"cof","ko":"카","m":"s","hi":"카"},{"en":"fee.","ko":"피","m":"w","hi":""}],"emph":false,"link":false}],
+ "reading":"coffee는 앞을 세게, [[카-피]]. 뒤 [[피]]는 짧고 약하게. cup of는 이어서 [[커-퍼]]."}
+
+Example: "I want to record it."
+{"words":[
+ {"syl":[{"en":"I","ko":"아이","m":"n","hi":""}],"emph":false,"link":false},
+ {"syl":[{"en":"want","ko":"원","m":"n","hi":""}],"emph":false,"link":true},
+ {"syl":[{"en":"to","ko":"터","m":"w","hi":""}],"emph":false,"link":false},
+ {"syl":[{"en":"re","ko":"리","m":"w","hi":""},{"en":"cord","ko":"코","m":"s","hi":"코"}],"emph":false,"link":true},
+ {"syl":[{"en":"it.","ko":"딧","m":"w","hi":""}],"emph":false,"link":false}],
+ "reading":"record는 동사라 뒤를 세게, [[리-코-딧]]. want to는 줄여서 [[원-터]]."}
+"""
+
+RECOMMEND_SYSTEM = """\
+You suggest one situation for a Korean adult to practice speaking English: a real moment in daily life where
+they must say something in English right away. Examples of the kind: a tourist on the street asks how to get
+somewhere, ordering at a cafe abroad, a hotel front desk, helping a lost foreigner on the subway, small talk with
+a coworker from abroad.
+
+Write request_ko as one Korean sentence in 반말, the way the learner would ask for it, ending with
+"상황으로 연습하고 싶어." Example: "길에서 외국인이 케이블카 타는 곳을 물어보는 상황으로 연습하고 싶어."
+Pick something different from the recent situations listed by the user.
+"""

@@ -24,3 +24,17 @@ class Word(BaseModel):
 class ThreeLine(BaseModel):
     words: list[Word]
     reading: str  # [[...]] marks a pronunciation, shown as 「...」
+
+
+class Frame(BaseModel):
+    """The situation's basic frame (who, where, what), in Korean."""
+
+    title_ko: str
+    user_role_ko: str
+    ryan_role_ko: str
+    place_ko: str
+    goal_ko: str
+
+
+Speaker = Literal["ryan", "user"]
+Draft = list[tuple[Speaker, str]]

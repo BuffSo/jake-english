@@ -1,0 +1,137 @@
+"""Claude calls (ADR-0004). Only text goes out: lines, transcripts, the Mac's findings, the situation."""
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import anthropic
+from pydantic import ValidationError
+
+from . import prompts
+from .models import Draft, Frame, ThreeLine
+from .threeline import Problem, check, degrade, plain
+
+# Spec 「기다리는 시간과 모델」: Haiku with thinking off for quick wording, Sonnet with thinking off and low
+# effort for writing. No temperature/top_p/top_k: API version 2026-10-21 rejects them.
+HAIKU: dict[str, Any] = {"model": "claude-haiku-5-5", "thinking": {"type": "disabled"}}
+SONNET: dict[str, Any] = {"model": "claude-sonnet-5-5", "thinking": {"type": "between_tools"}, "effort": "low"}
+
+USER_TURNS = (4, 6)
+USER_MAX_WORDS = 14
+ANNOTATE_TRIES = 3
+
+
+class ClaudeUnavailable(Exception):
+    """No answer right now: no internet, rate limit, server error, timeout or refusal."""
+
+
+def _problems_text(problems: list[str]) -> str:
+    return "\n".join(f"- {p}" for p in problems)
+
+
+class Claude:
+    def __init__(self, client: Any, writer: dict[str, Any] = SONNET, quick: dict[str, Any] = HAIKU):
+        self.client = client
+        self.writer = writer
+        self.quick = quick
+
+    def _request(self, model: dict[str, Any], output_config: dict[str, Any]) -> dict[str, Any]:
+        kw = {k: v for k, v in model.items() if k != "effort"}
+        if "effort" in model:
+            output_config = {**output_config, "effort": model["effort"]}
+        kw["output_config"] = output_config
+        return kw
+
+    async def _create(self, **kw):
+        try:
+            resp = await self.client.messages.create(**kw)
+        except anthropic.APIConnectionError as e:  # includes timeouts
+            raise ClaudeUnavailable("connection") from e
+        except anthropic.RateLimitError as e:
+            raise ClaudeUnavailable("rate limit") from e
+        except anthropic.APIStatusError as e:
+            if e.status_code >= 500:
+                raise ClaudeUnavailable(f"status {e.status_code}") from e
+            raise
+        if resp.stop_reason == "refusal":
+            raise ClaudeUnavailable("refusal")
+        return resp
+
+    async def _json(self, model: dict[str, Any], system: str, user: str, schema: dict, max_tokens: int) -> Any:
+        """Returns parsed JSON, or None when the answer is not valid JSON."""
+        resp = await self._create(
+            **self._request(model, {"format": {"type": "json_schema", "schema": schema}}),
+            max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user}],
+        )
+        text = next((b.text for b in resp.content if b.type == "text"), "")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return None
+
+    # --- script -------------------------------------------------------------------------------
+
+    @staticmethod
+    def script_problems(draft: Draft) -> list[str]:
+        out = []
+        if not draft:
+            return ["the script is empty"]
+        if draft[0][0] != "ryan" or draft[-1][0] != "ryan":
+            out.append("Ryan must speak first and last")
+        if any(a[0] == b[0] for a, b in zip(draft, draft[1:])):
+            out.append("lines must alternate between Ryan and the learner")
+        turns = sum(1 for s, _ in draft if s == "user")
+        if not USER_TURNS[0] <= turns <= USER_TURNS[1]:
+            out.append(f"the learner must have {USER_TURNS[0]} to {USER_TURNS[1]} lines, not {turns}")
+        if any(s == "user" and len(t.split()) > USER_MAX_WORDS for s, t in draft):
+            out.append(f"learner lines must be at most {USER_MAX_WORDS - 2} words")
+        return out
+
+    async def make_script(self, situation: str) -> tuple[Frame, Draft]:
+        user = f"상황: {situation}"
+        problems: list[str] = []
+        for _ in range(2):
+            content = user if not problems else f"{user}\n\nThe last script had problems. Fix them:\n{_problems_text(problems)}"
+            data = await self._json(self.writer, prompts.SCRIPT_SYSTEM, content, prompts.SCRIPT_SCHEMA, 4000)
+            try:
+                frame = Frame.model_validate(data["frame"])
+                draft: Draft = [(l["speaker"], l["text"].strip()) for l in data["lines"]]
+            except (TypeError, KeyError, ValidationError):
+                problems = ["the answer did not follow the JSON format"]
+                continue
+            problems = self.script_problems(draft)
+            if not problems:
+                return frame, draft
+        raise ClaudeUnavailable("could not get a valid script")
+
+    # --- three lines --------------------------------------------------------------------------
+
+    async def annotate(self, text: str, context: str) -> ThreeLine:
+        base = f"Line: {text}\nContext: {context or '-'}"
+        last: ThreeLine | None = None
+        problems: list[Problem] = []
+        for _ in range(ANNOTATE_TRIES):
+            content = base if last is None else (
+                f"{base}\n\nThe last answer failed these checks. Fix them:\n"
+                + _problems_text([f"{p.kind}: {p.detail}" for p in problems]))
+            data = await self._json(self.writer, prompts.THREE_SYSTEM, content, prompts.THREE_SCHEMA, 4000)
+            try:
+                three = ThreeLine.model_validate(data)
+            except ValidationError:
+                continue
+            problems = check(text, three)
+            if not problems:
+                return three
+            last = three
+        return degrade(text, last, problems) if last is not None else plain(text)
+
+    # --- recommendation -----------------------------------------------------------------------
+
+    async def recommend(self, recent: list[str]) -> str:
+        listed = "\n".join(f"- {r}" for r in recent) or "- 없음"
+        data = await self._json(self.quick, prompts.RECOMMEND_SYSTEM, f"최근 상황:\n{listed}",
+                                prompts.RECOMMEND_SCHEMA, 300)
+        text = (data or {}).get("request_ko", "").strip() if isinstance(data, dict) else ""
+        if not text:
+            raise ClaudeUnavailable("empty recommendation")
+        return text
