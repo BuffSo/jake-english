@@ -134,6 +134,14 @@ class Engine:
         await asyncio.wait_for(asyncio.shield(self.schedule(rp_id, idx)), LINE_WAIT)
         return self.get_line(rp_id, idx)[1]
 
+    def progress(self, rp_id: str, idx: int) -> dict[str, int]:
+        """「내 대사 no/total」 for the roleplay header. On Ryan's line it is the learner's next line. A rebuild that
+        failed ends with Ryan's goodbye and fewer learner lines, so no is kept within total."""
+        rp = self.load(rp_id)
+        total = sum(1 for l in rp.lines if l.speaker == "user")
+        before = sum(1 for l in rp.lines if l.speaker == "user" and l.idx < idx)
+        return {"no": min(before + 1, total), "total": total}
+
     async def three(self, rp_id: str, idx: int) -> ThreeLine:
         rp, line = self.get_line(rp_id, idx)
         if line.three is not None:

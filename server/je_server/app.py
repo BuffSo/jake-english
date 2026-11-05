@@ -167,7 +167,8 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.get("/roleplays/{rp_id}/lines/{idx}")
     async def line(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
         try:
-            return (await engine().line(rp_id, idx)).model_dump(mode="json")
+            line = await engine().line(rp_id, idx)  # waits for a rebuild, so the count is of the whole script
+            return {**line.model_dump(mode="json"), "progress": engine().progress(rp_id, idx)}
         except NotFound:
             raise ApiError(404, "not_found") from None
         except ClaudeUnavailable:

@@ -92,3 +92,21 @@ async def test_model_audio_starts_before_notes_finish(engine, fake_claude, fake_
     assert any(c[0] == rp.lines[1].text for c in fake_voice.calls)  # audio asked for while notes still wait
     gate.set()
     assert (await engine.line(rp.id, 1)).three is not None
+
+
+async def test_progress_counts_the_learners_lines(engine):
+    rp = await engine.create("길 묻기")  # lines: ryan 0, user 1, ryan 2, user 3, ryan 4, user 5, ryan 6
+    assert [engine.progress(rp.id, i) for i in (0, 1, 2, 3, 5, 6)] == [
+        {"no": 1, "total": 3}, {"no": 1, "total": 3}, {"no": 2, "total": 3},
+        {"no": 2, "total": 3}, {"no": 3, "total": 3}, {"no": 3, "total": 3}]
+
+
+async def test_progress_never_passes_total(engine, fake_claude, fake_whisper, speech_bytes):
+    # a rebuild that fails closes with Ryan's goodbye: lines become ryan 0, user 1, reply 2, closing 3
+    fake_claude.fail_continue = True
+    rp = await engine.create("길 묻기")
+    await engine.line(rp.id, 1)
+    fake_whisper.text = "I have no idea at all."
+    [e async for e in engine.attempt(rp.id, 1, speech_bytes, "turn")]
+    await engine.line(rp.id, 3)
+    assert engine.progress(rp.id, 3) == {"no": 1, "total": 1}

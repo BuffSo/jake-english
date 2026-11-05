@@ -40,6 +40,7 @@ def test_create_roleplay_and_get_lines(client):
     assert rp["lines"][0]["speaker"] == "ryan"
     line = client.get(f"/roleplays/{rp['id']}/lines/1").json()
     assert line["three"]["words"] and len(line["audio"]) == 64
+    assert line["progress"] == {"no": 1, "total": 3}
     audio = client.get(f"/audio/{line['audio']}?rate=0.8")
     assert audio.status_code == 200 and audio.headers["content-type"] == "audio/mp4"
     assert client.get(f"/roleplays/{rp['id']}/lines/0/three").json()["words"]
