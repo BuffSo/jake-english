@@ -65,5 +65,5 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  msg: { margin: 24, marginTop: 56, fontSize: 18, color: colors.text },
+  msg: { margin: 24, fontSize: 18, color: colors.text },
 });
