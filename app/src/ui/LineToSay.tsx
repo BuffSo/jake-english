@@ -30,7 +30,7 @@ export function LineToSay({ text, three, open, onToggle }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginVertical: 6 },
+  wrap: {}, // inside the 「내 차례」 bubble, which has its own padding
   text: { fontSize: 22, color: colors.text, lineHeight: 30 },
   sub: { fontSize: 15, color: colors.sub, marginTop: 4 },
   toggle: { alignSelf: "flex-start", marginTop: 6 },

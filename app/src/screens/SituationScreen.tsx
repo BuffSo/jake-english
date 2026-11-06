@@ -12,6 +12,7 @@ import { whenSilent } from "../flow/whenSilent";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { circleFace, type Face, type Step } from "../ui/faces";
+import { Named } from "../ui/Named";
 import { FaceCircle } from "../ui/RyanFace";
 import { ThinkingFace } from "../ui/ThinkingFace";
 import { colors, top } from "../ui/theme";
@@ -212,14 +213,14 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
       )}
       {step === "confirm" && jake && (
         <>
-          <Text style={[common.body, styles.jake]}>제이크: {jake.text}</Text>
+          <JakeSays text={jake.text} />
           <Button label="이걸로 할게요" onPress={pick} />
           <Button label="다른 걸로요" onPress={another} kind="plain" />
         </>
       )}
       {step === "working" && (
         <>
-          {jake && <Text style={[common.body, styles.jake]}>제이크: {jake.text}</Text>}
+          {jake && <JakeSays text={jake.text} />}
           <Waiting text={status} />
         </>
       )}
@@ -228,12 +229,22 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   );
 }
 
+// Jake's suggestion, on the left in gray with his name like on the roleplay screen: it was blue like the learner's
+// own lines there (2026-11-06 user)
+function JakeSays({ text }: { text: string }) {
+  return (
+    <Named part="jake">
+      <Text style={[common.body, styles.jake]}>{text}</Text>
+    </Named>
+  );
+}
+
 const styles = StyleSheet.create({
   // from just below the floating back button: centring left a wide gap above the picture (2026-11-05, user)
   wrap: { flex: 1, paddingTop: top + 44, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: colors.bg },
   face: { marginBottom: 12 },
   say: { marginBottom: 10 },
-  jake: { backgroundColor: colors.user, borderRadius: 12, padding: 12, marginBottom: 8 },
+  jake: { backgroundColor: colors.ryan, borderRadius: 12, padding: 12, marginTop: 2, marginBottom: 8, maxWidth: "92%" },
   input: {
     borderWidth: 1,
     borderColor: "#CED4DA",
