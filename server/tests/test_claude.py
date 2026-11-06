@@ -89,6 +89,19 @@ async def test_recommend_uses_haiku_and_avoids_recent():
     assert "케이블카" in r["messages"][0]["content"]
 
 
+async def test_recommend_avoids_turned_down():
+    # 2026-11-06 the user: Jake's suggestion waits for 「이걸로 할게요」 or 「다른 걸로요」, and one turned down
+    # with 「다른 걸로요」 must not come back
+    answer = json.dumps({"request_ko": "호텔 프런트에서 체크인하는 상황으로 연습해 보면 어때요?"})
+    fake = FakeAnthropic([answer, answer])
+    await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], ["카페에서 주문하는 상황으로 연습해 보면 어때요?"])
+    content = fake.requests[0]["messages"][0]["content"]
+    assert "케이블카" in content and "방금 거절한 상황:\n- 카페에서 주문하는" in content
+    assert "turned down" in str(fake.requests[0]["system"])
+    await Claude(fake).recommend([])  # nothing turned down: the message has no empty list for it
+    assert "거절" not in fake.requests[1]["messages"][0]["content"]
+
+
 async def test_feedback_streams_with_haiku_and_sends_findings():
     from je_server.models import Issue
 

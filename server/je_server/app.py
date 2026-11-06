@@ -5,7 +5,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi import Path as PathParam
@@ -69,6 +69,12 @@ class ApiError(Exception):
 
 class NewRoleplay(BaseModel):
     situation: str = Field(min_length=1, max_length=300)
+
+
+class Recommend(BaseModel):
+    # Jake's suggestions turned down on the situation screen (「다른 걸로요」, 2026-11-06), so they do not come
+    # back. Limited like the situation itself; the app keeps the last TURNED_DOWN_MAX.
+    skip: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=10)
 
 
 async def read_body(request: Request) -> bytes:
@@ -152,9 +158,9 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             raise ApiError(413, "too_long", engine().said("too_long").model_dump()) from None
 
     @router.post("/recommend")
-    async def recommend() -> dict:
+    async def recommend(body: Recommend | None = None) -> dict:
         try:
-            return (await engine().recommend()).model_dump()
+            return (await engine().recommend(body.skip if body else [])).model_dump()
         except ClaudeUnavailable:
             raise claude_down() from None
 

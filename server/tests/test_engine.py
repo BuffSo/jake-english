@@ -69,6 +69,13 @@ async def test_recommend_is_jake_korean(engine, fake_voice, fake_claude):
     assert said.text in fake_voice.checked  # heard back: its end was once swallowed (2026-11-05)
 
 
+async def test_recommend_passes_turned_down(engine, fake_claude):
+    await engine.create("길 묻기")
+    await engine.recommend(["카페에서 주문하는 상황으로 연습해 보면 어때요?"])
+    asked = [args for name, args in fake_claude.calls if name == "recommend"]
+    assert asked == [(["길 묻기"], ["카페에서 주문하는 상황으로 연습해 보면 어때요?"])]
+
+
 async def test_fixed_phrases_are_checked(engine, fake_voice):
     from je_server.phrases import PHRASES
 

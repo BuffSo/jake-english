@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import anthropic
@@ -159,10 +159,12 @@ class Claude:
 
     # --- recommendation -----------------------------------------------------------------------
 
-    async def recommend(self, recent: list[str]) -> str:
+    async def recommend(self, recent: list[str], turned_down: Sequence[str] = ()) -> str:
         listed = "\n".join(f"- {r}" for r in recent) or "- 없음"
-        data = await self._json(self.quick, prompts.RECOMMEND_SYSTEM, f"최근 상황:\n{listed}",
-                                prompts.RECOMMEND_SCHEMA, 300)
+        message = f"최근 상황:\n{listed}"
+        if turned_down:  # suggested on the situation screen and turned down with 「다른 걸로요」 (2026-11-06)
+            message += "\n\n방금 거절한 상황:\n" + "\n".join(f"- {t}" for t in turned_down)
+        data = await self._json(self.quick, prompts.RECOMMEND_SYSTEM, message, prompts.RECOMMEND_SCHEMA, 300)
         text = (data or {}).get("request_ko", "").strip() if isinstance(data, dict) else ""
         if not text:
             raise ClaudeUnavailable("empty recommendation")

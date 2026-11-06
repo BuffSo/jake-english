@@ -154,8 +154,8 @@ class FakeClaude:
         self._maybe_fail()
         return plain(text)
 
-    async def recommend(self, recent):
-        self.calls.append(("recommend", (recent,)))
+    async def recommend(self, recent, turned_down=()):
+        self.calls.append(("recommend", (recent, list(turned_down))))
         self._maybe_fail()
         return "카페에서 커피를 주문하는 상황으로 연습해 보면 어때요?"
 
