@@ -108,32 +108,32 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     sounds.enqueue(api.audioSource(line.audio, r));
   }
 
-  // Leaving (back or 「처음으로」): sounds stop, a recording in progress is deleted without being sent, and a
+  // Leaving (back): sounds stop, a recording in progress is deleted without being sent, and a
   // stream still answering is dropped by `epoch` (and by `mounted` when the screen goes away). A roleplay cannot
   // be picked up again later yet (이어 하기), so leaving one in progress asks first; a practice has nothing to lose
   // (`askFirst`).
-  async function leave(a: "back" | "home") {
+  async function leave() {
     // set before anything is awaited: a stop or start still finishing sees it (PR #13 review)
     epoch.current += 1;
-    if (leavesScreen(state, a)) mounted.current = false;
+    if (leavesScreen(state)) mounted.current = false;
     sounds.clear();
     await rec.discard();
-    dispatch({ type: a });
+    dispatch({ type: "back" });
   }
 
-  function askLeave(a: "back" | "home") {
-    if (!askFirst(state, a)) return void leave(a);
+  function askLeave() {
+    if (!askFirst(state)) return void leave();
     Alert.alert(
       "역할극을 그만둘까요?",
       "하던 역할극은 아직 이어 할 수 없어요.",
       [
         { text: "계속하기", style: "cancel" },
-        { text: "그만두기", style: "destructive", onPress: () => void leave(a) },
+        { text: "그만두기", style: "destructive", onPress: () => void leave() },
       ],
       { cancelable: true },
     );
   }
-  useBackKey(() => askLeave("back"));
+  useBackKey(askLeave);
 
   function replayJake() {
     if (!state.jake || !canReplay(state.phase)) return;
@@ -288,7 +288,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
-        <BackButton onPress={() => askLeave("back")} />
+        <BackButton onPress={askLeave} />
         <View style={styles.titleRow}>
           <Text style={[common.title, styles.titleText]}>{title}</Text>
           {count && <Text style={styles.count}>{count}</Text>}
@@ -376,40 +376,43 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {state.message && <Text style={state.phase === "error" ? common.error : styles.notice}>{state.message}</Text>}
       </ScrollView>
 
-      <View style={styles.controls}>
-        {myTurn && state.phase !== "error" && (
-          <>
-            <View style={styles.row}>
-              <Button label="다시 듣기" onPress={() => listen()} kind="plain" small disabled={busy || state.phase === "recording"} />
-              {RATES.map((r) => (
-                <Button
-                  key={r}
-                  label={`${r}배${r === rate ? " ✓" : ""}`}
-                  onPress={() => listen(r)}
-                  kind="plain"
-                  small
-                  disabled={busy || state.phase === "recording"}
-                />
-              ))}
-            </View>
-            {state.phase !== "evaluated" && (
-              <Button
-                label={state.phase === "recording" ? "■ 말하기 끝" : busy ? "평가하고 있어요" : shadow ? "🎤 따라 말하기" : "🎤 말하기"}
-                onPress={state.phase === "recording" ? stopRecording : startRecording}
-                disabled={busy}
-              />
-            )}
-            {state.phase === "evaluated" && (
+      {/* No 「처음으로」 at the bottom: back does nearly the same, one screen at a time (2026-11-06 user). Without it
+          the bar is empty while Ryan speaks or the next line loads, so it shows only when it has buttons. */}
+      {(myTurn || state.phase === "error") && (
+        <View style={styles.controls}>
+          {myTurn && state.phase !== "error" && (
+            <>
               <View style={styles.row}>
-                <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} kind="plain" />
-                <Button label={midway ? "역할극으로" : "다음"} onPress={() => dispatch({ type: "next" })} />
+                <Button label="다시 듣기" onPress={() => listen()} kind="plain" small disabled={busy || state.phase === "recording"} />
+                {RATES.map((r) => (
+                  <Button
+                    key={r}
+                    label={`${r}배${r === rate ? " ✓" : ""}`}
+                    onPress={() => listen(r)}
+                    kind="plain"
+                    small
+                    disabled={busy || state.phase === "recording"}
+                  />
+                ))}
               </View>
-            )}
-          </>
-        )}
-        {state.phase === "error" && <Button label="다시 시도" onPress={() => dispatch({ type: "retry" })} />}
-        <Button label="처음으로" onPress={() => askLeave("home")} kind="plain" small />
-      </View>
+              {state.phase !== "evaluated" && (
+                <Button
+                  label={state.phase === "recording" ? "■ 말하기 끝" : busy ? "평가하고 있어요" : shadow ? "🎤 따라 말하기" : "🎤 말하기"}
+                  onPress={state.phase === "recording" ? stopRecording : startRecording}
+                  disabled={busy}
+                />
+              )}
+              {state.phase === "evaluated" && (
+                <View style={styles.row}>
+                  <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} kind="plain" />
+                  <Button label={midway ? "역할극으로" : "다음"} onPress={() => dispatch({ type: "next" })} />
+                </View>
+              )}
+            </>
+          )}
+          {state.phase === "error" && <Button label="다시 시도" onPress={() => dispatch({ type: "retry" })} />}
+        </View>
+      )}
     </View>
   );
 }
