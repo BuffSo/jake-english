@@ -319,7 +319,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </View>
           ),
         )}
-        {state.phase === "loading" && <Waiting text={practice ? "대사를 준비하고 있어요" : "다음 대사를 준비하고 있어요"} />}
+        {state.phase === "loading" && <Waiting who="ryan" text={practice ? "대사를 준비하고 있어요" : "다음 대사를 준비하고 있어요"} />}
         {state.phase === "ryan" && line && <RyanBubble idx={line.idx} text={line.text} />}
         {myTurn && before?.speaker === "ryan" && (
           <Pressable onPress={() => playBefore(before.audio)} style={styles.before}>
@@ -347,7 +347,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             follow={practiceFor(state, { kind: "ryan", idx: state.reply.idx }) === "shadow"}
           />
         )}
-        {busy && !state.feedback && <Waiting text="라이언이 듣고 있어요" />}
+        {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" />}
         {state.message && <Text style={state.phase === "error" ? common.error : styles.notice}>{state.message}</Text>}
       </ScrollView>
 

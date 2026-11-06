@@ -103,7 +103,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
         {summary && <Text style={[common.body, styles.say]}>{summary.say.text}</Text>}
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
-        {!summary && !error && <Waiting text="마무리하고 있어요" />}
+        {!summary && !error && <Waiting who="ryan" text="마무리하고 있어요" />}
         {summary && <Text style={styles.section}>주고받은 말</Text>}
         {summary?.lines.map((l) =>
           l.line.speaker === "ryan" ? (

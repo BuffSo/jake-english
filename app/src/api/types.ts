@@ -38,9 +38,11 @@ export type Roleplay = {
   pos: number;
 };
 export type Said = { text: string; audio: string };
+// thinking-face picture paths per person, cross-faded while the app waits (/home `images.thinking`)
+export type Thinking = { jake: string[]; ryan: string[] };
 export type Home = {
   lines: { greeting: Said; ask_mode: Said; ask_situation: Said; ask_recommend: Said };
-  images: { front: string; listening: string };
+  images: { front: string; listening: string; thinking: Thinking };
 };
 export type Progress = { no: number; total: number }; // 「내 대사 no/total」
 export type LineWithProgress = ScriptLine & { progress: Progress };

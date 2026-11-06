@@ -11,7 +11,9 @@ import { whenSilent } from "../flow/whenSilent";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { RyanCircle } from "../ui/RyanFace";
+import { ThinkingFace } from "../ui/ThinkingFace";
 import { colors, top } from "../ui/theme";
+import { waiterOf } from "../ui/thinking";
 import { messageOf, styles as common, Waiting } from "./common";
 
 type Props = { sounds: SoundQueue; home: Home; onCreated: (rp: Roleplay, jake: Said | null) => void; onBack: () => void };
@@ -148,11 +150,17 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     }
   }
 
+  const listening = <RyanCircle source={api.imageSource(home.images.listening)} size={160} />;
   return (
     <View style={styles.wrap}>
       <BackButton onPress={back} floating />
       <View style={styles.face}>
-        <RyanCircle source={api.imageSource(home.images.listening)} size={160} />
+        {/* while working, this circle thinks in place, so the screen never shows two faces (2026-11-06) */}
+        {step === "working" ? (
+          <ThinkingFace who={waiterOf(status)} size={160} fallback={listening} />
+        ) : (
+          listening
+        )}
       </View>
       <Text style={[common.body, styles.say]}>{home.lines.ask_situation.text}</Text>
       {step === "input" && (

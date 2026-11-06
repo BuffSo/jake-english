@@ -11,6 +11,7 @@ import { EndScreen } from "./src/screens/EndScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { RoleplayScreen } from "./src/screens/RoleplayScreen";
 import { SituationScreen } from "./src/screens/SituationScreen";
+import { ThinkingFaces } from "./src/ui/ThinkingFace";
 import { colors } from "./src/ui/theme";
 
 export default function App() {
@@ -47,7 +48,8 @@ export default function App() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
-      {screen}
+      {/* the roleplay and end screens get no `home`, but their waits show Ryan's thinking face */}
+      <ThinkingFaces.Provider value={home?.images.thinking ?? null}>{screen}</ThinkingFaces.Provider>
     </View>
   );
 }
