@@ -11,3 +11,11 @@ def test_greeting_does_not_name_the_learner():
     # 2026-11-05 the user: leave the name out (later it should be the signed-in person's name) and have Ryan
     # introduce himself instead
     assert "제이크" not in PHRASES["greeting"] and "라이언입니다" in PHRASES["greeting"]
+
+
+def test_asking_again_neither_greets_nor_assumes_a_finished_roleplay():
+    # 2026-11-06 the user: Ryan greets once, when the app starts; coming back to the first screen he only asks
+    # again. The app cannot tell why the learner came back (done, or left halfway), so no 「수고했어요」.
+    again = PHRASES["ask_again"]
+    assert "안녕" not in again and "라이언입니다" not in again and "수고" not in again
+    assert again != PHRASES["ask_mode"]
