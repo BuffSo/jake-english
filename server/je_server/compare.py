@@ -24,6 +24,7 @@ _ONES = ("zero one two three four five six seven eight nine ten eleven twelve th
          "seventeen eighteen nineteen").split()
 _TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
 _SHORT = {"wanna": "want to", "gonna": "going to", "ok": "okay"}
+_AFTER_A = frozenset({"hundred", "thousand", "dollar"})
 
 
 def _number(n: int) -> str:
@@ -40,9 +41,21 @@ def _number(n: int) -> str:
     raise AssertionError(n)
 
 
+_ORDINAL = {"one": "first", "two": "second", "three": "third", "five": "fifth", "eight": "eighth", "nine": "ninth",
+            "twelve": "twelfth"}
+
+
+def _ordinal(n: int) -> str:
+    """2nd is second, 21st is twenty first."""
+    *head, last = _number(n).split()
+    last = _ORDINAL.get(last) or (last[:-1] + "ieth" if last.endswith("y") else last + "th")
+    return " ".join([*head, last])
+
+
 def words(text: str) -> list[str]:
     """Lowercase words with the transcriber's notation evened out: 10 and ten, $5 and five dollars, 11 AM and
-    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, wanna and want to, OK and okay are the same words."""
+    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, $100 and a hundred dollars, 2nd and second, wanna and
+    want to, OK and okay are the same words."""
     t = text.lower().replace("’", "'")
     t = re.sub(r"(?<=\d),(?=\d{3})", "", t)  # 1,000 is one number
     t = re.sub(r"\b([ap])\.?m\b\.?", r"\1m", t)
@@ -56,13 +69,16 @@ def words(text: str) -> list[str]:
             continue
         if w == "o'clock":
             continue
-        if w.isdigit() and len(w) == 2 and w[0] == "0":  # the 05 of 5:05 is "oh five"
+        if (m := re.fullmatch(r"(\d+)(?:st|nd|rd|th)", w)) and int(m[1]) < 1_000_000:
+            out += _ordinal(int(m[1])).split()
+        elif w.isdigit() and len(w) == 2 and w[0] == "0":  # the 05 of 5:05 is "oh five"
             out += ["oh", _ONES[int(w[1])]]
         elif w.isdigit() and int(w) < 1_000_000:
             out += _number(int(w)).split()
         else:
             out += _SHORT.get(w, w).split()
-    return out
+    # "a hundred", "a dollar fifty": the transcriber writes $100 and $1.50, which read as one hundred, one dollar
+    return ["one" if w == "a" and nxt in _AFTER_A else w for w, nxt in zip(out, out[1:] + [""])]
 
 
 def similarity(target: str, heard: str) -> float:
@@ -127,8 +143,9 @@ def _restart(line: list[str], at: int, added: list[str]) -> bool:
 
 
 def compare(target: str, heard: str) -> Comparison:
-    a = words(target)
-    b = [w for w in words(heard) if w not in FILLERS or w in a]
+    # fillers are never points, on either side: the transcriber usually leaves them out (spec 「평가」 2)
+    a = [w for w in words(target) if w not in FILLERS]
+    b = [w for w in words(heard) if w not in FILLERS]
     diffs: list[Issue] = []
     matched: set[str] = set()
     count = 0
@@ -181,11 +198,16 @@ def praise_candidates(target: str, heard: str, before: list[Issue], limit: int =
     c = compare(target, heard)
     out: list[str] = []
     now = {w for d in c.diffs for w in d.target.split()}
+    heard_now = {w for d in c.diffs for w in d.heard.split()}
     for i in before:
+        if not i.target:  # a word was added last time: gone if no current difference has it
+            if i.heard and not set(i.heard.split()) & heard_now:
+                out.append(f"이번에는 {i.heard} 없이 대사대로 들렸어요")
+            continue
         words_then = set(i.target.split())
         # gone only if no current difference touches these words; matched_words alone ignores position, and a
         # word can appear twice in the line
-        if not words_then or words_then & now or not words_then <= c.matched_words:
+        if words_then & now or not words_then <= c.matched_words:
             continue
         if i.sound:
             out.append(f"이번에는 {i.target}의 {SOUND_LETTERS.get(i.sound[0], i.sound[0])} 소리가 제대로 났어요")

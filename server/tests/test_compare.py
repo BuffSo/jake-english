@@ -151,3 +151,27 @@ def test_numbers_past_ninety_nine_are_not_differences():
                         ("We sold two thousand five hundred cups.", "We sold 2,500 cups.")]:
         assert compare(line, heard).diffs == [], (line, heard)
     assert compare("Room 305, please.", "Room 305, please.").diffs == []
+
+
+def test_fillers_written_in_the_line_are_not_points():
+    assert compare("Um, can I pay by card?", "Can I pay by card?").diffs == []
+    assert praise_candidates("Hmm, I think I'll have the soup.", "I think I'll have the soup.", []) == [
+        "대사를 빠짐없이 알아듣게 말했어요"]
+
+
+def test_a_hundred_a_dollar_and_ordinals_are_notation():
+    for line, heard in [("It costs a hundred dollars.", "It costs $100."),
+                        ("Do you take a dollar fifty?", "Do you take $1.50?"),
+                        ("We waited a thousand years.", "We waited 1,000 years."),
+                        ("It's on the 2nd floor.", "It's on the second floor."),
+                        ("My room is on the twenty-first floor.", "My room is on the 21st floor."),
+                        ("Turn left at the 3rd light.", "Turn left at the third light.")]:
+        assert compare(line, heard).diffs == [], (line, heard)
+
+
+def test_added_word_left_out_this_time_is_praised():
+    before = [Issue(target="", heard="and")]
+    praise = praise_candidates("Wait here, then come in.", "Wait here, then come in.", before)
+    assert praise[0] == "이번에는 and 없이 대사대로 들렸어요"
+    still = praise_candidates("Wait here, then come in.", "Wait here, and then come in.", before)
+    assert not any(p.startswith("이번에는") for p in still)
