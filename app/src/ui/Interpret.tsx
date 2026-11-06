@@ -6,6 +6,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { KoEntry, KoView } from "../flow/interpret";
 import { colors } from "./theme";
 
+// What a line hands to its 「통역」 button and Sohee's line
+export type KoProps = { view: KoView; entry: KoEntry | undefined; onToggle: () => void; onReplay: () => void };
+
 export function KoButton({ view, onPress }: { view: KoView; onPress: () => void }) {
   const open = view === "open" || view === "loading";
   return (

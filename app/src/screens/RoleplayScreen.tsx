@@ -9,7 +9,7 @@ import type { SoundQueue } from "../audio/player";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, stopThenSend } from "../flow/gate";
-import { koView, mayAutoPlay, mayReplay } from "../flow/interpret";
+import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { askFirst, canReplay, leavesScreen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
@@ -205,16 +205,14 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const koViewAt = (idx: number) => koView(interp.entry(idx, lineAt(idx)), koOpen[idx] === true);
 
   function toggleKo(idx: number) {
-    const v = koViewAt(idx);
-    const open = v === "closed" || v === "failed"; // a failure is tried again
+    const open = koOpensOnTap(koViewAt(idx));
     koOpenNow.current = { ...koOpenNow.current, [idx]: open };
     setKoOpen(koOpenNow.current);
     if (open) interp.open(idx, lineAt(idx), stillOpen(idx, false));
   }
 
   function toggleSayKo(idx: number) {
-    const v = koView(interp.entry(idx, lineAt(idx)), state.interpreting);
-    const open = v === "closed" || v === "failed";
+    const open = koOpensOnTap(koView(interp.entry(idx, lineAt(idx)), state.interpreting));
     sayOpenNow.current = open;
     dispatch({ type: "interpret", open });
     if (open) interp.open(idx, lineAt(idx), stillOpen(idx, true));

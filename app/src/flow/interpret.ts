@@ -21,6 +21,12 @@ export function koView(entry: KoEntry | undefined, open: boolean): KoView {
   return entry === undefined || entry === "loading" ? "loading" : "open";
 }
 
+// What a tap on 「통역」 does, the same for every button: opens a closed line, or a failed one to try again; closes an
+// open or loading one (PR #24 review: the rule was written out on each screen)
+export function koOpensOnTap(view: KoView): boolean {
+  return view === "closed" || view === "failed";
+}
+
 // Played by herself when the line opens: in the roleplay only while my turn waits and nothing plays, so she never
 // lands in a recording or over Ryan, his feedback or the model. The end screen has no turn and plays like its ▶.
 export function mayAutoPlay(where: Where, phase: Phase, playing: boolean): boolean {

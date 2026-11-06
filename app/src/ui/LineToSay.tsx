@@ -5,14 +5,12 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { ThreeLine } from "../api/types";
-import type { KoEntry, KoView } from "../flow/interpret";
-import { KoButton, KoLine } from "./Interpret";
+import { KoButton, KoLine, type KoProps } from "./Interpret";
 import { notesView } from "./notesView";
 import { colors } from "./theme";
 import { ThreeLineView } from "./ThreeLine";
 
-type Ko = { view: KoView; entry: KoEntry | undefined; onToggle: () => void; onReplay: () => void };
-type Props = { text: string; three: ThreeLine | "loading" | null; open: boolean; onToggle: () => void; ko: Ko };
+type Props = { text: string; three: ThreeLine | "loading" | null; open: boolean; onToggle: () => void; ko: KoProps };
 
 export function LineToSay({ text, three, open, onToggle, ko }: Props) {
   const view = notesView(three, open);

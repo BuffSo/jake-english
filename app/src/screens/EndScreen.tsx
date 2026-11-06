@@ -7,19 +7,17 @@ import { api } from "../api";
 import type { ScriptLine, Summary, TranscriptLine, Try } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { createGate } from "../flow/gate";
-import { koView, type KoEntry, type KoView } from "../flow/interpret";
+import { koOpensOnTap, koView } from "../flow/interpret";
 import type { Action, State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
-import { KoButton, KoLine } from "../ui/Interpret";
+import { KoButton, KoLine, type KoProps } from "../ui/Interpret";
 import { colors, top } from "../ui/theme";
 import { useInterpret } from "../ui/useInterpret";
 import { messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
 type Source = ReturnType<typeof api.audioSource>;
-// Sohee's interpretation of one line (spec korean-translation 2): not made ahead when this screen opens
-type Ko = { view: KoView; entry: KoEntry | undefined; onToggle: () => void; onReplay: () => void };
 
 export function EndScreen({ state, dispatch, sounds }: Props) {
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -95,14 +93,15 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
     }
   }
 
-  function ko(line: ScriptLine): Ko {
+  // Sohee's interpretation of one line (spec korean-translation 2): not made ahead when this screen opens
+  function ko(line: ScriptLine): KoProps {
     const idx = line.idx;
     const view = koView(interp.entry(idx, line), koOpen[idx] === true);
     return {
       view,
       entry: interp.entry(idx, line),
       onToggle: () => {
-        const open = view === "closed" || view === "failed"; // a failure is tried again
+        const open = koOpensOnTap(view);
         koOpenNow.current = { ...koOpenNow.current, [idx]: open };
         setKoOpen(koOpenNow.current);
         if (open) interp.open(idx, line, () => koOpenNow.current[idx] === true);
@@ -146,7 +145,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
 }
 
 // 「따라 말하기 ›」 follows this one line and comes back here, like 「이 줄 다시」 on my lines (spec 3, 2026-11-06)
-function RyanLine(props: { l: TranscriptLine; ko: Ko; onPlay: (src: Source) => void; onFollow: () => void }) {
+function RyanLine(props: { l: TranscriptLine; ko: KoProps; onPlay: (src: Source) => void; onFollow: () => void }) {
   const { l, ko, onPlay, onFollow } = props;
   const audio = l.line.audio;
   return (
@@ -171,7 +170,7 @@ function RyanLine(props: { l: TranscriptLine; ko: Ko; onPlay: (src: Source) => v
   );
 }
 
-function MyLine(props: { id: string; l: TranscriptLine; ko: Ko; onPlay: (src: Source) => void; onAgain: () => void }) {
+function MyLine(props: { id: string; l: TranscriptLine; ko: KoProps; onPlay: (src: Source) => void; onAgain: () => void }) {
   const { id, l, ko, onPlay, onAgain } = props;
   return (
     <View style={styles.line}>

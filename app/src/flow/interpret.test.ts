@@ -1,5 +1,5 @@
 import type { ScriptLine } from "../api/types";
-import { koOf, koView, mayAutoPlay, mayReplay } from "./interpret";
+import { koOf, koOpensOnTap, koView, mayAutoPlay, mayReplay } from "./interpret";
 import type { Phase } from "./state";
 
 const ko = { text: "뭐 드릴까요?", audio: null };
@@ -33,4 +33,10 @@ test("a tap on Sohee's line replays it while my turn waits, like 다시 듣기",
 
 test("on the end screen she always plays, stopping what played before", () => {
   expect(PHASES.every((p) => mayAutoPlay("end", p, true) && mayReplay("end", p))).toBe(true);
+});
+
+test("a tap opens a closed or failed line (a failure is tried again) and closes an open or loading one", () => {
+  // one rule for every 「통역」 button: the roleplay bubbles, the line to say and the end screen (PR #24 review)
+  expect([koOpensOnTap("closed"), koOpensOnTap("failed")]).toEqual([true, true]);
+  expect([koOpensOnTap("open"), koOpensOnTap("loading")]).toEqual([false, false]);
 });
