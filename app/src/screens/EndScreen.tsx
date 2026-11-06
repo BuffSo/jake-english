@@ -4,17 +4,22 @@ import { useEffect, useRef, useState, type Dispatch } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { api } from "../api";
-import type { Summary, TranscriptLine, Try } from "../api/types";
+import type { ScriptLine, Summary, TranscriptLine, Try } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { createGate } from "../flow/gate";
+import { koView, type KoEntry, type KoView } from "../flow/interpret";
 import type { Action, State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
+import { KoButton, KoLine } from "../ui/Interpret";
 import { colors, top } from "../ui/theme";
+import { useInterpret } from "../ui/useInterpret";
 import { messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
 type Source = ReturnType<typeof api.audioSource>;
+// Sohee's interpretation of one line (spec korean-translation 2): not made ahead when this screen opens
+type Ko = { view: KoView; entry: KoEntry | undefined; onToggle: () => void; onReplay: () => void };
 
 export function EndScreen({ state, dispatch, sounds }: Props) {
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -27,6 +32,10 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   // one copy at a time: `copying` is the render's value, so two taps before the next render would both pass it
   // (PR #15 review); the gate is checked at the tap itself, like the recording buttons (PR #13)
   const gate = useRef(createGate()).current;
+  // no turn here: Sohee plays whenever asked and stops what played, like ▶ (spec korean-translation 2)
+  const interp = useInterpret(id, sounds, () => mounted.current);
+  const [koOpen, setKoOpen] = useState<Record<number, boolean>>({});
+  const koOpenNow = useRef(koOpen); // set at the tap: a sound made before plays at once
 
   useEffect(() => {
     mounted.current = true;
@@ -92,6 +101,22 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
     }
   }
 
+  function ko(line: ScriptLine): Ko {
+    const idx = line.idx;
+    const view = koView(interp.entry(idx, line), koOpen[idx] === true);
+    return {
+      view,
+      entry: interp.entry(idx, line),
+      onToggle: () => {
+        const open = view === "closed" || view === "failed"; // a failure is tried again
+        koOpenNow.current = { ...koOpenNow.current, [idx]: open };
+        setKoOpen(koOpenNow.current);
+        if (open) interp.open(idx, line, () => koOpenNow.current[idx] === true);
+      },
+      onReplay: () => interp.replay(idx, line),
+    };
+  }
+
   const mine = summary?.lines.filter((l) => l.line.speaker === "user").map((l) => l.line.idx) ?? [];
   const ryans = summary?.lines.filter((l) => l.line.speaker === "ryan").map((l) => l.line.idx) ?? [];
 
@@ -107,9 +132,9 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
         {summary && <Text style={styles.section}>주고받은 말</Text>}
         {summary?.lines.map((l) =>
           l.line.speaker === "ryan" ? (
-            <RyanLine key={l.line.idx} l={l} onPlay={play} onFollow={() => practise("shadow", [l.line.idx])} />
+            <RyanLine key={l.line.idx} l={l} ko={ko(l.line)} onPlay={play} onFollow={() => practise("shadow", [l.line.idx])} />
           ) : (
-            <MyLine key={l.line.idx} id={id} l={l} onPlay={play} onAgain={() => practise("mine", [l.line.idx])} />
+            <MyLine key={l.line.idx} id={id} l={l} ko={ko(l.line)} onPlay={play} onAgain={() => practise("mine", [l.line.idx])} />
           ),
         )}
         {error && <Text style={common.error}>{error}</Text>}
@@ -129,7 +154,8 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
 }
 
 // 「따라 말하기 ›」 follows this one line and comes back here, like 「이 줄 다시」 on my lines (spec 3, 2026-11-06)
-function RyanLine({ l, onPlay, onFollow }: { l: TranscriptLine; onPlay: (src: Source) => void; onFollow: () => void }) {
+function RyanLine(props: { l: TranscriptLine; ko: Ko; onPlay: (src: Source) => void; onFollow: () => void }) {
+  const { l, ko, onPlay, onFollow } = props;
   const audio = l.line.audio;
   return (
     <View style={styles.line}>
@@ -141,27 +167,33 @@ function RyanLine({ l, onPlay, onFollow }: { l: TranscriptLine; onPlay: (src: So
               <Text style={styles.play}>▶ 듣기</Text>
             </Pressable>
           )}
+          <KoButton view={ko.view} onPress={ko.onToggle} />
           <Pressable onPress={onFollow} hitSlop={8}>
             <Text style={styles.again}>따라 말하기 ›</Text>
           </Pressable>
         </View>
       </View>
       <Text style={styles.text}>{l.line.text}</Text>
+      <KoLine view={ko.view} entry={ko.entry} onReplay={ko.onReplay} />
     </View>
   );
 }
 
-function MyLine(props: { id: string; l: TranscriptLine; onPlay: (src: Source) => void; onAgain: () => void }) {
-  const { id, l, onPlay, onAgain } = props;
+function MyLine(props: { id: string; l: TranscriptLine; ko: Ko; onPlay: (src: Source) => void; onAgain: () => void }) {
+  const { id, l, ko, onPlay, onAgain } = props;
   return (
     <View style={styles.line}>
       <View style={styles.who}>
         <Text style={styles.whoText}>나</Text>
-        <Pressable onPress={onAgain} hitSlop={8}>
-          <Text style={styles.again}>이 줄 다시 ›</Text>
-        </Pressable>
+        <View style={styles.actions}>
+          <KoButton view={ko.view} onPress={ko.onToggle} />
+          <Pressable onPress={onAgain} hitSlop={8}>
+            <Text style={styles.again}>이 줄 다시 ›</Text>
+          </Pressable>
+        </View>
       </View>
       <Text style={styles.text}>{l.line.text}</Text>
+      <KoLine view={ko.view} entry={ko.entry} onReplay={ko.onReplay} />
       {l.tries.map((t) => (
         <TryView key={t.n} t={t} onPlay={() => onPlay(api.recordingSource(id, l.line.idx, t.n))} />
       ))}
