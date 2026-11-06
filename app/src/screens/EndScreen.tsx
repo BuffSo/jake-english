@@ -107,7 +107,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
         setKoOpen(koOpenNow.current);
         if (open) interp.open(idx, line, () => koOpenNow.current[idx] === true);
       },
-      onReplay: () => interp.replay(idx, line),
+      onReplay: () => interp.replay(idx, line, () => true), // the hook drops it once this screen goes away
     };
   }
 

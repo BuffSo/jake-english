@@ -38,6 +38,7 @@ const styles = StyleSheet.create({
   line: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 6 },
   tag: { backgroundColor: colors.sohee, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, marginTop: 2 },
   tagText: { fontSize: 12, fontWeight: "700", color: "#FFFFFF" },
-  text: { flexShrink: 1, fontSize: 16, color: colors.text, lineHeight: 23 },
+  // her own color too, not the pronunciation line's (spec korean-translation 2, final review)
+  text: { flexShrink: 1, fontSize: 16, color: colors.soheeText, lineHeight: 23 },
   play: { fontSize: 13, color: colors.sohee },
 });

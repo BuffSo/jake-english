@@ -186,15 +186,20 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     return state.seen[idx];
   }
 
-  // Sohee's sound plays only if the line is still open when it arrives, on the same screen as when it was opened: a
-  // back or 「처음으로」 bumps `epoch`, and a practice mid-roleplay keeps this screen but changes `practice`
-  function stillOpen(idx: number, say: boolean): () => boolean {
+  // Sohee's sound plays only on the screen it was asked on: a back bumps `epoch`, and a practice mid-roleplay keeps
+  // this screen but bumps `practiceNo`, which stays bumped after coming back (final review: a replay asked for
+  // before 「따라 말하기 ›」 played on the practice screen)
+  function here(): () => boolean {
     const my = epoch.current;
-    const scope = now.current.practice;
+    const no = now.current.practiceNo;
+    return () => epoch.current === my && now.current.practiceNo === no;
+  }
+
+  // ...and when it opens by itself, only if the line is still open when the sound arrives
+  function stillOpen(idx: number, say: boolean): () => boolean {
+    const there = here();
     return () =>
-      epoch.current === my &&
-      now.current.practice === scope &&
-      (say ? sayOpenNow.current && now.current.line?.idx === idx : koOpenNow.current[idx] === true);
+      there() && (say ? sayOpenNow.current && now.current.line?.idx === idx : koOpenNow.current[idx] === true);
   }
 
   const koViewAt = (idx: number) => koView(interp.entry(idx, lineAt(idx)), koOpen[idx] === true);
@@ -218,7 +223,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // Sohee's line and its button for a past bubble
   function Ko({ idx }: { idx: number }) {
     const line = lineAt(idx);
-    return <KoLine view={koViewAt(idx)} entry={interp.entry(idx, line)} onReplay={() => interp.replay(idx, line)} />;
+    return <KoLine view={koViewAt(idx)} entry={interp.entry(idx, line)} onReplay={() => interp.replay(idx, line, here())} />;
   }
 
   // the Ryan line before a practised line of mine, to know what it answers (spec 4)
@@ -440,7 +445,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                   view: koView(interp.entry(line.idx, line), state.interpreting),
                   entry: interp.entry(line.idx, line),
                   onToggle: () => toggleSayKo(line.idx),
-                  onReplay: () => interp.replay(line.idx, line),
+                  onReplay: () => interp.replay(line.idx, line, here()),
                 }}
               />
             </View>

@@ -10,6 +10,7 @@ export const colors = {
   feedback: "#FFF9DB",
   primary: "#1C7ED6",
   sohee: "#2F9E44", // Sohee's tag on her interpretation (spec korean-translation 2)
+  soheeText: "#1F6F34", // her Korean: darker, to read on the gray and blue bubbles
   danger: "#C92A2A",
 };
 
