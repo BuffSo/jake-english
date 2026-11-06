@@ -36,3 +36,4 @@ AI가 처음 추천한 안과 사용자가 정한 것. 둘이 다르면 그 차�
 - [ADR-0007 집 밖에서는 Tailscale로 폰을 집의 맥에 잇는다](0007-remote-access-over-tailscale.md) (채택)
 - [ADR-0008 앱 고유 ID는 dev.jakeso.english로 한다](0008-android-application-id.md) (채택)
 - [ADR-0009 음성 합성은 맥의 기존 음성 환경에서 따로 도는 작업 프로세스로 부른다](0009-voice-worker-on-existing-tts.md) (채택)
+- [ADR-0010 화면 위아래 여백은 react-native-safe-area-context로 받아 앱 바깥 틀 한 곳에서 띄운다](0010-safe-area-insets.md) (채택)
