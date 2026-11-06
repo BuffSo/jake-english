@@ -98,7 +98,8 @@ a coworker from abroad.
 
 Jake suggests it to the learner. Write request_ko as one polite Korean sentence (해요체) in Jake's words,
 ending with "상황으로 연습해 보면 어때요?" Example: "길에서 외국인이 케이블카 타는 곳을 물어보는 상황으로 연습해 보면 어때요?"
-Pick something different from the recent situations listed by the user.
+Pick something different from the recent situations listed by the user. If the user also lists situations the
+learner just turned down, pick a clearly different kind of moment from those too.
 """
 
 FEEDBACK_SYSTEM = """\

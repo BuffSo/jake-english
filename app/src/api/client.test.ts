@@ -104,3 +104,11 @@ test("attempt sends the shadow mode", async () => {
   await makeApi(URL, TOKEN, f as never, noFile).attempt("a".repeat(12), 0, "file://x.m4a", "shadow", () => {});
   expect((f.mock.calls[0] as unknown as [string])[0]).toBe(`${URL}/roleplays/${"a".repeat(12)}/lines/0/attempts?mode=shadow`);
 });
+
+test("recommend sends the situations turned down on the screen", async () => {
+  const f = jest.fn(async () => json(200, { text: "호텔에서 체크인하는 상황으로 연습해 보면 어때요?", audio: "a".repeat(64) }));
+  await makeApi(URL, TOKEN, f as never, noFile).recommend(["카페에서 주문하는 상황으로 연습해 보면 어때요?"]);
+  const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe(`${URL}/recommend`);
+  expect(JSON.parse(init.body as string)).toEqual({ skip: ["카페에서 주문하는 상황으로 연습해 보면 어때요?"] });
+});

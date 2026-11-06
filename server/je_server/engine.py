@@ -5,7 +5,7 @@ import asyncio
 import contextlib
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -199,8 +199,9 @@ class Engine:
 
     # --- situation input ----------------------------------------------------------------------
 
-    async def recommend(self) -> Said:
-        text = await self.claude.recommend(self.store.recent_situations())
+    async def recommend(self, turned_down: Sequence[str] = ()) -> Said:
+        """Jake suggests a situation, not one of the recent ones or those just turned down on the screen."""
+        text = await self.claude.recommend(self.store.recent_situations(), list(turned_down))
         # heard back: its last sound was once swallowed (2026-11-05, 「…연습하고 싶~」)
         return Said(text=text, audio=await self.voice.say(text, "jake", "korean", urgent=True, check=True))
 

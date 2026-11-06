@@ -74,13 +74,13 @@ async def test_prepared_jobs_go_in_rank_order(voice, tmp_path):
 async def test_speaking_rate_by_voice_and_language(voice, tmp_path):
     # 2026-11-05 Ryan's greeting sounded drawn out at 1x, so his Korean became 1.3x like the reply reader.
     # The user then set Jake's Korean to 1.1x, later found Ryan's 1.3x a bit fast (1.2x), tried Jake at 1x and
-    # went back to 1.1x.
+    # went back to 1.1x. On 2026-11-06 the user asked for Jake 0.1x slower than that: 1x.
     # English model lines stay at 1x.
     await voice.say("안녕하세요.", "ryan", "korean", urgent=True)
     await voice.say("Hello.", "ryan", "english", urgent=True)
     await voice.say("카페 상황으로 하고 싶어.", "jake", "korean", urgent=True)
     rates = (tmp_path / ".tmp" / "rates.txt").read_text(encoding="utf-8").splitlines()
-    assert rates == ["ryan korean 1.2", "ryan english 1.0", "jake korean 1.1"]
+    assert rates == ["ryan korean 1.2", "ryan english 1.0", "jake korean 1.0"]
 
 
 async def test_key_changes_with_speaking_rate():
@@ -100,6 +100,10 @@ async def test_new_rates_are_not_served_from_the_old_cache():
     assert audio_key("jake", "korean", text) != old_key("jake", "korean", text)
     # Ryan's Korean moved from 1.3x to 1.2x (2026-11-05), so his old phrases are not served either
     assert audio_key("ryan", "korean", text) != old_key("ryan", "korean", text)
+    # Jake's Korean moved from 1.1x to 1x (2026-11-06): his 1.1x sounds are not served for the new rate
+    made = f"{tts.MADE['korean']}|"  # as `audio_key` writes it
+    at_11 = tts.hashlib.sha256(f"jake|korean|1.1|{made}{text}".encode()).hexdigest()
+    assert audio_key("jake", "korean", text) != at_11
 
 
 async def test_same_slow_copy_made_twice_at_once(voice, tmp_path):

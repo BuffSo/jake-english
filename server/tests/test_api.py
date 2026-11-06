@@ -85,6 +85,17 @@ def test_recommend_route(client):
     assert j["text"].endswith("어때요?") and len(j["audio"]) == 64
 
 
+def test_recommend_route_takes_turned_down(client, fake_claude):
+    skip = ["카페에서 주문하는 상황으로 연습해 보면 어때요?"]
+    assert client.post("/recommend", json={"skip": skip}).status_code == 200
+    assert [a for n, a in fake_claude.calls if n == "recommend"][-1] == ([], skip)
+    assert client.post("/recommend", json={}).status_code == 200  # what the app sent before 2026-11-06
+    # the list and each item are limited (REVIEW.md 「맥 서버 보안」: no upload without a size limit)
+    for bad in (["x"] * 11, ["x" * 301], "x"):
+        r = client.post("/recommend", json={"skip": bad})
+        assert r.status_code == 422 and r.json()["code"] == "bad_request"
+
+
 def _app(settings, engine, fake_voice, fake_whisper):
     from je_server.app import Services, create_app
 

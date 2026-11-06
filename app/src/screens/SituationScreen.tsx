@@ -6,7 +6,8 @@ import { api } from "../api";
 import type { Home, Roleplay, Said } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
-import { createGate } from "../flow/gate";
+import { createGate, createLatch } from "../flow/gate";
+import { turnDown } from "../flow/turnedDown";
 import { whenSilent } from "../flow/whenSilent";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
@@ -17,7 +18,8 @@ import { waiterOf } from "../ui/thinking";
 import { messageOf, styles as common, Waiting } from "./common";
 
 type Props = { sounds: SoundQueue; home: Home; onCreated: (rp: Roleplay, jake: Said | null) => void; onBack: () => void };
-type Step = "input" | "askRecommend" | "working";
+// confirm: Jake has suggested a situation and waits for 「이걸로 할게요」 or 「다른 걸로요」 (2026-11-06, user)
+type Step = "input" | "askRecommend" | "working" | "confirm";
 
 const WANTS_RECOMMEND = /모르겠|추천/;
 
@@ -25,11 +27,13 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   const [text, setText] = useState("");
   const [step, setStep] = useState<Step>("input");
   const [status, setStatus] = useState("");
-  const [jake, setJake] = useState<string | null>(null);
+  const [jake, setJake] = useState<Said | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rec = useRecorder();
   const gate = useRef(createGate()).current; // a double tap or the auto-stop must not send the recording twice
   const gen = useRef(0); // bumped by going back (or leaving): an answer to an earlier request is dropped
+  const turnedDown = useRef<string[]>([]); // Jake's suggestions turned down on this screen, not suggested again
+  const choice = useRef(createLatch()).current; // one answer per suggestion: a double tap must not ask twice
 
   useEffect(
     () => () => {
@@ -80,23 +84,39 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     sounds.enqueue(api.audioSource(home.lines.ask_recommend.audio));
   }
 
+  // Jake suggests a situation and the learner picks it or asks for another. The script is not made until they
+  // pick it: one made while they choose would be thrown away on 「다른 걸로요」 (2026-11-06, user).
   async function recommend() {
     const my = gen.current;
     setStep("working");
     setStatus("제이크가 상황을 고르고 있어요");
+    setJake(null);
     setError(null);
     try {
-      const said = await api.recommend();
+      const said = await api.recommend(turnedDown.current);
       if (my !== gen.current) return;
-      setJake(said.text);
+      setJake(said);
       sounds.clear();
-      sounds.enqueue(api.audioSource(said.audio)); // Jake asks for it, the way the learner would
-      await create(said.text, said);
+      sounds.enqueue(api.audioSource(said.audio));
+      choice.open();
+      setStep("confirm");
     } catch (e) {
       if (my !== gen.current) return;
       setError(messageOf(e));
       setStep("input");
     }
+  }
+
+  function pick() {
+    if (!jake || !choice.take()) return;
+    create(jake.text, jake);
+  }
+
+  function another() {
+    if (!jake || !choice.take()) return;
+    turnedDown.current = turnDown(turnedDown.current, jake.text);
+    sounds.clear(); // Jake stops; the next suggestion is on its way
+    recommend();
   }
 
   function start() {
@@ -185,9 +205,16 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
           <Button label="아니요" onPress={() => setStep("input")} kind="plain" />
         </>
       )}
+      {step === "confirm" && jake && (
+        <>
+          <Text style={[common.body, styles.jake]}>제이크: {jake.text}</Text>
+          <Button label="이걸로 할게요" onPress={pick} />
+          <Button label="다른 걸로요" onPress={another} kind="plain" />
+        </>
+      )}
       {step === "working" && (
         <>
-          {jake && <Text style={[common.body, styles.jake]}>제이크: {jake}</Text>}
+          {jake && <Text style={[common.body, styles.jake]}>제이크: {jake.text}</Text>}
           <Waiting text={status} />
         </>
       )}
@@ -201,7 +228,7 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, paddingTop: top + 44, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: colors.bg },
   face: { marginBottom: 12 },
   say: { marginBottom: 10 },
-  jake: { backgroundColor: colors.user, borderRadius: 12, padding: 12 },
+  jake: { backgroundColor: colors.user, borderRadius: 12, padding: 12, marginBottom: 8 },
   input: {
     borderWidth: 1,
     borderColor: "#CED4DA",

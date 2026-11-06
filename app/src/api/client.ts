@@ -72,7 +72,7 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
 
   return {
     getHome: () => get<Home>("/home"),
-    recommend: () => post<Said>("/recommend"),
+    recommend: (skip: string[]) => post<Said>("/recommend", { skip }),
     transcribe: async (fileUri: string) => ((await (await upload("/transcribe", fileUri)).json()) as { text: string }).text,
     createRoleplay: (situation: string) => post<Roleplay>("/roleplays", { situation }, LONG),
     getLine: (id: string, idx: number) => get<LineWithProgress>(`/roleplays/${id}/lines/${idx}`, LONG),
