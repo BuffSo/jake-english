@@ -411,20 +411,21 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
   });
 
   test("asks first only when a roleplay would be lost", () => {
+    // back is the only way out since 「처음으로」 went (2026-11-06 user): from a practice it never loses the roleplay
     const s = midway("ready");
-    expect([askFirst(s, "back"), askFirst(s, "home")]).toEqual([true, true]);
+    expect(askFirst(s)).toBe(true);
     const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
-    expect([askFirst(inside, "back"), askFirst(inside, "home")]).toEqual([false, true]);
+    expect(askFirst(inside)).toBe(false);
     const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
-    expect([askFirst(fromEnd, "back"), askFirst(fromEnd, "home")]).toEqual([false, false]);
+    expect(askFirst(fromEnd)).toBe(false);
   });
 
   test("only back from a line practised mid-roleplay stays on the roleplay screen", () => {
     const s = midway("ready");
     const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
     const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
-    expect([leavesScreen(inside, "back"), leavesScreen(inside, "home")]).toEqual([false, true]);
-    expect([leavesScreen(s, "back"), leavesScreen(fromEnd, "back")]).toEqual([true, true]);
+    expect(leavesScreen(inside)).toBe(false);
+    expect([leavesScreen(s), leavesScreen(fromEnd)]).toEqual([true, true]);
   });
 
   test("the roleplay line keeps its model key across a practice", () => {

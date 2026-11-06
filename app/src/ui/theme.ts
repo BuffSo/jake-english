@@ -1,5 +1,3 @@
-import { StatusBar } from "react-native";
-
 export const colors = {
   bg: "#FFFFFF",
   text: "#1F2328",
@@ -15,4 +13,6 @@ export const colors = {
   danger: "#C92A2A",
 };
 
-export const top = (StatusBar.currentHeight ?? 24) + 12;
+// The gap above each screen's content. The frame in App.tsx already keeps clear of the status bar; this used to
+// add the bar's height too, when each screen kept clear of it alone.
+export const top = 12;

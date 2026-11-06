@@ -69,12 +69,6 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   }
   useBackKey(back);
 
-  // 「처음으로」 stops what is playing too, like every other button here (PR #15 review)
-  function home() {
-    sounds.clear();
-    dispatch({ type: "home" });
-  }
-
   function play(src: Source) {
     sounds.clear();
     sounds.enqueue(src);
@@ -139,16 +133,14 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
         )}
         {error && <Text style={common.error}>{error}</Text>}
       </ScrollView>
-      <View style={styles.controls}>
-        {summary && (
-          <>
-            <Button label={`내 대사 다시 연습(${mine.length}줄)`} onPress={() => practise("mine", mine)} />
-            <Button label={`라이언 대사 따라 말하기(${ryans.length}줄)`} onPress={() => practise("shadow", ryans)} kind="plain" />
-            <Button label={copying ? "준비하고 있어요" : "같은 대본으로 처음부터"} onPress={restart} kind="plain" disabled={copying} />
-          </>
-        )}
-        <Button label="처음으로" onPress={home} kind="plain" small />
-      </View>
+      {/* no 「처음으로」: back goes to a new situation, one more back to the first screen (2026-11-06 user) */}
+      {summary && (
+        <View style={styles.controls}>
+          <Button label={`내 대사 다시 연습(${mine.length}줄)`} onPress={() => practise("mine", mine)} />
+          <Button label={`라이언 대사 따라 말하기(${ryans.length}줄)`} onPress={() => practise("shadow", ryans)} kind="plain" />
+          <Button label={copying ? "준비하고 있어요" : "같은 대본으로 처음부터"} onPress={restart} kind="plain" disabled={copying} />
+        </View>
+      )}
     </View>
   );
 }

@@ -24,7 +24,7 @@ def test_routes_need_token(settings, engine, fake_voice, fake_whisper):
 
 def test_home_lists_fixed_lines(client):
     j = client.get("/home").json()
-    assert set(j["lines"]) == {"greeting", "ask_mode", "ask_situation", "ask_recommend"}
+    assert set(j["lines"]) == {"greeting", "ask_mode", "ask_again", "ask_situation", "ask_recommend"}
     assert all(len(v["audio"]) == 64 for v in j["lines"].values())
     assert j["images"] == {
         "front": "/assets/ryan-front.png",
