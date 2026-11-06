@@ -41,7 +41,8 @@ export type Said = { text: string; audio: string };
 // thinking-face picture paths per person, cross-faded while the app waits (/home `images.thinking`)
 export type Thinking = { jake: string[]; ryan: string[] };
 export type Home = {
-  lines: { greeting: Said; ask_mode: Said; ask_situation: Said; ask_recommend: Said };
+  // ask_again: said instead of greeting + ask_mode when the learner comes back (absent on an older server)
+  lines: { greeting: Said; ask_mode: Said; ask_again?: Said; ask_situation: Said; ask_recommend: Said };
   // jake: Jake's front picture, shown while his suggestion waits for the learner's pick (absent on an older server)
   images: { front: string; listening: string; jake?: string; thinking: Thinking };
 };

@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { api } from "../api";
-import type { Home } from "../api/types";
+import type { Home, Said } from "../api/types";
 import type { SoundQueue } from "../audio/player";
+import { homeLines } from "../flow/homeLines";
 import { Button } from "../ui/Button";
 import { RyanPortrait } from "../ui/RyanFace";
 import { colors, top } from "../ui/theme";
@@ -13,23 +14,36 @@ type Props = { sounds: SoundQueue; home: Home | null; setHome: (h: Home) => void
 
 export function HomeScreen({ sounds, home, setHome, onRoleplay }: Props) {
   const [error, setError] = useState<string | null>(null);
+  // App keeps `home` for as long as the app runs, so having it when this screen opens means Ryan has greeted
+  // already and the learner came back, whichever way. Kept as it was at opening: `home` arriving from `load`
+  // below must not count as coming back. Coming back, `/home` is not asked again: the fixed lines and their
+  // sound names stay the same while the server runs and across restarts.
+  const [opened] = useState(home);
+  const returning = opened !== null;
+
+  const say = useCallback(
+    (lines: Said[]) => {
+      sounds.clear();
+      for (const l of lines) sounds.enqueue(api.audioSource(l.audio));
+    },
+    [sounds],
+  );
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const h = await api.getHome();
       setHome(h);
-      sounds.clear();
-      sounds.enqueue(api.audioSource(h.lines.greeting.audio));
-      sounds.enqueue(api.audioSource(h.lines.ask_mode.audio));
+      say(homeLines(h.lines, false));
     } catch (e) {
       setError(messageOf(e));
     }
-  }, [sounds, setHome]);
+  }, [say, setHome]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (opened) say(homeLines(opened.lines, true));
+    else load();
+  }, [opened, say, load]);
 
   return (
     <View style={styles.wrap}>
@@ -41,8 +55,11 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay }: Props) {
       )}
       {home && (
         <>
-          <Text style={[common.body, styles.say]}>{home.lines.greeting.text}</Text>
-          <Text style={[common.body, styles.say]}>{home.lines.ask_mode.text}</Text>
+          {homeLines(home.lines, returning).map((l) => (
+            <Text key={l.audio} style={[common.body, styles.say]}>
+              {l.text}
+            </Text>
+          ))}
           <Button label="상황 역할극" onPress={onRoleplay} />
         </>
       )}
