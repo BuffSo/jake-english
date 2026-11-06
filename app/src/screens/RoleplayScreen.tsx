@@ -94,9 +94,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (shadow && line && !line.three && state.phase === "ready" && !threes[line.idx]) fetchThree(line.idx);
   }, [shadow, line, state.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toEnd = () => scroll.current?.scrollToEnd({ animated: true });
+  // Always a moment later: on Android the new renderer runs a scroll before it adds the views committed with it, so
+  // scrolling at once to a wait that has just appeared (`Waiting` `onShow`) stopped above it (PR #20 review).
+  const toEnd = () => setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
   useEffect(() => {
-    setTimeout(toEnd, 50);
+    toEnd();
   }, [state.history.length, state.phase, state.feedback]);
 
   function listen(r: Rate = rate) {
