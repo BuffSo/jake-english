@@ -293,6 +293,39 @@ describe("notes start closed (spec roleplay-practice 8)", () => {
   });
 });
 
+// --- Sohee's interpretation of the line to say, like the notes (spec korean-translation 2) ---------------------
+
+describe("the line to say starts without Sohee's interpretation (spec korean-translation 2)", () => {
+  test("interpret opens and closes it", () => {
+    const s = reduce(at("ready"), { type: "interpret", open: true });
+    expect(s.interpreting).toBe(true);
+    expect(reduce(s, { type: "interpret", open: false }).interpreting).toBe(false);
+  });
+
+  test("it can open while Ryan or the mic is busy: it only adds a line", () => {
+    expect(reduce(at("recording"), { type: "interpret", open: true }).interpreting).toBe(true);
+  });
+
+  test("nothing to interpret without a line", () => {
+    const s = { ...at("loading"), line: null };
+    expect(reduce(s, { type: "interpret", open: true })).toBe(s);
+  });
+
+  test("again keeps it open; the next line starts closed", () => {
+    expect(reduce(at("evaluated", { interpreting: true }), { type: "again" }).interpreting).toBe(true);
+    const s = reduce(at("evaluated", { interpreting: true, nextIdx: 2 }), { type: "next" });
+    expect(reduce(s, { type: "lineLoaded", line: ryanLine }).interpreting).toBe(false);
+  });
+
+  test("a practice starts closed, from the end or mid-roleplay, and the roleplay comes back as it was", () => {
+    expect(reduce(end({ interpreting: true }), { type: "startPractice", kind: "mine", order: [1] }).interpreting).toBe(false);
+    const before = { ...at("ready", { interpreting: true }), seen: { 0: ryanLine, 1: userLine } };
+    const inside = reduce(before, { type: "practiseLine", kind: "shadow", idx: 0 });
+    expect(inside.interpreting).toBe(false);
+    expect(reduce(inside, { type: "back" }).interpreting).toBe(true);
+  });
+});
+
 // --- one line in the middle of the roleplay (spec roleplay-practice 9) ---------------------------------------------
 
 describe("one line in the middle of the roleplay (spec roleplay-practice 9)", () => {

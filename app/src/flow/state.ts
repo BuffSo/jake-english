@@ -24,6 +24,9 @@ export type State = {
   line: ScriptLine | null;
   // the line's three-line notes are open: each line starts plain and opens only when asked (spec roleplay-practice 8)
   reading: boolean;
+  // Sohee's interpretation of the line to say is open; like the notes, each line starts without it
+  // (spec korean-translation 2)
+  interpreting: boolean;
   seen: Record<number, ScriptLine>;
   heard: string | null;
   feedback: string;
@@ -60,6 +63,7 @@ export type Action =
   | { type: "restarted"; roleplay: Roleplay }
   | { type: "closingPlayed" }
   | { type: "toggleReading" }
+  | { type: "interpret"; open: boolean }
   | { type: "practiseLine"; kind: "mine" | "shadow"; idx: number };
 
 export const initial: State = {
@@ -72,6 +76,7 @@ export const initial: State = {
   phase: "loading",
   line: null,
   reading: false,
+  interpreting: false,
   seen: {},
   heard: null,
   feedback: "",
@@ -169,6 +174,7 @@ export function reduce(s: State, a: Action): State {
         ...freshTurn,
         line: a.line,
         reading: false,
+        interpreting: false,
         seen: { ...s.seen, [a.line.idx]: a.line },
         // in shadow practice Ryan's line is the learner's to say, with or without its sound
         phase: a.line.speaker === "ryan" && s.mode !== "shadow" ? "ryan" : "ready",
@@ -250,6 +256,7 @@ export function reduce(s: State, a: Action): State {
         history: [],
         line: null,
         reading: false,
+        interpreting: false,
         phase: "loading",
         progress: null,
       };
@@ -269,6 +276,7 @@ export function reduce(s: State, a: Action): State {
         idx: a.idx,
         line,
         reading: false,
+        interpreting: false,
         nextIdx: null,
         history: [],
         phase: "ready",
@@ -282,5 +290,7 @@ export function reduce(s: State, a: Action): State {
       return { ...s, closingPlayed: true };
     case "toggleReading":
       return s.line ? { ...s, reading: !s.reading } : s;
+    case "interpret":
+      return s.line ? { ...s, interpreting: a.open } : s;
   }
 }
