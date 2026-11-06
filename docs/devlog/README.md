@@ -57,3 +57,4 @@
 - [2026-11-05 맥 서버의 Claude 모델을 .env에서 고르기](2026-11-05-server-claude-model-setting.md)
 - [2026-11-06 역할극 뒤 반복 연습과 주고받은 말 보기](2026-11-06-roleplay-practice.md)
 - [2026-11-06 처음엔 평범하게, 역할극 중에도 그 줄만 연습](2026-11-06-practice-midway.md)
+- [2026-11-06 따라 말한 차례에서 다른 곳을 다 짚기](2026-11-06-follow-feedback.md)
