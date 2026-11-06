@@ -42,7 +42,8 @@ export type Said = { text: string; audio: string };
 export type Thinking = { jake: string[]; ryan: string[] };
 export type Home = {
   lines: { greeting: Said; ask_mode: Said; ask_situation: Said; ask_recommend: Said };
-  images: { front: string; listening: string; thinking: Thinking };
+  // jake: Jake's front picture, shown while his suggestion waits for the learner's pick (absent on an older server)
+  images: { front: string; listening: string; jake?: string; thinking: Thinking };
 };
 export type Progress = { no: number; total: number }; // 「내 대사 no/total」
 export type LineWithProgress = ScriptLine & { progress: Progress };

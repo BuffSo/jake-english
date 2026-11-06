@@ -28,6 +28,7 @@ def test_home_lists_fixed_lines(client):
     assert j["images"] == {
         "front": "/assets/ryan-front.png",
         "listening": "/assets/ryan-listening.png",
+        "jake": "/assets/jake-front.png",
         "thinking": {
             "jake": ["/assets/jake-thinking-1.png", "/assets/jake-thinking-2.png"],
             "ryan": ["/assets/ryan-thinking-1.png", "/assets/ryan-thinking-2.png"],
@@ -38,12 +39,20 @@ def test_home_lists_fixed_lines(client):
 def test_thinking_faces_served(client, settings):
     settings.assets_dir.mkdir(parents=True)
     names = ["jake-thinking-1.png", "jake-thinking-2.png", "ryan-thinking-1.png", "ryan-thinking-2.png"]
-    for n in names + ["jake-front.png"]:
+    for n in names + ["ryan-face-v3.png"]:
         (settings.assets_dir / n).write_bytes(b"png")
     for n in names:
         r = client.get(f"/assets/{n}")
         assert r.status_code == 200 and r.content == b"png"
-    assert client.get("/assets/jake-front.png").status_code == 404  # on disk but not listed
+    assert client.get("/assets/ryan-face-v3.png").status_code == 404  # on disk but not listed
+
+
+def test_jake_front_served(client, settings):
+    # Jake's own face while he waits for 「이걸로 할게요」 or 「다른 걸로요」 (2026-11-06 user, after the phone test)
+    settings.assets_dir.mkdir(parents=True)
+    (settings.assets_dir / "jake-front.png").write_bytes(b"png")
+    r = client.get("/assets/jake-front.png")
+    assert r.status_code == 200 and r.content == b"png"
 
 
 def test_assets_served_from_assets_dir(client, settings):
