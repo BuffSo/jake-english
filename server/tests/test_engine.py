@@ -1,7 +1,10 @@
+import asyncio
+
 import pytest
 
 from je_server.claude import ClaudeUnavailable
 from je_server.engine import NotFound
+from je_server.models import Attempt, ScriptLine
 
 pytestmark = pytest.mark.anyio
 
@@ -188,3 +191,57 @@ async def test_a_line_whose_sound_failed_still_has_its_notes(engine, fake_claude
     fake_claude.annotate_gate.set()
     line = await ask
     assert line.audio is None and line.three is not None
+
+
+# --- Sohee's interpretation (spec korean-translation 4, 5) ------------------------------------------------------
+
+async def test_ko_made_once_and_kept_on_the_line(engine, fake_claude):
+    rp = await engine.create("길 묻기")
+    a, b = await asyncio.gather(engine.ko(rp.id, 0), engine.ko(rp.id, 0))
+    assert a == b == "소희: " + rp.lines[0].text and len(fake_claude.interpret_calls) == 1
+    assert engine.store.load(rp.id).lines[0].ko == a
+    assert await engine.ko(rp.id, 0) == a and len(fake_claude.interpret_calls) == 1
+    copy = await engine.copy(rp.id)
+    assert copy.lines[0].ko == a  # 「같은 대본으로 처음부터」 does not make it again
+
+
+async def test_ko_context_is_the_conversation_as_it_went(engine, fake_claude):
+    rp = await engine.create("길 묻기")
+    await engine.ko(rp.id, 1)
+    call = fake_claude.interpret_calls[-1]
+    assert call["line"] == ("user", rp.lines[1].text)
+    assert call["before"] == ("ryan", rp.lines[0].text) and call["after"] == ("ryan", rp.lines[2].text)
+    await engine.ko(rp.id, 0)
+    assert fake_claude.interpret_calls[-1]["before"] is None
+
+
+async def test_ko_of_a_reply_sees_what_was_said_and_does_not_wait_for_the_rebuild(engine, fake_claude):
+    rp = await engine.create("길 묻기")
+    fake_claude.continue_gate = asyncio.Event()  # the rest of the script is being rebuilt, and stays so
+    said = "Do you have oat milk?"
+    await engine.save_attempt(rp.id, 1, Attempt(n=1, mode="turn", heard=said, followed=False, issues=[], say_ko="",
+                                                audio=[], timings={}), None)
+    await engine.add_reply(rp.id, 1, said, ScriptLine(idx=2, speaker="ryan", text="Yes, we do!", kind="reply"))
+    ko = await asyncio.wait_for(engine.ko(rp.id, 2), 1)
+    assert ko == "소희: Yes, we do!" and fake_claude.interpret_calls[-1]["before"] == ("user", said)
+    fake_claude.continue_gate.set()
+
+
+async def test_ko_does_not_queue_behind_three_line_notes(engine, fake_claude):
+    fake_claude.annotate_gate = asyncio.Event()  # every note waits, so Engine.sem is full
+    rp = await engine.create("길 묻기")
+    await asyncio.sleep(0)
+    assert await asyncio.wait_for(engine.ko(rp.id, 0), 1)
+    fake_claude.annotate_gate.set()
+
+
+async def test_ko_audio_is_sohee_urgent_checked_and_kept(engine, fake_voice):
+    rp = await engine.create("길 묻기")
+    with pytest.raises(NotFound):
+        await engine.ko_audio(rp.id, 0)  # no Korean yet
+    text = await engine.ko(rp.id, 0)
+    key = await engine.ko_audio(rp.id, 0)
+    assert (text, "sohee", "korean", True) in fake_voice.calls and text in fake_voice.checked
+    assert engine.store.load(rp.id).lines[0].ko_audio == key
+    n = len(fake_voice.calls)
+    assert await engine.ko_audio(rp.id, 0) == key and len(fake_voice.calls) == n

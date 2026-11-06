@@ -43,6 +43,7 @@ class Engine:
         self.continuing: dict[str, asyncio.Task] = {}
         self.left: dict[str, int] = {}  # learner lines the running rebuild is writing
         self.threes: dict[tuple[str, int], asyncio.Task] = {}  # notes asked for on demand, one call per line
+        self.kos: dict[tuple[str, int], asyncio.Task] = {}  # Sohee's Korean asked for, one call per line
 
     # --- fixed phrases ------------------------------------------------------------------------
 
@@ -196,6 +197,46 @@ class Engine:
             three = await self.claude.annotate(line.text, self.context(rp, idx))
         await self.update_line(rp_id, idx, line.text, three=three)
         return three
+
+    # --- Sohee's interpretation (spec korean-translation) ---------------------------------------
+
+    async def ko(self, rp_id: str, idx: int) -> str:
+        """Sohee's Korean for a line, made when first asked and kept on the line. Asks for the same line at once
+        share one Claude call. It waits neither for `self.sem`, which three-line notes can fill at the start of a
+        roleplay, nor for a rebuild of the rest of the script (spec 5, builder check)."""
+        _, line = self.get_line(rp_id, idx)
+        if line.ko is not None:
+            return line.ko
+        key = (rp_id, idx)
+        task = self.kos.get(key)
+        if task is None or task.done():
+            task = asyncio.create_task(self._make_ko(rp_id, idx))
+            task.add_done_callback(_quiet)
+            task.add_done_callback(lambda _: self.kos.pop(key, None))
+            self.kos[key] = task
+        return await asyncio.shield(task)
+
+    async def _make_ko(self, rp_id: str, idx: int) -> str:
+        rp, line = self.get_line(rp_id, idx)
+        # the lines around it as the conversation went: Ryan's reply answers what the learner actually said (spec 3)
+        went = self.history(rp, len(rp.lines))
+        before = went[idx - 1] if idx > 0 else None
+        after = went[idx + 1] if idx + 1 < len(went) else None
+        ko = await self.claude.interpret(rp.frame, (line.speaker, line.text), before, after)
+        await self.update_line(rp_id, idx, line.text, ko=ko)
+        return ko
+
+    async def ko_audio(self, rp_id: str, idx: int) -> str:
+        """Sohee saying the line's Korean, made when first asked: urgent, since the learner waits, and heard back,
+        since a lost last sound (「~요」) changes the meaning (spec 4)."""
+        _, line = self.get_line(rp_id, idx)
+        if line.ko is None:
+            raise NotFound(f"{rp_id}/{idx}/ko")
+        if line.ko_audio is not None and self.voice.path(line.ko_audio).is_file():
+            return line.ko_audio
+        key = await self.voice.say(line.ko, "sohee", "korean", urgent=True, check=True)
+        await self.update_line(rp_id, idx, line.text, ko_audio=key)
+        return key
 
     # --- situation input ----------------------------------------------------------------------
 

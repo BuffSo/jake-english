@@ -16,7 +16,8 @@ def test_routes_need_token(settings, engine, fake_voice, fake_whisper):
     from je_server.app import Services, create_app
 
     c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
-    for path in ["/home", "/assets/ryan-front.png", "/audio/" + "a" * 64, "/roleplays/000000000000/lines/0"]:
+    for path in ["/home", "/assets/ryan-front.png", "/audio/" + "a" * 64, "/roleplays/000000000000/lines/0",
+                 "/roleplays/000000000000/lines/0/ko", "/roleplays/000000000000/lines/0/ko/audio"]:
         assert c.get(path).status_code == 401
     assert c.post("/roleplays", json={"situation": "x"}).status_code == 401
 
@@ -189,3 +190,24 @@ def test_copy_route(client):
     new = client.post(f"/roleplays/{rp['id']}/copy").json()
     assert new["id"] != rp["id"] and [l["text"] for l in new["lines"]] == [l["text"] for l in rp["lines"]]
     assert client.post("/roleplays/000000000000/copy").status_code == 404
+
+
+def test_sohee_interpretation_text_then_sound(client):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    base = f"/roleplays/{rp['id']}/lines/0"
+    assert client.get(f"{base}/ko/audio").status_code == 404  # no Korean yet
+    r = client.get(f"{base}/ko")
+    assert r.status_code == 200 and r.json() == {"text": "소희: " + rp["lines"][0]["text"]}
+    audio = client.get(f"{base}/ko/audio").json()["audio"]
+    assert len(audio) == 64 and client.get(f"/audio/{audio}").status_code == 200
+    assert client.get(f"/roleplays/{rp['id']}/lines/99/ko").status_code == 404
+
+
+def test_sohee_interpretation_failures(client, fake_claude, fake_voice):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    fake_claude.fail_next = True
+    r = client.get(f"/roleplays/{rp['id']}/lines/1/ko")
+    assert r.status_code == 503 and r.json()["code"] == "claude_unavailable"
+    fake_voice.fail_text = client.get(f"/roleplays/{rp['id']}/lines/1/ko").json()["text"]
+    r = client.get(f"/roleplays/{rp['id']}/lines/1/ko/audio")
+    assert r.status_code == 503 and r.json()["code"] == "voice_unavailable"
