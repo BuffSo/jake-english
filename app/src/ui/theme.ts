@@ -11,6 +11,7 @@ export const colors = {
   user: "#E7F5FF",
   feedback: "#FFF9DB",
   primary: "#1C7ED6",
+  sohee: "#2F9E44", // Sohee's tag on her interpretation (spec korean-translation 2)
   danger: "#C92A2A",
 };
 

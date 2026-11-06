@@ -4,17 +4,20 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 
 import { api } from "../api";
 import { ApiError } from "../api/client";
-import type { AttemptEvent, ThreeLine } from "../api/types";
+import type { AttemptEvent, ScriptLine, ThreeLine } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, stopThenSend } from "../flow/gate";
+import { koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { askFirst, canReplay, leavesScreen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
+import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
 import { Named } from "../ui/Named";
 import { ThreeLineView } from "../ui/ThreeLine";
+import { useInterpret } from "../ui/useInterpret";
 import { colors, top } from "../ui/theme";
 import { codeOf, styles as common, Waiting } from "./common";
 
@@ -41,6 +44,19 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // a start, stop or stream that began before the leave sees the number change and drops itself (spec 9).
   const epoch = useRef(0);
   const playing = usePlaying(sounds);
+  // the state as of the last render, for Sohee's sound, which arrives after the tap (spec korean-translation 2)
+  const now = useRef(state);
+  now.current = state;
+  // which past bubbles show Sohee's line, by line; the line to say keeps it in the state (`interpreting`). The refs
+  // are set at the tap, before the render, since a sound already made plays at once.
+  const [koOpen, setKoOpen] = useState<Record<number, boolean>>({});
+  const koOpenNow = useRef(koOpen);
+  const sayOpenNow = useRef(state.interpreting);
+  sayOpenNow.current = state.interpreting;
+  const interp = useInterpret(rp.id, sounds, (auto) =>
+    mounted.current &&
+    (auto ? mayAutoPlay("roleplay", now.current.phase, sounds.isPlaying()) : mayReplay("roleplay", now.current.phase)),
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -163,6 +179,48 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (!(await fetchThree(idx))) setOpen((o) => ({ ...o, [idx]: false }));
   }
 
+  // The line object for a bubble: the one on screen, an off-script reply, or one seen before
+  function lineAt(idx: number): ScriptLine | undefined {
+    if (state.line?.idx === idx) return state.line;
+    if (state.reply?.idx === idx) return state.reply;
+    return state.seen[idx];
+  }
+
+  // Sohee's sound plays only if the line is still open when it arrives, on the same screen as when it was opened: a
+  // back or 「처음으로」 bumps `epoch`, and a practice mid-roleplay keeps this screen but changes `practice`
+  function stillOpen(idx: number, say: boolean): () => boolean {
+    const my = epoch.current;
+    const scope = now.current.practice;
+    return () =>
+      epoch.current === my &&
+      now.current.practice === scope &&
+      (say ? sayOpenNow.current && now.current.line?.idx === idx : koOpenNow.current[idx] === true);
+  }
+
+  const koViewAt = (idx: number) => koView(interp.entry(idx, lineAt(idx)), koOpen[idx] === true);
+
+  function toggleKo(idx: number) {
+    const v = koViewAt(idx);
+    const open = v === "closed" || v === "failed"; // a failure is tried again
+    koOpenNow.current = { ...koOpenNow.current, [idx]: open };
+    setKoOpen(koOpenNow.current);
+    if (open) interp.open(idx, lineAt(idx), stillOpen(idx, false));
+  }
+
+  function toggleSayKo(idx: number) {
+    const v = koView(interp.entry(idx, lineAt(idx)), state.interpreting);
+    const open = v === "closed" || v === "failed";
+    sayOpenNow.current = open;
+    dispatch({ type: "interpret", open });
+    if (open) interp.open(idx, lineAt(idx), stillOpen(idx, true));
+  }
+
+  // Sohee's line and its button for a past bubble
+  function Ko({ idx }: { idx: number }) {
+    const line = lineAt(idx);
+    return <KoLine view={koViewAt(idx)} entry={interp.entry(idx, line)} onReplay={() => interp.replay(idx, line)} />;
+  }
+
   // the Ryan line before a practised line of mine, to know what it answers (spec 4)
   function playBefore(audio: string | null) {
     if (!audio || !canReplay(state.phase)) return;
@@ -244,19 +302,30 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
 
   // `follow`: the bubble is a past Ryan line that can be practised (`practiceFor`)
+  // The bubble itself takes no tap: 「읽는 법 보기」 and 「통역」 each have a button (spec korean-translation 2)
   function RyanBubble({ idx, text, follow }: { idx?: number; text: string; follow?: boolean }) {
     const three = idx !== undefined ? threes[idx] : undefined;
     return (
       <Named part="ryan">
-        <Pressable onPress={() => idx !== undefined && toggleThree(idx)} style={[styles.bubble, styles.ryan]}>
+        <View style={[styles.bubble, styles.ryan]}>
           <Text style={styles.ryanText}>{text}</Text>
           {idx !== undefined && open[idx] && three === "loading" && <Text style={common.sub}>세 줄을 만들고 있어요…</Text>}
           {idx !== undefined && open[idx] && three && three !== "loading" && <ThreeLineView three={three} />}
-          {idx !== undefined && !open[idx] && <Text style={styles.hint}>눌러서 읽는 법 보기</Text>}
-          {follow && idx !== undefined && (
-            <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} />
+          {idx !== undefined && <Ko idx={idx} />}
+          {idx !== undefined && (
+            <View style={styles.links}>
+              <View style={styles.linkGroup}>
+                <Pressable onPress={() => toggleThree(idx)} hitSlop={8}>
+                  <Text style={styles.link}>{open[idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
+                </Pressable>
+                <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
+              </View>
+              {follow && (
+                <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} inRow />
+              )}
+            </View>
           )}
-        </Pressable>
+        </View>
       </Named>
     );
   }
@@ -317,6 +386,14 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
               <View style={[styles.bubble, styles.user]}>
                 <Text style={styles.label}>대본</Text>
                 <Text style={styles.plainText}>{b.script}</Text>
+                {b.idx !== undefined && (
+                  <>
+                    <Ko idx={b.idx} />
+                    <View style={styles.linkRow}>
+                      <KoButton view={koViewAt(b.idx)} onPress={() => toggleKo(b.idx!)} />
+                    </View>
+                  </>
+                )}
                 <Text style={[styles.label, styles.gap]}>들린 말</Text>
                 <Text style={styles.plainText}>{b.text}</Text>
                 {practiceFor(state, b) === "mine" && b.idx !== undefined && (
@@ -340,7 +417,13 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           <Named part="ryan">
             <Pressable onPress={() => playBefore(before.audio)} style={[styles.bubble, styles.ryan]}>
               <Text style={styles.beforeText}>{before.text}</Text>
-              <Text style={styles.hint}>눌러서 듣기</Text>
+              <Ko idx={before.idx} />
+              <View style={styles.linkGroup}>
+                <Text style={styles.hint}>눌러서 듣기</Text>
+                <View style={styles.linkRow}>
+                  <KoButton view={koViewAt(before.idx)} onPress={() => toggleKo(before.idx)} />
+                </View>
+              </View>
             </Pressable>
           </Named>
         )}
@@ -353,6 +436,12 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                 three={shadow ? (line.three ?? threes[line.idx] ?? null) : line.three}
                 open={state.reading}
                 onToggle={() => dispatch({ type: "toggleReading" })}
+                ko={{
+                  view: koView(interp.entry(line.idx, line), state.interpreting),
+                  entry: interp.entry(line.idx, line),
+                  onToggle: () => toggleSayKo(line.idx),
+                  onReplay: () => interp.replay(line.idx, line),
+                }}
               />
             </View>
           </Named>
@@ -417,9 +506,10 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
 // A small link under a past bubble: practise that line on its own (spec 9). Dimmed while it cannot be used, but
 // still taking the tap (`practise` ignores it then): a disabled Pressable passes the tap to the Ryan bubble around
 // it, which opened the notes instead (final review).
-function PractiseLink({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
+function PractiseLink(props: { label: string; disabled: boolean; onPress: () => void; inRow?: boolean }) {
+  const { label, disabled, onPress, inRow } = props;
   return (
-    <Pressable onPress={onPress} hitSlop={8} style={styles.practise}>
+    <Pressable onPress={onPress} hitSlop={8} style={inRow ? undefined : styles.practise}>
       <Text style={[styles.practiseText, disabled && styles.off]}>{label}</Text>
     </Pressable>
   );
@@ -445,6 +535,10 @@ const styles = StyleSheet.create({
   plainText: { fontSize: 17, color: colors.text, lineHeight: 25 },
   hint: { fontSize: 13, color: colors.weak, marginTop: 4 },
   practise: { alignSelf: "flex-end", marginTop: 6 },
+  links: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 8 },
+  linkGroup: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 16 },
+  linkRow: { marginTop: 4 },
+  link: { fontSize: 15, color: colors.primary, fontWeight: "600" },
   practiseText: { fontSize: 14, color: colors.primary, fontWeight: "600" },
   off: { opacity: 0.4 },
   heard: { fontSize: 14, color: colors.sub, marginTop: 4, alignSelf: "flex-end" },
