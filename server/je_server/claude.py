@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
@@ -11,7 +12,7 @@ import anthropic
 from pydantic import ValidationError
 
 from . import prompts
-from .models import Draft, Frame, Issue, Offscript, ThreeLine
+from .models import Draft, Frame, Issue, Offscript, Speaker, ThreeLine
 from .threeline import Problem, check, degrade, plain
 
 # Spec 「기다리는 시간과 모델」: Haiku with thinking off for quick wording, Sonnet with thinking off and low
@@ -38,6 +39,9 @@ log = logging.getLogger("je_server")
 USER_TURNS = (3, 3)  # 2026-11-05 the user tried 5 on the phone, found it too many, chose 3
 USER_MAX_WORDS = 14
 ANNOTATE_TRIES = 3
+INTERPRET_TRIES = 2
+HANGUL = re.compile(r"[가-힣]")
+QUOTES = "\"'“”‘’「」『』"
 
 
 # Calls made while the learner waits in a turn (feedback, off-script reply). The app gives up after 30s without a
@@ -156,6 +160,30 @@ class Claude:
         log.info("three-line note degraded after %d tries, %.1fs: %s", ANNOTATE_TRIES, time.perf_counter() - t0,
                  ",".join(sorted({p.kind for p in problems})))
         return degrade(text, last, problems) if last is not None else plain(text)
+
+    # --- Sohee's interpretation -----------------------------------------------------------------
+
+    async def interpret(self, frame: Frame, line: tuple[Speaker, str], before: tuple[Speaker, str] | None,
+                        after: tuple[Speaker, str] | None) -> str:
+        """Sohee's Korean for one line, on the quick model (spec korean-translation 3). The lines around it are
+        context, as the conversation went. The learner waits for it, so it fails fast."""
+        roles = {"ryan": frame.ryan_role_ko, "user": frame.user_role_ko}
+
+        def said(l: tuple[Speaker, str] | None) -> dict | None:
+            return None if l is None else {"말하는 사람": roles[l[0]], "text": l[1]}
+
+        body = json.dumps({"상황": frame.model_dump(), "앞 대사": said(before), "옮길 대사": said(line),
+                           "뒤 대사": said(after)}, ensure_ascii=False)
+        t0 = time.perf_counter()
+        for tries in range(1, INTERPRET_TRIES + 1):
+            data = await self._json(self.quick, prompts.INTERPRET_SYSTEM, body, prompts.INTERPRET_SCHEMA, 300,
+                                    live=True)
+            raw = data.get("ko") if isinstance(data, dict) else None
+            ko = " ".join(raw.split()).strip(QUOTES).strip() if isinstance(raw, str) else ""
+            if HANGUL.search(ko):
+                log.info("interpretation: %d tries, %.1fs", tries, time.perf_counter() - t0)
+                return ko
+        raise ClaudeUnavailable("bad interpretation")
 
     # --- recommendation -----------------------------------------------------------------------
 

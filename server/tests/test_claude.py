@@ -200,3 +200,41 @@ def test_feedback_prompt_puts_the_improvement_first():
     from je_server import prompts
 
     assert "「이번에는」으로 시작하는 후보가 있으면 그것을 말해요" in prompts.FEEDBACK_SYSTEM
+
+
+# --- Sohee's interpretation (spec korean-translation 3) --------------------------------------------------------
+
+async def test_interpret_uses_the_quick_model_with_roles_and_neighbors():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([json.dumps({"ko": "역까지 어떻게 가요?"})])
+    ko = await Claude(fake).interpret(Frame(**FRAME), ("ryan", "How do I get there?"),
+                                      ("user", "It's right over there."), None)
+    req = fake.requests[0]
+    assert ko == "역까지 어떻게 가요?" and req["model"] == "claude-haiku-5-5"
+    body = req["messages"][0]["content"]
+    assert "How do I get there?" in body and "It's right over there." in body
+    assert FRAME["ryan_role_ko"] in body and FRAME["user_role_ko"] in body
+    assert fake.options and fake.options[0]["timeout"] == 12.0  # the learner waits: fail fast (LIVE_OPTIONS)
+
+
+async def test_interpret_keeps_one_line_without_quotes():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([json.dumps({"ko": "「역까지\n어떻게 가요?」"})])
+    ko = await Claude(fake).interpret(Frame(**FRAME), ("ryan", "How do I get there?"), None, None)
+    assert ko == "역까지 어떻게 가요?"
+
+
+async def test_interpret_asks_again_without_korean_then_gives_up():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([json.dumps({"ko": "How do I get there?"}), json.dumps({"ko": "역까지 어떻게 가요?"})])
+    ko = await Claude(fake).interpret(Frame(**FRAME), ("ryan", "How do I get there?"), None, None)
+    assert ko == "역까지 어떻게 가요?" and len(fake.requests) == 2
+    fake = FakeAnthropic([json.dumps({"ko": ""}), "not json"])
+    with pytest.raises(ClaudeUnavailable):
+        await Claude(fake).interpret(Frame(**FRAME), ("ryan", "How do I get there?"), None, None)
