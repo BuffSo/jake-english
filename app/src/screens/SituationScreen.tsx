@@ -11,15 +11,15 @@ import { turnDown } from "../flow/turnedDown";
 import { whenSilent } from "../flow/whenSilent";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
-import { RyanCircle } from "../ui/RyanFace";
+import { circleFace, type Face, type Step } from "../ui/faces";
+import { Named } from "../ui/Named";
+import { FaceCircle } from "../ui/RyanFace";
 import { ThinkingFace } from "../ui/ThinkingFace";
 import { colors, top } from "../ui/theme";
 import { waiterOf } from "../ui/thinking";
 import { messageOf, styles as common, Waiting } from "./common";
 
 type Props = { sounds: SoundQueue; home: Home; onCreated: (rp: Roleplay, jake: Said | null) => void; onBack: () => void };
-// confirm: Jake has suggested a situation and waits for 「이걸로 할게요」 or 「다른 걸로요」 (2026-11-06, user)
-type Step = "input" | "askRecommend" | "working" | "confirm";
 
 const WANTS_RECOMMEND = /모르겠|추천/;
 
@@ -34,6 +34,8 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   const gen = useRef(0); // bumped by going back (or leaving): an answer to an earlier request is dropped
   const turnedDown = useRef<string[]>([]); // Jake's suggestions turned down on this screen, not suggested again
   const choice = useRef(createLatch()).current; // one answer per suggestion: a double tap must not ask twice
+  const [jakeFailed, setJakeFailed] = useState(false); // Jake's picture did not load: Ryan's face instead
+  const shown = useRef<Face>("listening"); // the circle's face before a wait, kept until the thinking face comes
 
   useEffect(
     () => () => {
@@ -170,17 +172,21 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     }
   }
 
-  const listening = <RyanCircle source={api.imageSource(home.images.listening)} size={160} />;
+  const jakePicture = !jakeFailed ? home.images.jake : undefined;
+  const face = circleFace(step, shown.current, !!jakePicture);
+  shown.current = face;
+  const circle =
+    face === "jake" && jakePicture ? (
+      <FaceCircle source={api.imageSource(jakePicture)} size={160} face="jake" onError={() => setJakeFailed(true)} />
+    ) : (
+      <FaceCircle source={api.imageSource(home.images.listening)} size={160} face="listening" />
+    );
   return (
     <View style={styles.wrap}>
       <BackButton onPress={back} floating />
       <View style={styles.face}>
         {/* while working, this circle thinks in place, so the screen never shows two faces (2026-11-06) */}
-        {step === "working" ? (
-          <ThinkingFace who={waiterOf(status)} size={160} fallback={listening} />
-        ) : (
-          listening
-        )}
+        {step === "working" ? <ThinkingFace who={waiterOf(status)} size={160} fallback={circle} /> : circle}
       </View>
       <Text style={[common.body, styles.say]}>{home.lines.ask_situation.text}</Text>
       {step === "input" && (
@@ -207,14 +213,14 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
       )}
       {step === "confirm" && jake && (
         <>
-          <Text style={[common.body, styles.jake]}>제이크: {jake.text}</Text>
+          <JakeSays text={jake.text} />
           <Button label="이걸로 할게요" onPress={pick} />
           <Button label="다른 걸로요" onPress={another} kind="plain" />
         </>
       )}
       {step === "working" && (
         <>
-          {jake && <Text style={[common.body, styles.jake]}>제이크: {jake.text}</Text>}
+          {jake && <JakeSays text={jake.text} />}
           <Waiting text={status} />
         </>
       )}
@@ -223,12 +229,22 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   );
 }
 
+// Jake's suggestion, on the left in gray with his name like on the roleplay screen: it was blue like the learner's
+// own lines there (2026-11-06 user)
+function JakeSays({ text }: { text: string }) {
+  return (
+    <Named part="jake">
+      <Text style={[common.body, styles.jake]}>{text}</Text>
+    </Named>
+  );
+}
+
 const styles = StyleSheet.create({
   // from just below the floating back button: centring left a wide gap above the picture (2026-11-05, user)
   wrap: { flex: 1, paddingTop: top + 44, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: colors.bg },
   face: { marginBottom: 12 },
   say: { marginBottom: 10 },
-  jake: { backgroundColor: colors.user, borderRadius: 12, padding: 12, marginBottom: 8 },
+  jake: { backgroundColor: colors.ryan, borderRadius: 12, padding: 12, marginTop: 2, marginBottom: 8, maxWidth: "92%" },
   input: {
     borderWidth: 1,
     borderColor: "#CED4DA",

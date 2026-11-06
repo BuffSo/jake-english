@@ -27,7 +27,8 @@ MAX_UPLOAD = 5 * 1024 * 1024
 # (docs/superpowers/specs/2026-11-06-waiting-animation-design.md). Like Ryan's pictures they live only in the
 # private assets folder.
 THINKING = {who: [f"{who}-thinking-{n}.png" for n in (1, 2)] for who in ("jake", "ryan")}
-ASSETS = {"ryan-front.png", "ryan-listening.png", *THINKING["jake"], *THINKING["ryan"]}
+# jake-front.png: Jake's face while his suggested situation waits for 「이걸로 할게요」 or 「다른 걸로요」 (2026-11-06 user)
+ASSETS = {"ryan-front.png", "ryan-listening.png", "jake-front.png", *THINKING["jake"], *THINKING["ryan"]}
 ID = r"^[0-9a-f]{12}$"
 KEY = r"^[0-9a-f]{64}$"
 
@@ -136,6 +137,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         e = engine()
         return {"lines": {n: e.said(n).model_dump() for n in ("greeting", "ask_mode", "ask_situation", "ask_recommend")},
                 "images": {"front": "/assets/ryan-front.png", "listening": "/assets/ryan-listening.png",
+                           "jake": "/assets/jake-front.png",
                            "thinking": {who: [f"/assets/{n}" for n in names] for who, names in THINKING.items()}}}
 
     @router.get("/assets/{name}")

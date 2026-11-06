@@ -13,6 +13,7 @@ import { askFirst, canReplay, leavesScreen, modelKey, practiceFor, type Action, 
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { LineToSay } from "../ui/LineToSay";
+import { Named } from "../ui/Named";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { colors, top } from "../ui/theme";
 import { codeOf, styles as common, Waiting } from "./common";
@@ -93,8 +94,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (shadow && line && !line.three && state.phase === "ready" && !threes[line.idx]) fetchThree(line.idx);
   }, [shadow, line, state.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Always a moment later: on Android the new renderer runs a scroll before it adds the views committed with it, so
+  // scrolling at once to a wait that has just appeared (`Waiting` `onShow`) stopped above it (PR #20 review).
+  const toEnd = () => setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
   useEffect(() => {
-    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
+    toEnd();
   }, [state.history.length, state.phase, state.feedback]);
 
   function listen(r: Rate = rate) {
@@ -243,15 +247,17 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   function RyanBubble({ idx, text, follow }: { idx?: number; text: string; follow?: boolean }) {
     const three = idx !== undefined ? threes[idx] : undefined;
     return (
-      <Pressable onPress={() => idx !== undefined && toggleThree(idx)} style={[styles.bubble, styles.ryan]}>
-        <Text style={styles.ryanText}>{text}</Text>
-        {idx !== undefined && open[idx] && three === "loading" && <Text style={common.sub}>세 줄을 만들고 있어요…</Text>}
-        {idx !== undefined && open[idx] && three && three !== "loading" && <ThreeLineView three={three} />}
-        {idx !== undefined && !open[idx] && <Text style={styles.hint}>눌러서 읽는 법 보기</Text>}
-        {follow && idx !== undefined && (
-          <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} />
-        )}
-      </Pressable>
+      <Named part="ryan">
+        <Pressable onPress={() => idx !== undefined && toggleThree(idx)} style={[styles.bubble, styles.ryan]}>
+          <Text style={styles.ryanText}>{text}</Text>
+          {idx !== undefined && open[idx] && three === "loading" && <Text style={common.sub}>세 줄을 만들고 있어요…</Text>}
+          {idx !== undefined && open[idx] && three && three !== "loading" && <ThreeLineView three={three} />}
+          {idx !== undefined && !open[idx] && <Text style={styles.hint}>눌러서 읽는 법 보기</Text>}
+          {follow && idx !== undefined && (
+            <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} />
+          )}
+        </Pressable>
+      </Named>
     );
   }
 
@@ -294,51 +300,70 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         </Text>
       </View>
       <ScrollView ref={scroll} contentContainerStyle={styles.scroll}>
+        {/* who says each bubble, like a messenger: others left in gray, me right in blue (2026-11-06 user) */}
         {state.jake && !practice && (
-          <Pressable onPress={replayJake} style={[styles.bubble, styles.user]}>
-            <Text style={styles.plainText}>제이크: {state.jake.text}</Text>
-            <Text style={styles.hint}>눌러서 다시 듣기</Text>
-          </Pressable>
+          <Named part="jake">
+            <Pressable onPress={replayJake} style={[styles.bubble, styles.ryan]}>
+              <Text style={styles.plainText}>{state.jake.text}</Text>
+              <Text style={styles.hint}>눌러서 다시 듣기</Text>
+            </Pressable>
+          </Named>
         )}
         {state.history.map((b, i) =>
           b.kind === "ryan" ? (
             <RyanBubble key={i} idx={b.idx} text={b.text} follow={practiceFor(state, b) === "shadow"} />
           ) : b.kind === "user" && b.script ? (
-            <View key={i} style={[styles.bubble, styles.user]}>
-              <Text style={styles.label}>대본</Text>
-              <Text style={styles.plainText}>{b.script}</Text>
-              <Text style={[styles.label, styles.gap]}>들린 말</Text>
-              <Text style={styles.plainText}>{b.text}</Text>
-              {practiceFor(state, b) === "mine" && b.idx !== undefined && (
-                <PractiseLink label="이 줄 다시 ›" disabled={!canPractise} onPress={() => practise("mine", b.idx!)} />
-              )}
-            </View>
+            <Named key={i} part="mine">
+              <View style={[styles.bubble, styles.user]}>
+                <Text style={styles.label}>대본</Text>
+                <Text style={styles.plainText}>{b.script}</Text>
+                <Text style={[styles.label, styles.gap]}>들린 말</Text>
+                <Text style={styles.plainText}>{b.text}</Text>
+                {practiceFor(state, b) === "mine" && b.idx !== undefined && (
+                  <PractiseLink label="이 줄 다시 ›" disabled={!canPractise} onPress={() => practise("mine", b.idx!)} />
+                )}
+              </View>
+            </Named>
           ) : (
-            <View key={i} style={[styles.bubble, b.kind === "user" ? styles.user : styles.feedback]}>
-              <Text style={styles.plainText}>{b.text}</Text>
-            </View>
+            <Named key={i} part={b.kind === "user" ? "mine" : "feedback"}>
+              <View style={[styles.bubble, b.kind === "user" ? styles.user : styles.feedback]}>
+                <Text style={styles.plainText}>{b.text}</Text>
+              </View>
+            </Named>
           ),
         )}
-        {state.phase === "loading" && <Waiting who="ryan" text={practice ? "대사를 준비하고 있어요" : "다음 대사를 준비하고 있어요"} />}
+        {state.phase === "loading" && (
+          <Waiting who="ryan" text={practice ? "대사를 준비하고 있어요" : "다음 대사를 준비하고 있어요"} onShow={toEnd} />
+        )}
         {state.phase === "ryan" && line && <RyanBubble idx={line.idx} text={line.text} />}
         {myTurn && before?.speaker === "ryan" && (
-          <Pressable onPress={() => playBefore(before.audio)} style={styles.before}>
-            <Text style={styles.beforeText}>라이언: {before.text}</Text>
-          </Pressable>
+          <Named part="ryan">
+            <Pressable onPress={() => playBefore(before.audio)} style={[styles.bubble, styles.ryan]}>
+              <Text style={styles.beforeText}>{before.text}</Text>
+              <Text style={styles.hint}>눌러서 듣기</Text>
+            </Pressable>
+          </Named>
         )}
+        {/* the line to say, Ryan's own in shadow practice: the learner says it, so it is on their side */}
         {myTurn && line && (
-          <LineToSay
-            text={line.text}
-            three={shadow ? (line.three ?? threes[line.idx] ?? null) : line.three}
-            open={state.reading}
-            onToggle={() => dispatch({ type: "toggleReading" })}
-          />
+          <Named part="now">
+            <View style={[styles.bubble, styles.now]}>
+              <LineToSay
+                text={line.text}
+                three={shadow ? (line.three ?? threes[line.idx] ?? null) : line.three}
+                open={state.reading}
+                onToggle={() => dispatch({ type: "toggleReading" })}
+              />
+            </View>
+          </Named>
         )}
         {state.heard && <Text style={styles.heard}>들린 말: {state.heard}</Text>}
         {state.feedback !== "" && (
-          <View style={[styles.bubble, styles.feedback]}>
-            <Text style={styles.plainText}>{state.feedback}</Text>
-          </View>
+          <Named part="feedback">
+            <View style={[styles.bubble, styles.feedback]}>
+              <Text style={styles.plainText}>{state.feedback}</Text>
+            </View>
+          </Named>
         )}
         {state.reply && (
           <RyanBubble
@@ -347,7 +372,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             follow={practiceFor(state, { kind: "ryan", idx: state.reply.idx }) === "shadow"}
           />
         )}
-        {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" />}
+        {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" onShow={toEnd} />}
         {state.message && <Text style={state.phase === "error" ? common.error : styles.notice}>{state.message}</Text>}
       </ScrollView>
 
@@ -405,15 +430,16 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#E9ECEF" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   titleText: { flexShrink: 1 },
-  count: { fontSize: 14, fontWeight: "700", color: colors.text, backgroundColor: colors.strong, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  // in my blue, like my bubbles (2026-11-06 user); it was yellow, which is Ryan's feedback
+  count: { fontSize: 14, fontWeight: "700", color: colors.primary, backgroundColor: colors.user, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   label: { fontSize: 12, color: colors.sub },
   gap: { marginTop: 6 },
-  before: { alignSelf: "flex-start", marginBottom: 8 },
-  beforeText: { fontSize: 15, color: colors.sub },
+  beforeText: { fontSize: 15, color: colors.sub, lineHeight: 22 },
   scroll: { padding: 16, paddingBottom: 32 },
   bubble: { borderRadius: 14, padding: 12, marginVertical: 5, maxWidth: "92%" },
   ryan: { backgroundColor: colors.ryan, alignSelf: "flex-start" },
   user: { backgroundColor: colors.user, alignSelf: "flex-end" },
+  now: { backgroundColor: colors.user, alignSelf: "flex-end", borderWidth: 2, borderColor: colors.primary },
   feedback: { backgroundColor: colors.feedback, alignSelf: "flex-start" },
   ryanText: { fontSize: 20, color: colors.text, lineHeight: 28 },
   plainText: { fontSize: 17, color: colors.text, lineHeight: 25 },

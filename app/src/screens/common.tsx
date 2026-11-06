@@ -1,8 +1,9 @@
+import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { ApiError, type ErrorCode } from "../api/client";
 import { OFFLINE } from "../flow/state";
-import { Dots, ThinkingFace } from "../ui/ThinkingFace";
+import { Dots, SHOW_AFTER, ThinkingFace, useLate } from "../ui/ThinkingFace";
 import { colors } from "../ui/theme";
 import type { Who } from "../ui/thinking";
 
@@ -19,10 +20,18 @@ export function messageOf(e: unknown): string {
 
 // The thinking face of `who` (no face when left out, as on the situation screen, whose big circle at the top
 // thinks instead), the waiting text and three blinking dots. It replaced the spinner (2026-11-06 user).
-export function Waiting({ text, who }: { text: string; who?: Who }) {
+// With a face, all of it shows only once the wait has lasted SHOW_AFTER, so a short wait shows nothing; the face
+// alone coming later would push the text down. Without one the text shows at once, in place of the buttons the tap
+// took away. `onShow`: called when it appears (the roleplay screen scrolls to it).
+export function Waiting({ text, who, onShow }: { text: string; who?: Who; onShow?: () => void }) {
+  const late = useLate(who ? SHOW_AFTER : 0);
+  useEffect(() => {
+    if (late) onShow?.();
+  }, [late]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!late) return null;
   return (
     <View style={styles.wait}>
-      {who && <ThinkingFace who={who} size={96} />}
+      {who && <ThinkingFace who={who} size={96} after={0} />}
       <Text style={styles.waitText}>{text}</Text>
       <Dots />
     </View>
