@@ -27,10 +27,17 @@ _SHORT = {"wanna": "want to", "gonna": "going to", "ok": "okay"}
 
 
 def _number(n: int) -> str:
+    """Words for 0 <= n < 1,000,000, the way the transcriber's digits are read out (1,000 is one thousand)."""
     if n < 20:
         return _ONES[n]
-    tens, ones = divmod(n, 10)
-    return _TENS[tens] + (f" {_ONES[ones]}" if ones else "")
+    if n < 100:
+        tens, ones = divmod(n, 10)
+        return _TENS[tens] + (f" {_ONES[ones]}" if ones else "")
+    for size, name in ((1000, "thousand"), (100, "hundred")):
+        if n >= size:
+            head, rest = divmod(n, size)
+            return f"{_number(head)} {name}" + (f" {_number(rest)}" if rest else "")
+    raise AssertionError(n)
 
 
 def words(text: str) -> list[str]:
@@ -51,7 +58,7 @@ def words(text: str) -> list[str]:
             continue
         if w.isdigit() and len(w) == 2 and w[0] == "0":  # the 05 of 5:05 is "oh five"
             out += ["oh", _ONES[int(w[1])]]
-        elif w.isdigit() and int(w) < 100:
+        elif w.isdigit() and int(w) < 1_000_000:
             out += _number(int(w)).split()
         else:
             out += _SHORT.get(w, w).split()

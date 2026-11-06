@@ -143,3 +143,11 @@ def test_clock_times_are_not_differences():
                         ("The bus leaves at five oh five.", "The bus leaves at 5:05.")]:
         assert compare(line, heard).diffs == [], (line, heard)
     assert "zero" not in words("It costs $1,000.")
+
+
+def test_numbers_past_ninety_nine_are_not_differences():
+    for line, heard in [("It is one thousand dollars.", "It is $1,000."),
+                        ("That's one hundred twenty.", "That's 120."),
+                        ("We sold two thousand five hundred cups.", "We sold 2,500 cups.")]:
+        assert compare(line, heard).diffs == [], (line, heard)
+    assert compare("Room 305, please.", "Room 305, please.").diffs == []
