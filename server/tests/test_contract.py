@@ -30,4 +30,4 @@ def test_summary_example_has_the_engine_shape():
         assert set(l) == {"line", "tries"} and ScriptLine.model_validate(l["line"]).model_dump(mode="json") == l["line"]
         for t in l["tries"]:
             assert set(t) == {"n", "mode", "heard", "followed", "issues", "point_ko"}
-            assert all(set(i) == {"target", "heard"} for i in t["issues"])
+            assert all(set(i) == {"target", "heard", "say_ko"} for i in t["issues"])

@@ -43,7 +43,8 @@ async def test_summary_shows_roleplay_tries_not_practice(engine_with_rp, speech_
     await run(engine, rp_id, user_idx, speech_bytes, "practice")
     s = engine.summary(rp_id)
     assert tries(s, user_idx) == [{"n": 1, "mode": "turn", "heard": "It's light over there.", "followed": True,
-                                   "issues": [{"target": "right", "heard": "light"}], "point_ko": ""}]
+                                   "issues": [{"target": "right", "heard": "light",
+                                               "say_ko": "「right」 → 「light」처럼 들렸어요"}], "point_ko": ""}]
     assert s["say"] == engine.said("closing_retry").model_dump()  # the practice fix does not count
     assert [l["line"]["idx"] for l in s["lines"]] == list(range(7)) and tries(s, 0) == []
 
@@ -81,4 +82,18 @@ async def test_pronunciation_point_is_not_repeated(engine_with_rp, speech_bytes,
     fake_whisper.text = "I have no idea, it is light there."
     await run(engine, rp_id, user_idx, speech_bytes)
     [t] = tries(engine.summary(rp_id), user_idx)
-    assert t["issues"] == [{"target": "right", "heard": "light"}] and t["point_ko"] == ""
+    assert t["issues"] == [{"target": "right", "heard": "light", "say_ko": "「right」 → 「light」처럼 들렸어요"}]
+    assert t["point_ko"] == ""
+
+
+async def test_summary_says_each_issue_in_korean(engine_with_rp):
+    from je_server.models import Attempt, Issue
+
+    engine, rp_id, user_idx = engine_with_rp
+    old = Issue.model_validate({"target": "coffee", "heard": "copy", "sound": ["F", "P"], "explain": "…"})
+    issues = [old, Issue(target="on", heard="")]
+    await engine.save_attempt(rp_id, user_idx, Attempt(n=1, mode="turn", heard="…", followed=True, issues=issues,
+                                                       say_ko="…", audio=[], timings={}), pos=None)
+    [t] = tries(engine.summary(rp_id), user_idx)
+    assert t["issues"] == [{"target": "coffee", "heard": "copy", "say_ko": "「coffee」 → 「copy」처럼 들렸어요"},
+                           {"target": "on", "heard": "", "say_ko": "「on」 → 들리지 않았어요"}]

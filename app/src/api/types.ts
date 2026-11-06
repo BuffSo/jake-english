@@ -14,7 +14,7 @@ export type ScriptLine = {
   audio: string | null;
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };
-export type Issue = { target: string; heard: string; sound: [string, string]; explain: string };
+export type Issue = { target: string; heard: string; sound: [string, string] | null; explain: string };
 // turn and retry are the roleplay's own tries; practice (the learner's lines again) and shadow (following Ryan's
 // lines) are practice tries, from the end screen or from a past bubble mid-roleplay, and never move the roleplay on
 export type AttemptMode = "turn" | "retry" | "practice" | "shadow";
@@ -50,7 +50,7 @@ export type Try = {
   mode: "turn" | "retry";
   heard: string;
   followed: boolean;
-  issues: { target: string; heard: string }[];
+  issues: { target: string; heard: string; say_ko: string }[]; // say_ko: the line the end screen shows
   point_ko: string;
 };
 export type TranscriptLine = { line: ScriptLine; tries: Try[] };
@@ -70,6 +70,7 @@ export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "reply", "error", "done"] as const;
 export const SUMMARY_KEYS = ["say", "lines"] as const;
 export const TRY_KEYS = ["n", "mode", "heard", "followed", "issues", "point_ko"] as const;
+export const ISSUE_KEYS = ["target", "heard", "say_ko"] as const;
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 export const KEYS_MATCH: [
@@ -79,4 +80,5 @@ export const KEYS_MATCH: [
   Same<AttemptEvent["type"], (typeof EVENT_TYPES)[number]>,
   Same<keyof Summary, (typeof SUMMARY_KEYS)[number]>,
   Same<keyof Try, (typeof TRY_KEYS)[number]>,
-] = [true, true, true, true, true, true];
+  Same<keyof Try["issues"][number], (typeof ISSUE_KEYS)[number]>,
+] = [true, true, true, true, true, true, true];

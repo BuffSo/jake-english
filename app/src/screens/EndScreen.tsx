@@ -172,7 +172,7 @@ function MyLine(props: { id: string; l: TranscriptLine; onPlay: (src: Source) =>
 // One try inside the roleplay: what was heard, the recording, and what Ryan pointed out (only that, so the
 // screen never says more than he did)
 function TryView({ t, onPlay }: { t: Try; onPlay: () => void }) {
-  const points = [...t.issues.map((i) => `「${i.target}」 → 「${i.heard}」처럼 들렸어요`), ...(t.point_ko ? [t.point_ko] : [])];
+  const points = [...t.issues.map((i) => i.say_ko), ...(t.point_ko ? [t.point_ko] : [])];
   return (
     <View style={styles.try}>
       <View style={styles.who}>

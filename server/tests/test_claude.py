@@ -181,3 +181,9 @@ async def test_continue_script_needs_the_exact_number_of_learner_lines():
     fake = FakeAnthropic([three, two])
     draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 2)
     assert sum(1 for s, _ in draft if s == "user") == 2 and len(fake.requests) == 2
+
+
+def test_feedback_prompt_puts_the_improvement_first():
+    from je_server import prompts
+
+    assert "「이번에는」으로 시작하는 후보가 있으면 그것을 말해요" in prompts.FEEDBACK_SYSTEM

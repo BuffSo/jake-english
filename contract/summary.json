@@ -33,7 +33,8 @@
      "issues": [
       {
        "target": "coffee",
-       "heard": "copy"
+       "heard": "copy",
+       "say_ko": "「coffee」 → 「copy」처럼 들렸어요"
       }
      ],
      "point_ko": ""
