@@ -25,7 +25,25 @@ def test_home_lists_fixed_lines(client):
     j = client.get("/home").json()
     assert set(j["lines"]) == {"greeting", "ask_mode", "ask_situation", "ask_recommend"}
     assert all(len(v["audio"]) == 64 for v in j["lines"].values())
-    assert j["images"] == {"front": "/assets/ryan-front.png", "listening": "/assets/ryan-listening.png"}
+    assert j["images"] == {
+        "front": "/assets/ryan-front.png",
+        "listening": "/assets/ryan-listening.png",
+        "thinking": {
+            "jake": ["/assets/jake-thinking-1.png", "/assets/jake-thinking-2.png"],
+            "ryan": ["/assets/ryan-thinking-1.png", "/assets/ryan-thinking-2.png"],
+        },
+    }
+
+
+def test_thinking_faces_served(client, settings):
+    settings.assets_dir.mkdir(parents=True)
+    names = ["jake-thinking-1.png", "jake-thinking-2.png", "ryan-thinking-1.png", "ryan-thinking-2.png"]
+    for n in names + ["jake-front.png"]:
+        (settings.assets_dir / n).write_bytes(b"png")
+    for n in names:
+        r = client.get(f"/assets/{n}")
+        assert r.status_code == 200 and r.content == b"png"
+    assert client.get("/assets/jake-front.png").status_code == 404  # on disk but not listed
 
 
 def test_assets_served_from_assets_dir(client, settings):
