@@ -17,3 +17,15 @@ export function createGate() {
     },
   };
 }
+
+// Stopping the recorder goes through the gate (a double tap, the auto-stop landing on a tap); sending it and
+// reading Ryan's answer come after, outside it. Back from a practice in the middle of the answer keeps the roleplay
+// screen and its gate (spec roleplay-practice 9), and the mic must not wait for that old answer (final review).
+export async function stopThenSend<T>(
+  gate: ReturnType<typeof createGate>,
+  stop: () => Promise<T | undefined>,
+  send: (stopped: T) => Promise<void>,
+): Promise<void> {
+  const stopped = await gate.run(stop);
+  if (stopped !== undefined) await send(stopped);
+}

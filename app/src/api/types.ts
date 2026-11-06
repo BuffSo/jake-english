@@ -15,8 +15,8 @@ export type ScriptLine = {
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };
 export type Issue = { target: string; heard: string; sound: [string, string] | null; explain: string };
-// turn and retry happen inside the roleplay; practice (the learner's lines again) and shadow (following Ryan's
-// lines) after it, from the end screen
+// turn and retry are the roleplay's own tries; practice (the learner's lines again) and shadow (following Ryan's
+// lines) are practice tries, from the end screen or from a past bubble mid-roleplay, and never move the roleplay on
 export type AttemptMode = "turn" | "retry" | "practice" | "shadow";
 export type Attempt = {
   n: number;

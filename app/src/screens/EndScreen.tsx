@@ -107,7 +107,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
         {summary && <Text style={styles.section}>주고받은 말</Text>}
         {summary?.lines.map((l) =>
           l.line.speaker === "ryan" ? (
-            <RyanLine key={l.line.idx} l={l} onPlay={play} />
+            <RyanLine key={l.line.idx} l={l} onPlay={play} onFollow={() => practise("shadow", [l.line.idx])} />
           ) : (
             <MyLine key={l.line.idx} id={id} l={l} onPlay={play} onAgain={() => practise("mine", [l.line.idx])} />
           ),
@@ -128,17 +128,23 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   );
 }
 
-function RyanLine({ l, onPlay }: { l: TranscriptLine; onPlay: (src: Source) => void }) {
+// 「따라 말하기 ›」 follows this one line and comes back here, like 「이 줄 다시」 on my lines (spec 3, 2026-11-06)
+function RyanLine({ l, onPlay, onFollow }: { l: TranscriptLine; onPlay: (src: Source) => void; onFollow: () => void }) {
   const audio = l.line.audio;
   return (
     <View style={styles.line}>
       <View style={styles.who}>
         <Text style={styles.whoText}>라이언</Text>
-        {audio && (
-          <Pressable onPress={() => onPlay(api.audioSource(audio))} hitSlop={8}>
-            <Text style={styles.play}>▶ 듣기</Text>
+        <View style={styles.actions}>
+          {audio && (
+            <Pressable onPress={() => onPlay(api.audioSource(audio))} hitSlop={8}>
+              <Text style={styles.play}>▶ 듣기</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={onFollow} hitSlop={8}>
+            <Text style={styles.again}>따라 말하기 ›</Text>
           </Pressable>
-        )}
+        </View>
       </View>
       <Text style={styles.text}>{l.line.text}</Text>
     </View>
@@ -192,6 +198,7 @@ const styles = StyleSheet.create({
   section: { fontSize: 14, fontWeight: "700", color: colors.sub, marginBottom: 6 },
   line: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F1F3F5" },
   who: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  actions: { flexDirection: "row", alignItems: "center", gap: 16 },
   whoText: { fontSize: 13, color: colors.weak },
   text: { fontSize: 17, color: colors.text, lineHeight: 25, marginTop: 2 },
   try: { marginTop: 6 },
