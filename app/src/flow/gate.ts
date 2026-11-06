@@ -29,3 +29,21 @@ export async function stopThenSend<T>(
   const stopped = await gate.run(stop);
   if (stopped !== undefined) await send(stopped);
 }
+
+// One answer per question: the first tap on either choice is taken, and later ones (the second tap of a double tap,
+// before the screen redraws) are ignored until the next question opens it. Unlike the gate it holds nothing while the
+// answer's work runs, so going back in the middle never leaves the next question shut. PR #18 review: a double tap on
+// 「이걸로 할게요」 asked for two scripts.
+export function createLatch() {
+  let open = false;
+  return {
+    open() {
+      open = true;
+    },
+    take(): boolean {
+      if (!open) return false;
+      open = false;
+      return true;
+    },
+  };
+}

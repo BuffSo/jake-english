@@ -6,7 +6,7 @@ import { api } from "../api";
 import type { Home, Roleplay, Said } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
-import { createGate } from "../flow/gate";
+import { createGate, createLatch } from "../flow/gate";
 import { turnDown } from "../flow/turnedDown";
 import { whenSilent } from "../flow/whenSilent";
 import { BackButton, useBackKey } from "../ui/BackButton";
@@ -31,6 +31,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
   const gate = useRef(createGate()).current; // a double tap or the auto-stop must not send the recording twice
   const gen = useRef(0); // bumped by going back (or leaving): an answer to an earlier request is dropped
   const turnedDown = useRef<string[]>([]); // Jake's suggestions turned down on this screen, not suggested again
+  const choice = useRef(createLatch()).current; // one answer per suggestion: a double tap must not ask twice
 
   useEffect(
     () => () => {
@@ -95,6 +96,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
       setJake(said);
       sounds.clear();
       sounds.enqueue(api.audioSource(said.audio));
+      choice.open();
       setStep("confirm");
     } catch (e) {
       if (my !== gen.current) return;
@@ -103,8 +105,13 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     }
   }
 
+  function pick() {
+    if (!jake || !choice.take()) return;
+    create(jake.text, jake);
+  }
+
   function another() {
-    if (!jake) return;
+    if (!jake || !choice.take()) return;
     turnedDown.current = turnDown(turnedDown.current, jake.text);
     sounds.clear(); // Jake stops; the next suggestion is on its way
     recommend();
@@ -193,7 +200,7 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
       {step === "confirm" && jake && (
         <>
           <Text style={[common.body, styles.jake]}>제이크: {jake.text}</Text>
-          <Button label="이걸로 할게요" onPress={() => create(jake.text, jake)} />
+          <Button label="이걸로 할게요" onPress={pick} />
           <Button label="다른 걸로요" onPress={another} kind="plain" />
         </>
       )}

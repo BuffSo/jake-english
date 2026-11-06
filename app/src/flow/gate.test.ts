@@ -1,4 +1,4 @@
-import { createGate, stopThenSend } from "./gate";
+import { createGate, createLatch, stopThenSend } from "./gate";
 
 test("a second call while the first runs is ignored", async () => {
   // PR #12 review: a double tap on 「■ 말하기 끝」 uploaded the same recording twice
@@ -54,4 +54,15 @@ test("a stop that arrives while another runs sends nothing", async () => {
   finish();
   await first;
   expect(send).not.toHaveBeenCalled();
+});
+
+// PR #18 review: a double tap on 「이걸로 할게요」 before the screen redrew asked for two scripts
+test("a latch takes one answer per question", () => {
+  const choice = createLatch();
+  expect(choice.take()).toBe(false); // nothing asked yet
+  choice.open();
+  expect(choice.take()).toBe(true);
+  expect(choice.take()).toBe(false); // the second tap of a double tap
+  choice.open(); // the next suggestion
+  expect(choice.take()).toBe(true);
 });
