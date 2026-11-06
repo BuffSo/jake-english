@@ -135,7 +135,8 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.get("/home")
     def home() -> dict:
         e = engine()
-        return {"lines": {n: e.said(n).model_dump() for n in ("greeting", "ask_mode", "ask_situation", "ask_recommend")},
+        lines = ("greeting", "ask_mode", "ask_again", "ask_situation", "ask_recommend")
+        return {"lines": {n: e.said(n).model_dump() for n in lines},
                 "images": {"front": "/assets/ryan-front.png", "listening": "/assets/ryan-listening.png",
                            "jake": "/assets/jake-front.png",
                            "thinking": {who: [f"/assets/{n}" for n in names] for who, names in THINKING.items()}}}
