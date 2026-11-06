@@ -124,12 +124,12 @@ PRD 「실패로 볼 것」 그대로다. 이 기능에서 특히 조심할 것:
 
 1. 맥이 녹음을 받아쓴다. 받아쓰기에는 대사를 힌트로 주지 않는다(AI 판단). 주면 받아쓰기가 틀린 소리를 대사대로 고쳐 적을 수 있다.
 2. 받아쓴 글과 대사의 표기를 맞춘 뒤 낱말 단위로 맞댄다. 받아쓰기가 표기만 다르게 적은 것은 차이로 보지 않는다(AI 판단). 짚는 범위를 넓히면 이것을 먼저 헛짚기 때문이다.
-   - 숫자: ten과 10, eleven a.m.과 11 a.m., nine o'clock과 9:00, five oh five와 5:05, one thousand의 1,000. 받아쓰기는 o'clock을 9:00으로 적기도 해서, o'clock을 빼고 말해도 짚지 않는다(AI 판단, 2026-11-06 리뷰).
+   - 숫자: ten과 10, eleven a.m.과 11 a.m., nine o'clock과 9:00, five oh five와 5:05, one thousand의 1,000, a hundred dollars와 $100, second와 2nd. 받아쓰기는 o'clock을 9:00으로 적기도 해서, o'clock을 빼고 말해도 짚지 않는다(AI 판단, 2026-11-06 리뷰).
    - 줄여 적은 말: want to와 wanna, going to와 gonna, okay와 OK
    - 문장부호와 대소문자, a.m.과 am
    - 붙여 쓰기와 띄어 쓰기: check-in과 check in, checkout과 check out
    - I'm과 I am처럼 소리가 다른 것은 표기 차이가 아니다. 사용자가 실제로 다르게 말한 것이라 짚는다(AI 판단).
-   - 말하다 막혀 대사의 앞부분을 되풀이한 것(I'd like a… I'd like a cup of coffee)과 um, uh 같은 군말은 짚지 않는다(AI 판단). 다시 시작해서 끝까지 대사대로 말했으면 따라 말한 것이다. 받아쓰기는 군말을 대개 적지 않는다.
+   - 말하다 막혀 대사의 앞부분을 되풀이한 것(I'd like a… I'd like a cup of coffee)과 um, uh 같은 군말은 짚지 않는다(AI 판단). 대사에 적힌 군말도 마찬가지다(2026-11-06 PR 리뷰). 다시 시작해서 끝까지 대사대로 말했으면 따라 말한 것이다. 받아쓰기는 군말을 대개 적지 않는다.
 3. 대사와 다른 곳은 모두 짚을 후보다(사용자).
    - 다르게 들린 낱말: running이 learning으로 들림
    - 빠진 낱말: on이 들리지 않음
