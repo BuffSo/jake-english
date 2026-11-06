@@ -61,7 +61,7 @@ test("no_speech returns to ready with Ryan's words", () => {
 });
 
 test("a reply line is shown and next skips past it", () => {
-  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64) };
+  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64), ko: null, ko_audio: null };
   let s = at("evaluating");
   s = reduce(s, { type: "event", e: { type: "heard", text: "I don't know", followed: false } });
   s = reduce(s, { type: "event", e: { type: "reply", line: reply } });
@@ -109,7 +109,7 @@ test("loading error retries the load", () => {
 
 test("again after an off-script turn keeps Ryan's reply in the conversation", () => {
   // final review: 「다시 해 보기」 cleared the reply, so it never reached the bubbles
-  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64) };
+  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64), ko: null, ko_audio: null };
   let s = at("evaluating");
   s = reduce(s, { type: "event", e: { type: "heard", text: "I don't know", followed: false } });
   s = reduce(s, { type: "event", e: { type: "reply", line: reply } });
@@ -371,7 +371,7 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     const s = midway("ready");
     expect(s.history.map((b) => practiceFor(s, b))).toEqual(["shadow", "mine", null, "shadow"]);
     expect(practiceFor(s, { kind: "user", idx: 3 })).toBeNull(); // the line on screen, tried again
-    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null };
+    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null, ko: null, ko_audio: null };
     expect(practiceFor({ ...s, seen: { ...s.seen, 4: reply } }, { kind: "ryan", idx: 4 })).toBe("shadow");
     const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
     expect(practiceFor(inside, s.history[0])).toBeNull();
