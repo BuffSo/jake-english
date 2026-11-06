@@ -33,11 +33,12 @@ function Pieces({ groups, size }: { groups: Seg[][]; size: number }) {
   );
 }
 
-export function ThreeLineView({ three }: { three: ThreeLine }) {
+// `bare`: no card of its own, inside the 「내 차례」 bubble, which is the same blue (a card there doubled the padding)
+export function ThreeLineView({ three, bare = false }: { three: ThreeLine; bare?: boolean }) {
   const korean = koreanSegments(three);
   const reading = readingSegments(three.reading);
   return (
-    <View style={styles.card}>
+    <View style={bare ? styles.bare : styles.card}>
       <Text style={styles.en}>
         <Pieces groups={englishSegments(three)} size={24} />
       </Text>
@@ -53,6 +54,7 @@ export function ThreeLineView({ three }: { three: ThreeLine }) {
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.user, borderRadius: 14, padding: 14, marginVertical: 6 },
+  bare: { marginVertical: 2 },
   en: { fontSize: 24, color: colors.text, lineHeight: 34 },
   ko: { fontSize: 20, color: colors.text, marginTop: 6, lineHeight: 30 },
   reading: { fontSize: 16, color: colors.sub, marginTop: 8, lineHeight: 23 },

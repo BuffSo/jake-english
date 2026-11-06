@@ -15,7 +15,7 @@ export function LineToSay({ text, three, open, onToggle }: Props) {
   return (
     <View style={styles.wrap}>
       {view === "open" && three && three !== "loading" ? (
-        <ThreeLineView three={three} />
+        <ThreeLineView three={three} bare />
       ) : (
         <Text style={styles.text}>{text}</Text>
       )}
