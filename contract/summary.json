@@ -11,7 +11,9 @@
     "text": "Hi there! What can I get you?",
     "kind": "script",
     "three": null,
-    "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ko": null,
+    "ko_audio": null
    },
    "tries": []
   },
@@ -22,7 +24,9 @@
     "text": "I'd like a cup of coffee.",
     "kind": "script",
     "three": null,
-    "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "ko": null,
+    "ko_audio": null
    },
    "tries": [
     {
@@ -48,7 +52,9 @@
     "text": "Sure. What size would you like?",
     "kind": "script",
     "three": null,
-    "audio": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    "audio": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "ko": null,
+    "ko_audio": null
    },
    "tries": []
   },
@@ -59,7 +65,9 @@
     "text": "A large one, please.",
     "kind": "script",
     "three": null,
-    "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "ko": null,
+    "ko_audio": null
    },
    "tries": [
     {

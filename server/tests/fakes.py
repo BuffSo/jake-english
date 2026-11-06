@@ -135,6 +135,8 @@ class FakeClaude:
         self.fail_continue = False
         self.continue_gate = None  # an asyncio.Event to hold continue_script until set
         self.annotate_gate = None  # an asyncio.Event to hold annotate until set
+        self.interpret_calls: list[dict] = []
+        self.interpret_gate = None  # an asyncio.Event to hold interpret until set
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -153,6 +155,13 @@ class FakeClaude:
             await self.annotate_gate.wait()
         self._maybe_fail()
         return plain(text)
+
+    async def interpret(self, frame, line, before, after):
+        self.interpret_calls.append({"frame": frame.model_dump(), "line": line, "before": before, "after": after})
+        if self.interpret_gate is not None:
+            await self.interpret_gate.wait()
+        self._maybe_fail()
+        return "소희: " + line[1]
 
     async def recommend(self, recent, turned_down=()):
         self.calls.append(("recommend", (recent, list(turned_down))))

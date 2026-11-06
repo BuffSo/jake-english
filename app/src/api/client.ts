@@ -77,6 +77,9 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
     createRoleplay: (situation: string) => post<Roleplay>("/roleplays", { situation }, LONG),
     getLine: (id: string, idx: number) => get<LineWithProgress>(`/roleplays/${id}/lines/${idx}`, LONG),
     getThree: (id: string, idx: number) => get<ThreeLine>(`/roleplays/${id}/lines/${idx}/three`, LONG),
+    // Sohee's interpretation: the text first, then her sound of it (spec korean-translation 4)
+    getKo: (id: string, idx: number) => get<{ text: string }>(`/roleplays/${id}/lines/${idx}/ko`),
+    getKoAudio: (id: string, idx: number) => get<{ audio: string }>(`/roleplays/${id}/lines/${idx}/ko/audio`),
     summary: (id: string) => get<Summary>(`/roleplays/${id}/summary`),
     copyRoleplay: (id: string) => post<Roleplay>(`/roleplays/${id}/copy`, undefined, LONG),
 

@@ -218,3 +218,11 @@ async def test_korean_sounds_made_before_the_pause_fix_are_not_served():
 
     assert audio_key("ryan", "korean", "반가워요.") != old_key("ryan", "korean", "반가워요.")
     assert audio_key("ryan", "english", "Hello.") == old_key("ryan", "english", "Hello.")
+
+
+async def test_sohee_is_the_cloned_voice(voice, tmp_path):
+    # the voice setup falls back to its default voice for a name it does not know, and its plain "sohee" is another
+    # model: the worker must get the cloned voice by name (spec korean-translation 「제약」)
+    key = await voice.say("커피 한 잔 주세요.", "sohee", "korean", urgent=True)
+    rates = (tmp_path / ".tmp" / "rates.txt").read_text(encoding="utf-8").splitlines()
+    assert rates == ["sohee_clone korean 1.0"] and key == audio_key("sohee", "korean", "커피 한 잔 주세요.")

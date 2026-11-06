@@ -16,7 +16,9 @@
    "text": "Hi there! What can I get you?",
    "kind": "script",
    "three": null,
-   "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "ko": null,
+   "ko_audio": null
   },
   {
    "idx": 1,
@@ -106,7 +108,9 @@
     ],
     "reading": "coffee는 앞을 세게, [[카-피]]. 뒤 [[피]]는 짧고 약하게. cup of는 이어서 [[커-퍼]]."
    },
-   "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "ko": null,
+   "ko_audio": null
   },
   {
    "idx": 2,
@@ -114,7 +118,9 @@
    "text": "Sure. Anything else?",
    "kind": "script",
    "three": null,
-   "audio": null
+   "audio": null,
+   "ko": null,
+   "ko_audio": null
   }
  ],
  "attempts": {

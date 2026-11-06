@@ -12,6 +12,9 @@ export type ScriptLine = {
   kind: "script" | "reply";
   three: ThreeLine | null;
   audio: string | null;
+  // Sohee's Korean for the line and its sound key, made on the Mac only when asked (spec korean-translation 5)
+  ko: string | null;
+  ko_audio: string | null;
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };
 export type Issue = { target: string; heard: string; sound: [string, string] | null; explain: string };
@@ -69,7 +72,7 @@ export type AttemptEvent =
 
 // Key lists checked against contract/ by the tests; the type checks below keep them in step with the types.
 export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos"] as const;
-export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio"] as const;
+export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "reply", "error", "done"] as const;
 export const SUMMARY_KEYS = ["say", "lines"] as const;

@@ -112,3 +112,12 @@ test("recommend sends the situations turned down on the screen", async () => {
   expect(url).toBe(`${URL}/recommend`);
   expect(JSON.parse(init.body as string)).toEqual({ skip: ["카페에서 주문하는 상황으로 연습해 보면 어때요?"] });
 });
+
+test("Sohee's interpretation: the text, then its sound", async () => {
+  const f = jest.fn(async (url: string) => json(200, url.endsWith("/audio") ? { audio: "c".repeat(64) } : { text: "뭐 드릴까요?" }));
+  const api = makeApi(URL, TOKEN, f as never, noFile);
+  expect(await api.getKo("abcdef012345", 2)).toEqual({ text: "뭐 드릴까요?" });
+  expect(await api.getKoAudio("abcdef012345", 2)).toEqual({ audio: "c".repeat(64) });
+  const urls = f.mock.calls.map((c) => (c as unknown as [string])[0]);
+  expect(urls).toEqual([`${URL}/roleplays/abcdef012345/lines/2/ko`, `${URL}/roleplays/abcdef012345/lines/2/ko/audio`]);
+});

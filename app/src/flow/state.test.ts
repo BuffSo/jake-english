@@ -61,7 +61,7 @@ test("no_speech returns to ready with Ryan's words", () => {
 });
 
 test("a reply line is shown and next skips past it", () => {
-  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64) };
+  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64), ko: null, ko_audio: null };
   let s = at("evaluating");
   s = reduce(s, { type: "event", e: { type: "heard", text: "I don't know", followed: false } });
   s = reduce(s, { type: "event", e: { type: "reply", line: reply } });
@@ -109,7 +109,7 @@ test("loading error retries the load", () => {
 
 test("again after an off-script turn keeps Ryan's reply in the conversation", () => {
   // final review: 「다시 해 보기」 cleared the reply, so it never reached the bubbles
-  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64) };
+  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64), ko: null, ko_audio: null };
   let s = at("evaluating");
   s = reduce(s, { type: "event", e: { type: "heard", text: "I don't know", followed: false } });
   s = reduce(s, { type: "event", e: { type: "reply", line: reply } });
@@ -293,6 +293,39 @@ describe("notes start closed (spec roleplay-practice 8)", () => {
   });
 });
 
+// --- Sohee's interpretation of the line to say, like the notes (spec korean-translation 2) ---------------------
+
+describe("the line to say starts without Sohee's interpretation (spec korean-translation 2)", () => {
+  test("interpret opens and closes it", () => {
+    const s = reduce(at("ready"), { type: "interpret", open: true });
+    expect(s.interpreting).toBe(true);
+    expect(reduce(s, { type: "interpret", open: false }).interpreting).toBe(false);
+  });
+
+  test("it can open while Ryan or the mic is busy: it only adds a line", () => {
+    expect(reduce(at("recording"), { type: "interpret", open: true }).interpreting).toBe(true);
+  });
+
+  test("nothing to interpret without a line", () => {
+    const s = { ...at("loading"), line: null };
+    expect(reduce(s, { type: "interpret", open: true })).toBe(s);
+  });
+
+  test("again keeps it open; the next line starts closed", () => {
+    expect(reduce(at("evaluated", { interpreting: true }), { type: "again" }).interpreting).toBe(true);
+    const s = reduce(at("evaluated", { interpreting: true, nextIdx: 2 }), { type: "next" });
+    expect(reduce(s, { type: "lineLoaded", line: ryanLine }).interpreting).toBe(false);
+  });
+
+  test("a practice starts closed, from the end or mid-roleplay, and the roleplay comes back as it was", () => {
+    expect(reduce(end({ interpreting: true }), { type: "startPractice", kind: "mine", order: [1] }).interpreting).toBe(false);
+    const before = { ...at("ready", { interpreting: true }), seen: { 0: ryanLine, 1: userLine } };
+    const inside = reduce(before, { type: "practiseLine", kind: "shadow", idx: 0 });
+    expect(inside.interpreting).toBe(false);
+    expect(reduce(inside, { type: "back" }).interpreting).toBe(true);
+  });
+});
+
 // --- one line in the middle of the roleplay (spec roleplay-practice 9) ---------------------------------------------
 
 describe("one line in the middle of the roleplay (spec roleplay-practice 9)", () => {
@@ -371,7 +404,7 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     const s = midway("ready");
     expect(s.history.map((b) => practiceFor(s, b))).toEqual(["shadow", "mine", null, "shadow"]);
     expect(practiceFor(s, { kind: "user", idx: 3 })).toBeNull(); // the line on screen, tried again
-    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null };
+    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null, ko: null, ko_audio: null };
     expect(practiceFor({ ...s, seen: { ...s.seen, 4: reply } }, { kind: "ryan", idx: 4 })).toBe("shadow");
     const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
     expect(practiceFor(inside, s.history[0])).toBeNull();

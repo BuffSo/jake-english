@@ -1,9 +1,9 @@
-"""Ryan and Jake voices through a worker process on the Mac's existing TTS setup (ADR-0009).
+"""Ryan, Jake and Sohee voices through a worker process on the Mac's existing TTS setup (ADR-0009).
 
 One worker, one queue: urgent jobs (Ryan's live feedback) go before prepared ones (model audio for
 later lines). Sounds are cached by sha256(voice|lang|rate|text), with Korean keys also carrying how they were
 made (`MADE`), so the same line is made once.
-Sounds played as they are made once (Jake, Ryan's fixed phrases) can be heard back with whisper and made
+Sounds played as they are made once (Jake, Ryan's fixed phrases, Sohee) can be heard back with whisper and made
 again when their last word is missing.
 """
 from __future__ import annotations
@@ -35,7 +35,12 @@ SPEAK_RATE = {
     ("ryan", "english"): 1.0,
     ("jake", "korean"): 1.0,
     ("jake", "english"): 1.0,
+    ("sohee", "korean"): 1.0,  # Sohee's interpretation (2026-11-06): 1x until the user hears it on the phone
 }
+# The name the worker gets, when it is not the server's own. The voice setup makes a name it does not know in its
+# default voice, without an error, and its plain "sohee" is another model that would load a second one into memory:
+# Sohee is the cloned voice, on the same model as Ryan and Jake (spec korean-translation 「제약」).
+WORKER_VOICE = {"sohee": "sohee_clone"}
 
 
 # Korean sounds are made differently since 2026-11-05: pauses inside a sentence are cut short
@@ -109,7 +114,7 @@ class Voice:
             self.proc = None
             raise
 
-    async def say(self, text: str, voice: Literal["ryan", "jake"], lang: Literal["english", "korean"],
+    async def say(self, text: str, voice: Literal["ryan", "jake", "sohee"], lang: Literal["english", "korean"],
                   urgent: bool, rank: int = 0, check: bool = False) -> str:
         """rank orders prepared jobs (the line number), so the next line's sound is not stuck behind later lines.
         check hears the sound back and makes it again when its last word is missing; it adds a transcription
@@ -161,7 +166,7 @@ class Voice:
     async def _render(self, tmp: Path, text: str, voice: str, lang: str) -> None:
         if self.proc is None or self.proc.returncode is not None:
             await self._spawn()
-        req = {"id": next(self.ids), "text": text, "voice": voice, "lang": lang, "rate": SPEAK_RATE[voice, lang],
+        req = {"id": next(self.ids), "text": text, "voice": WORKER_VOICE.get(voice, voice), "lang": lang, "rate": SPEAK_RATE[voice, lang],
                "out": str(tmp)}
         self.proc.stdin.write((json.dumps(req, ensure_ascii=False) + "\n").encode())
         await self.proc.stdin.drain()

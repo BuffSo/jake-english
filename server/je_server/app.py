@@ -20,6 +20,7 @@ from .claude import ClaudeUnavailable
 from .config import Settings
 from .engine import Engine, NotFound, TooLong
 from .models import Mode
+from .tts import VoiceError
 
 log = logging.getLogger("je_server")
 MAX_UPLOAD = 5 * 1024 * 1024
@@ -204,6 +205,24 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             raise ApiError(404, "not_found") from None
         except ClaudeUnavailable:
             raise claude_down() from None
+
+    @router.get("/roleplays/{rp_id}/lines/{idx}/ko")
+    async def ko(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            return {"text": await engine().ko(rp_id, idx)}
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except ClaudeUnavailable:
+            raise claude_down() from None
+
+    @router.get("/roleplays/{rp_id}/lines/{idx}/ko/audio")
+    async def ko_audio(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            return {"audio": await engine().ko_audio(rp_id, idx)}
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except VoiceError:
+            raise ApiError(503, "voice_unavailable") from None
 
     @router.post("/roleplays/{rp_id}/lines/{idx}/attempts")
     async def attempt(request: Request, rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0),
