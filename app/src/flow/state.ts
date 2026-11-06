@@ -119,16 +119,17 @@ export function practiceFor(s: State, b: Pick<Bubble, "kind" | "idx">): "mine" |
   return null;
 }
 
-// Whether leaving needs 「역할극을 그만둘까요?」 first: only when a roleplay in progress would be lost.
-export function askFirst(s: State, a: "back" | "home"): boolean {
-  if (!s.practice) return true;
-  return s.practice.from === "roleplay" && a === "home";
+// Whether going back needs 「역할극을 그만둘까요?」 first: only when a roleplay in progress would be lost. Back from
+// a practice returns to the roleplay or the end screen, so nothing is lost. Back is the only way out of the screen
+// since 「처음으로」 went (2026-11-06 user).
+export function askFirst(s: State): boolean {
+  return !s.practice;
 }
 
 // Whether the roleplay screen goes away. Back from a line practised mid-roleplay stays on it, so the screen must
 // drop only that practice's recording and stream, not everything after it.
-export function leavesScreen(s: State, a: "back" | "home"): boolean {
-  return !(s.practice?.from === "roleplay" && a === "back");
+export function leavesScreen(s: State): boolean {
+  return s.practice?.from !== "roleplay";
 }
 
 // What the screen remembers to play a line's model once. Inside a practice it carries the practice number: the
@@ -208,7 +209,7 @@ export function reduce(s: State, a: Action): State {
       return s;
     }
     case "failed":
-      // only a request this screen is waiting for can fail it; a stream left behind by 「처음으로」 cannot
+      // only a request this screen is waiting for can fail it; a stream left behind on leaving cannot
       if (s.screen !== "roleplay" || (s.phase !== "loading" && s.phase !== "evaluating")) return s;
       return { ...s, phase: "error", message: messageFor(a.code, a.say), errorFrom: s.phase === "loading" ? "loading" : "evaluating" };
     case "retry":
