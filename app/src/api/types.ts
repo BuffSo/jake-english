@@ -47,11 +47,26 @@ export type Roleplay = {
 export type Said = { text: string; audio: string };
 // thinking-face picture paths per person, cross-faded while the app waits (/home `images.thinking`)
 export type Thinking = { jake: string[]; ryan: string[] };
+// A situation topic and its prepared list (spec situation-topics 1, 3). The Mac keeps what Claude gets; the app only
+// shows the names and sends the ids back.
+export type Topic = { id: string; name_ko: string; placeholder_ko: string; picks: { id: string; title_ko: string }[] };
 export type Home = {
-  // ask_again: said instead of greeting + ask_mode when the learner comes back (absent on an older server)
-  lines: { greeting: Said; ask_mode: Said; ask_again?: Said; ask_situation: Said; ask_recommend: Said };
+  // ask_again: said instead of greeting + ask_mode when the learner comes back (absent on an older server).
+  // ask_topic, ask_how, ask_pick, ask_describe: the situation screen's steps (spec situation-topics 6)
+  lines: {
+    greeting: Said;
+    ask_mode: Said;
+    ask_again?: Said;
+    ask_situation: Said;
+    ask_recommend: Said;
+    ask_topic: Said;
+    ask_how: Said;
+    ask_pick: Said;
+    ask_describe: Said;
+  };
   // jake: Jake's front picture, shown while his suggestion waits for the learner's pick (absent on an older server)
   images: { front: string; listening: string; jake?: string; thinking: Thinking };
+  topics: Topic[];
 };
 export type Progress = { no: number; total: number }; // 「내 대사 no/total」
 export type LineWithProgress = ScriptLine & { progress: Progress };

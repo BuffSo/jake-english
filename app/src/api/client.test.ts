@@ -35,7 +35,7 @@ test("sends bearer token", async () => {
 test("503 becomes claude_unavailable with say", async () => {
   const say = { text: "지금은 대답할 수 없어요.", audio: "a".repeat(64) };
   const f = jest.fn(async () => json(503, { code: "claude_unavailable", say }));
-  const err = await makeApi(URL, TOKEN, f as never, noFile).createRoleplay("길 묻기").catch((e) => e);
+  const err = await makeApi(URL, TOKEN, f as never, noFile).createRoleplay({ situation: "길 묻기" }, "other").catch((e) => e);
   expect(err).toBeInstanceOf(ApiError);
   expect(err.code).toBe("claude_unavailable");
   expect(err.say).toEqual(say);
@@ -107,10 +107,20 @@ test("attempt sends the shadow mode", async () => {
 
 test("recommend sends the situations turned down on the screen", async () => {
   const f = jest.fn(async () => json(200, { text: "호텔에서 체크인하는 상황으로 연습해 보면 어때요?", audio: "a".repeat(64) }));
-  await makeApi(URL, TOKEN, f as never, noFile).recommend(["카페에서 주문하는 상황으로 연습해 보면 어때요?"]);
+  await makeApi(URL, TOKEN, f as never, noFile).recommend(["카페에서 주문하는 상황으로 연습해 보면 어때요?"], "usa");
   const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
   expect(url).toBe(`${URL}/recommend`);
-  expect(JSON.parse(init.body as string)).toEqual({ skip: ["카페에서 주문하는 상황으로 연습해 보면 어때요?"] });
+  // Jake suggests inside the topic the learner picked (spec situation-topics 4)
+  expect(JSON.parse(init.body as string)).toEqual({ skip: ["카페에서 주문하는 상황으로 연습해 보면 어때요?"], topic: "usa" });
+});
+
+test("a list pick goes by its id, not its text", async () => {
+  // the Mac looks up the list line's description and who speaks first (spec situation-topics, builder notes)
+  const f = jest.fn(async () => json(200, {}));
+  await makeApi(URL, TOKEN, f as never, noFile).createRoleplay({ pick: "u-hotel-checkin" }, "usa");
+  const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe(`${URL}/roleplays`);
+  expect(JSON.parse(init.body as string)).toEqual({ pick: "u-hotel-checkin", topic: "usa" });
 });
 
 test("Sohee's interpretation: the text, then its sound", async () => {

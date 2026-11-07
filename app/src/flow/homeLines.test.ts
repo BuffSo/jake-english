@@ -8,6 +8,10 @@ const lines: Home["lines"] = {
   ask_again: said("ask_again"),
   ask_situation: said("ask_situation"),
   ask_recommend: said("ask_recommend"),
+  ask_topic: said("ask_topic"),
+  ask_how: said("ask_how"),
+  ask_pick: said("ask_pick"),
+  ask_describe: said("ask_describe"),
 };
 
 test("when the app has just started Ryan greets, then asks which way to talk", () => {
