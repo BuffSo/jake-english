@@ -58,11 +58,16 @@ class Store:
         return items
 
     def save_saved(self, items: list[Saved]) -> None:
-        """Writes the list. A file that could not be read whole is kept once as saved.broken.json before it is
-        replaced, so what was in it can still be put back by hand."""
-        path, broken = self.root / "saved.json", self.root / "saved.broken.json"
-        if path.exists() and not self._read_saved()[1] and not broken.exists():
+        """Writes the list. A file that could not be read whole is first kept as saved.broken.json (then
+        saved.broken.2.json and so on, never over an earlier copy), so what was in it can still be put back by hand
+        (final review: a second breakage used to be lost). The copies stay in the app data folder until removed."""
+        path = self.root / "saved.json"
+        if path.exists() and not self._read_saved()[1]:
+            n = 1
+            while (broken := self.root / ("saved.broken.json" if n == 1 else f"saved.broken.{n}.json")).exists():
+                n += 1
             path.replace(broken)
+            log.warning("kept unreadable saved sentences as %s", broken.name)
         self._write(path, json.dumps([s.model_dump() for s in items], ensure_ascii=False, indent=1))
 
     def _read_saved(self) -> tuple[list[Saved], bool]:

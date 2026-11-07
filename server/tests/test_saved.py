@@ -112,3 +112,25 @@ async def test_saving_over_an_unreadable_saved_file_keeps_a_copy(engine):
     await engine.set_saved(rp.id, 1, True)
     assert [i["idx"] for i in engine.saved()] == [1]
     assert (engine.store.root / "saved.broken.json").read_text(encoding="utf-8") == "{ not json"
+
+
+async def test_a_saved_file_with_one_unreadable_entry_is_kept_before_saving(engine):
+    rp = await engine.create("길 묻기")
+    await engine.set_saved(rp.id, 1, True)
+    path = engine.store.root / "saved.json"
+    path.write_text(path.read_text(encoding="utf-8").replace("[", '[{"key": 3},', 1), encoding="utf-8")
+    before = path.read_text(encoding="utf-8")
+    await engine.set_saved(rp.id, 2, True)
+    assert (engine.store.root / "saved.broken.json").read_text(encoding="utf-8") == before
+
+
+async def test_a_second_unreadable_saved_file_gets_its_own_copy(engine):
+    # final review: the copy was made only while saved.broken.json did not exist, so a second breakage was lost
+    rp = await engine.create("길 묻기")
+    root = engine.store.root
+    (root / "saved.json").write_text("{ first", encoding="utf-8")
+    await engine.set_saved(rp.id, 1, True)
+    (root / "saved.json").write_text("{ second", encoding="utf-8")
+    await engine.set_saved(rp.id, 2, True)
+    assert (root / "saved.broken.json").read_text(encoding="utf-8") == "{ first"
+    assert (root / "saved.broken.2.json").read_text(encoding="utf-8") == "{ second"
