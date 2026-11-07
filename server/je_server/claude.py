@@ -9,10 +9,11 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import anthropic
+import httpx2  # the HTTP client the anthropic SDK uses
 from pydantic import ValidationError
 
 from . import prompts
-from .models import Draft, Frame, Issue, Offscript, Speaker, ThreeLine
+from .models import Draft, Frame, Issue, Speaker, ThreeLine
 from .threeline import Problem, check, degrade, plain
 from .topics import Topic
 
@@ -216,47 +217,11 @@ class Claude:
             raise ClaudeUnavailable("empty recommendation")
         return text
 
-    # --- the learner said something else -------------------------------------------------------
+    # --- the conversation sent along ---------------------------------------------------------
 
     @staticmethod
     def _talk(frame: Frame, history: Draft) -> dict:
         return {"상황": frame.model_dump(), "지금까지 대화": [{"speaker": s, "text": t} for s, t in history]}
-
-    async def offscript(self, frame: Frame, history: Draft, expected: str, heard: str) -> Offscript:
-        body = {**self._talk(frame, history), "대본의 대사": expected, "학습자가 한 말(받아쓴 글)": heard}
-        data = await self._json(self.writer, prompts.OFFSCRIPT_SYSTEM, json.dumps(body, ensure_ascii=False),
-                                prompts.OFFSCRIPT_SCHEMA, 1000, live=True)
-        try:
-            out = Offscript.model_validate(data)
-        except ValidationError as e:
-            raise ClaudeUnavailable("bad off-script answer") from e
-        out.reply_en = _spoken(out.reply_en)
-        if not out.reply_en:
-            raise ClaudeUnavailable("empty reply")
-        return out
-
-    async def continue_script(self, frame: Frame, history: Draft, user_turns: int) -> Draft:
-        body = json.dumps({**self._talk(frame, history), "학습자 대사 수": user_turns}, ensure_ascii=False)
-        problems: list[str] = []
-        for _ in range(2):
-            content = body if not problems else f"{body}\n\nThe last answer had problems. Fix them:\n{_problems_text(problems)}"
-            data = await self._json(self.writer, prompts.CONTINUE_SYSTEM, content, prompts.CONTINUE_SCHEMA, 3000)
-            try:
-                draft: Draft = [(l["speaker"], _spoken(l["text"])) for l in data["lines"]]
-            except (TypeError, KeyError):
-                problems = ["the answer did not follow the JSON format"]
-                continue
-            problems = []
-            if not draft or draft[0][0] != "user":  # either may end it (spec situation-topics 5)
-                problems.append("start with the learner")
-            if any(a[0] == b[0] for a, b in zip(draft, draft[1:])):
-                problems.append("lines must alternate")
-            turns = sum(1 for sp, _ in draft if sp == "user")
-            if turns != user_turns:  # exact, like make_script (PR #12 review)
-                problems.append(f"the learner must have {user_turns} lines, not {turns}")
-            if not problems:
-                return draft
-        raise ClaudeUnavailable("could not continue the script")
 
     # --- feedback on a followed line ----------------------------------------------------------
 
@@ -268,19 +233,52 @@ class Claude:
             "대사": line,
             "들린 말": heard,
             "잘한 점 후보": praise,
-            "짚을 것": [{"대사 낱말": i.target, "들린 낱말": i.heard, "소리 내는 법": i.explain} for i in issues],
+            "짚을 것": _points(issues),
             "마지막 대사": last,
         }
         kw = {k: v for k, v in self.quick.items() if k != "effort"}
+        async for text in self._stream(kw, prompts.FEEDBACK_SYSTEM, found, 800):
+            yield text
+
+    # --- teacher Ryan, when the line was not followed -------------------------------------------
+
+    async def aside(self, frame: Frame, history: Draft, line: str, heard: str, heard_ko: str | None,
+                    issues: list[Issue], earlier: list[tuple[str, str]]) -> AsyncIterator[str]:
+        """Streams teacher Ryan's Korean answer to a recording that did not follow the line (spec offscript-aside
+        3), on the writer model. `heard` is the English transcript, `heard_ko` the Korean one when auto-detection
+        heard Korean, `issues` what the Mac found against the line, `earlier` the asides before on this line as
+        (heard, Ryan's answer). Only text goes out (ADR-0004)."""
+        body = {
+            **self._talk(frame, history),
+            "대사": line,
+            "들린 말(영어 받아쓰기)": heard,
+            "들린 말(한국어 받아쓰기)": heard_ko or "",
+            "짚을 것": _points(issues),
+            "앞서 선생님에게 한 말": [{"들린 말": h, "라이언의 답": a} for h, a in earlier],
+        }
+        async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600):
+            yield text
+
+    async def _stream(self, kw: dict[str, Any], system: str, body: dict, max_tokens: int) -> AsyncIterator[str]:
+        """A live call streamed as text; an empty output_config is left out."""
+        if not kw.get("output_config", True):
+            kw = {k: v for k, v in kw.items() if k != "output_config"}
         try:
             async with self._client(live=True).messages.stream(
-                **kw, max_tokens=800, system=prompts.FEEDBACK_SYSTEM,
-                messages=[{"role": "user", "content": json.dumps(found, ensure_ascii=False)}],
+                **kw, max_tokens=max_tokens, system=system,
+                messages=[{"role": "user", "content": json.dumps(body, ensure_ascii=False)}],
             ) as stream:
                 async for text in stream.text_stream:
                     yield text
-        except anthropic.APIConnectionError as e:
+        except (anthropic.APIConnectionError, httpx2.TransportError) as e:
+            # the SDK raises a transport error met while reading the stream (a dropped connection, a read timeout
+            # between pieces) as it is, not as APIConnectionError (final review, 2026-11-07)
             raise ClaudeUnavailable("connection") from e
         except anthropic.APIStatusError as e:
             log.info("claude api status %d", e.status_code)
             raise ClaudeUnavailable(f"status {e.status_code}") from e
+
+
+def _points(issues: list[Issue]) -> list[dict[str, str]]:
+    """The Mac's points as the prompts name them."""
+    return [{"대사 낱말": i.target, "들린 낱말": i.heard, "소리 내는 법": i.explain} for i in issues]

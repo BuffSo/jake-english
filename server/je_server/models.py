@@ -77,6 +77,9 @@ class Attempt(BaseModel):
     timings: dict[str, float]
     # when it was recorded, ISO to the second; None on tries made before 2026-11-07 (ADR-0011)
     at: str | None = None
+    # the line was not followed and teacher Ryan answered: not a turn, kept out of the end screen, the conversation
+    # and the past-situation list (spec offscript-aside 6). Absent on tries from before 2026-11-07.
+    aside: bool = False
 
 
 class Roleplay(BaseModel):
@@ -107,13 +110,3 @@ class Saved(BaseModel):
 class Said(BaseModel):
     text: str
     audio: str
-
-
-class Offscript(BaseModel):
-    """Claude's answer when the learner said something other than the line."""
-
-    point_kind: Literal["none", "expression", "pronunciation"]
-    point_ko: str
-    meant: str
-    heard_word: str
-    reply_en: str

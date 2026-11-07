@@ -111,3 +111,9 @@ def test_first_try_not_from_the_same_sentence_in_this_run():
     twice.attempts[3] = [Attempt(n=1, mode="turn", heard="x", followed=True, issues=[], say_ko="", audio=[],
                                  timings={}, at="2026-11-05T10:03:00")]
     assert first_try([twice], twice, 3) is None
+
+
+def test_aside_only_run_is_not_a_past_situation():
+    run = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", False, None)]})
+    run.attempts[1][0].aside = True
+    assert not spoken(run) and past_items([run]) == []

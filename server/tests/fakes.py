@@ -8,7 +8,7 @@ import anthropic
 import httpx2
 
 from je_server.claude import ClaudeUnavailable
-from je_server.models import Frame, Offscript, ThreeLine
+from je_server.models import Frame, ThreeLine
 from je_server.threeline import plain
 
 
@@ -50,6 +50,8 @@ class _Stream:
     def text_stream(self):
         async def gen():
             for piece in self.item:
+                if isinstance(piece, Exception):  # the connection fails after the pieces before it
+                    raise piece
                 yield piece
         return gen()
 
@@ -131,15 +133,14 @@ class FakeClaude:
         self.fail_next = False
         self.calls: list[tuple[str, tuple]] = []
         self.feedback_calls: list[dict] = []
-        self.offscript_calls: list[dict] = []
-        self.offscript_out = Offscript(point_kind="expression", point_ko="이럴 때는 I'm not sure처럼 말해도 좋아요.",
-                                       meant="", heard_word="", reply_en="Oh, no worries. Thanks anyway!")
-        self.fail_continue = False
-        self.continue_gate = None  # an asyncio.Event to hold continue_script until set
         self.annotate_gate = None  # an asyncio.Event to hold annotate until set
         self.interpret_calls: list[dict] = []
         self.interpret_gate = None  # an asyncio.Event to hold interpret until set
         self.script_last = "ryan"  # who ends the scripts make_script gives
+        self.aside_calls: list[dict] = []
+        self.aside_pieces = ["괜찮아요, 말이 꼬일 수 있어요. ", "다시 해 볼까요?"]
+        # pieces given before aside() fails; 0 fails at once. Not fail_next: background notes may take that first.
+        self.aside_fail_after: int | None = None
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -179,23 +180,15 @@ class FakeClaude:
         for piece in self.feedback_pieces:
             yield piece
 
-    async def offscript(self, frame, history, expected, heard):
-        self.offscript_calls.append({"frame": frame.model_dump(), "history": history, "expected": expected,
-                                     "heard": heard})
+    async def aside(self, frame, history, line, heard, heard_ko, issues, earlier):
+        self.aside_calls.append({"frame": frame.model_dump(), "history": history, "line": line, "heard": heard,
+                                 "heard_ko": heard_ko, "issues": [i.model_dump() for i in issues],
+                                 "earlier": list(earlier)})
         self._maybe_fail()
-        return self.offscript_out
-
-    async def continue_script(self, frame, history, user_turns):
-        self.calls.append(("continue_script", (user_turns, list(history))))
-        if self.continue_gate is not None:
-            await self.continue_gate.wait()
-        if self.fail_continue:
-            raise ClaudeUnavailable("fake")
-        draft = []
-        for i in range(user_turns):
-            draft += [("user", f"Maybe ask at the shop number {i}."), ("ryan", "Good idea." if i < user_turns - 1
-                                                                       else "Thanks for your help!")]
-        return draft
+        for n, piece in enumerate(self.aside_pieces):
+            if self.aside_fail_after is not None and n >= self.aside_fail_after:
+                raise ClaudeUnavailable("fake")
+            yield piece
 
 
 class FakeVoice:
@@ -240,6 +233,8 @@ class FakeWhisper:
         self.text = text
         self.calls = 0
         self.langs: list[str] = []
+        self.auto_text: str | None = None  # what auto-detection hears; None: the same as `text`
+        self.auto_lang = "english"
 
     async def start(self):
         pass
@@ -251,3 +246,8 @@ class FakeWhisper:
         self.calls += 1
         self.langs.append(lang)
         return self.text
+
+    async def transcribe_auto(self, wav):
+        self.calls += 1
+        self.langs.append("auto")
+        return (self.auto_text if self.auto_text is not None else self.text), self.auto_lang

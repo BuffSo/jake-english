@@ -5,5 +5,4 @@
 {"type": "text", "delta": "P는 두 입술을 붙였다가 터뜨리지만, F는 윗니를 아랫입술에 살짝 대고 바람을 내보내요."}
 {"type": "audio", "key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}
 {"type": "done", "next": 2, "issues": 1}
-{"type": "reply", "line": {"idx": 2, "speaker": "ryan", "text": "Oh, no worries. Let me ask someone else.", "kind": "reply", "three": null, "audio": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}}
 {"type": "error", "code": "no_speech", "say": {"text": "잘 안 들렸어요. 한 번 더 말해 줄래요?", "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}
