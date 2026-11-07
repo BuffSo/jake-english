@@ -76,7 +76,7 @@ async def test_recommend_passes_turned_down(engine, fake_claude):
     await engine.create("길 묻기")
     await engine.recommend(["카페에서 주문하는 상황으로 연습해 보면 어때요?"])
     asked = [args for name, args in fake_claude.calls if name == "recommend"]
-    assert asked == [(["길 묻기"], ["카페에서 주문하는 상황으로 연습해 보면 어때요?"])]
+    assert asked == [(["길 묻기"], ["카페에서 주문하는 상황으로 연습해 보면 어때요?"], "other")]
 
 
 async def test_fixed_phrases_are_checked(engine, fake_voice):
@@ -263,3 +263,29 @@ async def test_attempt_records_when(engine_with_rp, speech_bytes, fake_whisper):
     [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
     at = engine.load(rp_id).attempts[user_idx][0].at
     assert at is not None and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d", at)
+
+
+# --- situation topics (spec situation-topics 4, 7) ---------------------------------------------------------------
+
+async def test_create_keeps_the_topic(engine, fake_claude):
+    rp = await engine.create("관광객이 길을 묻는다.", "tourist")
+    assert engine.store.load(rp.id).topic == "tourist"
+    assert ("make_script", ("관광객이 길을 묻는다.", "tourist", None)) in fake_claude.calls
+
+
+async def test_create_from_a_pick_starts_with_its_speaker(engine, fake_claude):
+    rp = await engine.create("호텔 프런트에서 체크인한다.", "usa", first="user")
+    assert rp.lines[0].speaker == "user"
+    assert engine.progress(rp.id, 0) == {"no": 1, "total": 3}
+
+
+async def test_copy_keeps_the_topic(engine):
+    rp = await engine.create("호텔 체크인", "usa")
+    assert (await engine.copy(rp.id)).topic == "usa"
+
+
+async def test_recommend_avoids_recent_of_the_same_topic(engine, fake_claude):
+    await engine.create("호텔 체크인", "usa")
+    await engine.create("관광객 길 안내", "tourist")
+    await engine.recommend([], "usa")
+    assert [a for n, a in fake_claude.calls if n == "recommend"][-1] == (["호텔 체크인"], [], "usa")

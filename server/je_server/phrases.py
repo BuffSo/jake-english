@@ -7,6 +7,11 @@ PHRASES: dict[str, str] = {
     "ask_again": "이번에는 어떤 방식으로 대화해 볼까요?",
     "ask_situation": "어떤 상황으로 연습해 볼까요? 말하거나 써 주세요. 정하기 어려우면 제이크가 추천해 줄 거예요.",
     "ask_recommend": "제이크에게 상황을 하나 추천받아 볼까요?",
+    # the situation screen's steps (spec situation-topics 2, 6). ask_situation stays for an app from before topics.
+    "ask_topic": "어떤 주제로 연습해 볼까요?",
+    "ask_how": "어떻게 상황을 정할까요?",
+    "ask_pick": "해 보고 싶은 상황을 골라 주세요.",
+    "ask_describe": "어떤 상황인지 말하거나 써 주세요.",
     "closing_retry": "역할극 끝! 수고했어요. 고칠 것이 남았던 대사를 다시 해 볼까요?",
     "closing_clean": "역할극 끝! 수고했어요. 오늘 정말 잘했어요.",
     "no_speech": "잘 안 들렸어요. 한 번 더 말해 줄래요?",

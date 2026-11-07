@@ -5,7 +5,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi import Path as PathParam
@@ -13,8 +13,9 @@ from fastapi import Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from . import topics
 from .auth import RequestGuard, token_checker
 from .claude import ClaudeUnavailable
 from .config import Settings
@@ -73,8 +74,27 @@ class ApiError(Exception):
         self.status, self.code, self.say = status, code, say
 
 
+TopicId = Literal[tuple(t.id for t in topics.TOPICS)]  # type: ignore[valid-type]
+
+
 class NewRoleplay(BaseModel):
-    situation: str = Field(min_length=1, max_length=300)
+    """A situation the learner described or Jake suggested, or a line of the topic's list (spec situation-topics).
+    Without a topic (an app from before topics) it is 「그 밖의 상황」."""
+
+    situation: str | None = Field(None, min_length=1, max_length=300)
+    pick: str | None = Field(None, max_length=40)
+    topic: TopicId = topics.OTHER
+
+    @model_validator(mode="after")
+    def one_of(self) -> NewRoleplay:
+        if (self.situation is None) == (self.pick is None):
+            raise ValueError("give a situation or a pick")
+        if self.pick is not None:
+            try:
+                topics.pick(self.topic, self.pick)
+            except KeyError:
+                raise ValueError("no such pick in the topic") from None
+        return self
 
 
 class SavedChange(BaseModel):
@@ -87,6 +107,7 @@ class Recommend(BaseModel):
     # Jake's suggestions turned down on the situation screen (「다른 걸로요」, 2026-11-06), so they do not come
     # back. Limited like the situation itself; the app keeps the last TURNED_DOWN_MAX.
     skip: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=10)
+    topic: TopicId = topics.OTHER
 
 
 async def read_body(request: Request) -> bytes:
@@ -142,8 +163,9 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.get("/home")
     def home() -> dict:
         e = engine()
-        lines = ("greeting", "ask_mode", "ask_again", "ask_situation", "ask_recommend")
-        return {"lines": {n: e.said(n).model_dump() for n in lines},
+        lines = ("greeting", "ask_mode", "ask_again", "ask_situation", "ask_recommend", "ask_topic", "ask_how",
+                 "ask_pick", "ask_describe")
+        return {"lines": {n: e.said(n).model_dump() for n in lines}, "topics": topics.public(),
                 "images": {"front": "/assets/ryan-front.png", "listening": "/assets/ryan-listening.png",
                            "jake": "/assets/jake-front.png",
                            "thinking": {who: [f"/assets/{n}" for n in names] for who, names in THINKING.items()}}}
@@ -175,14 +197,20 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.post("/recommend")
     async def recommend(body: Recommend | None = None) -> dict:
         try:
-            return (await engine().recommend(body.skip if body else [])).model_dump()
+            body = body or Recommend()
+            return (await engine().recommend(body.skip, body.topic)).model_dump()
         except ClaudeUnavailable:
             raise claude_down() from None
 
     @router.post("/roleplays")
     async def create(body: NewRoleplay) -> dict:
         try:
-            return (await engine().create(body.situation.strip())).model_dump(mode="json")
+            if body.pick is not None:
+                p = topics.pick(body.topic, body.pick)
+                rp = await engine().create(p.situation, body.topic, p.first)
+            else:
+                rp = await engine().create(body.situation.strip(), body.topic)
+            return rp.model_dump(mode="json")
         except ClaudeUnavailable:
             raise claude_down() from None
 

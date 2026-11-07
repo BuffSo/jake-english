@@ -74,8 +74,9 @@ class Store:
                     log.warning("unreadable roleplay %s", d.name)
         return found
 
-    def recent_situations(self, n: int = 10) -> list[str]:
-        found = [(rp.created, rp.situation) for rp in self.all()]
+    def recent_situations(self, n: int = 10, topic: str = "other") -> list[str]:
+        """The topic's latest situations, for Jake to avoid. A roleplay from before topics counts as "other"."""
+        found = [(rp.created, rp.situation) for rp in self.all() if (rp.topic or "other") == topic]
         return [s for _, s in sorted(found, reverse=True)[:n]]
 
     def next_rec(self, rp_id: str, idx: int) -> tuple[int, Path]:

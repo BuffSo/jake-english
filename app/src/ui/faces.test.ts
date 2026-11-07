@@ -5,7 +5,9 @@ test("Jake's face while his suggestion waits for the learner's pick", () => {
 });
 
 test("Ryan's listening face when Ryan asks or waits for the situation", () => {
-  expect(circleFace("input", "jake", true)).toBe("listening");
+  expect(circleFace("describe", "jake", true)).toBe("listening");
+  expect(circleFace("topic", "jake", true)).toBe("listening");
+  expect(circleFace("how", "listening", true)).toBe("listening");
   expect(circleFace("askRecommend", "listening", true)).toBe("listening");
 });
 

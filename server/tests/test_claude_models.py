@@ -12,6 +12,7 @@ import pytest
 from fakes import FakeAnthropic, script_json
 from je_server.claude import HAIKU, QUICKS, SONNET, WRITERS, Claude
 from je_server.config import load_settings
+from je_server.topics import get
 
 TOKEN = {"JE_TOKEN": "x" * 32}
 
@@ -72,7 +73,7 @@ def test_a_role_keeps_its_settings_when_the_model_changes():
 @pytest.mark.anyio
 async def test_haiku_writer_request():
     fake = FakeAnthropic([script_json(user_turns=3)])
-    await Claude(fake, writer=WRITERS["haiku"]).make_script("길 묻기")
+    await Claude(fake, writer=WRITERS["haiku"]).make_script("길 묻기", get("other"))
     r = fake.requests[0]
     assert r["model"] == "claude-haiku-5-5" and r["thinking"] == {"type": "disabled"}
     assert r["output_config"]["effort"] == "low" and r["output_config"]["format"]["type"] == "json_schema"
@@ -81,7 +82,7 @@ async def test_haiku_writer_request():
 @pytest.mark.anyio
 async def test_opus_writer_request_leaves_thinking_unset():
     fake = FakeAnthropic([script_json(user_turns=3)])
-    await Claude(fake, writer=WRITERS["opus"]).make_script("길 묻기")
+    await Claude(fake, writer=WRITERS["opus"]).make_script("길 묻기", get("other"))
     r = fake.requests[0]
     assert r["model"] == "claude-opus-5-5" and "thinking" not in r and r["output_config"]["effort"] == "low"
 
@@ -89,7 +90,7 @@ async def test_opus_writer_request_leaves_thinking_unset():
 @pytest.mark.anyio
 async def test_sonnet_quick_request():
     fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황으로 연습하고 싶어."})])
-    await Claude(fake, quick=QUICKS["sonnet"]).recommend([])
+    await Claude(fake, quick=QUICKS["sonnet"]).recommend([], [], get("other"))
     r = fake.requests[0]
     assert r["model"] == "claude-sonnet-5-5" and r["thinking"] == {"type": "between_tools"}
     assert "effort" not in r["output_config"]

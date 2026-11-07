@@ -605,3 +605,47 @@ test("a past view knows its lines, so practice shows the line before (final revi
   const s = reduce(past, { type: "startPractice", kind: "mine", order: [1] });
   expect(s.seen[0]).toEqual(rp.lines[0]);
 });
+
+describe("situation topics (spec situation-topics 2, 5)", () => {
+  const from = { topic: "usa", step: "list" as const };
+  const started = () => reduce(situation, { type: "created", roleplay: rp, from });
+
+  test("back from a roleplay returns to the step the situation came from", () => {
+    // picking another card should not mean choosing the topic and the way again
+    const s = reduce(reduce(started(), { type: "lineLoaded", line: ryanLine }), { type: "back" });
+    expect([s.screen, s.situationFrom, s.roleplay]).toEqual(["situation", from, null]);
+    const e = reduce({ ...started(), screen: "end" }, { type: "back" });
+    expect([e.screen, e.situationFrom]).toEqual(["situation", from]);
+  });
+
+  test("restarting keeps where back leads", () => {
+    const copy = { ...rp, id: "b".repeat(12) };
+    const s = reduce({ ...started(), screen: "end" }, { type: "restarted", roleplay: copy });
+    expect(reduce(s, { type: "back" }).situationFrom).toEqual(from);
+  });
+
+  test("choosing roleplay on the home screen starts at the topics", () => {
+    expect(reduce(initial, { type: "chooseRoleplay" }).situationFrom).toBeNull();
+    expect(reduce(situation, { type: "created", roleplay: rp }).situationFrom).toBeNull();
+  });
+
+  const mineFirst: Roleplay = { ...rp, lines: rp.lines.slice(1).map((l, i) => ({ ...l, idx: i })) };
+
+  test("a script that starts with my line starts on my turn", () => {
+    // in the US the learner asks first (user, 2026-11-07)
+    const first = mineFirst.lines[0];
+    expect(first.speaker).toBe("user");
+    const s = reduce(reduce(situation, { type: "created", roleplay: mineFirst }), { type: "lineLoaded", line: first });
+    expect([s.phase, s.history]).toEqual(["ready", []]);
+  });
+
+  test("a script that ends with my line ends after it", () => {
+    const last = { ...userLine, idx: 4 };
+    let s = reduce(reduce(situation, { type: "created", roleplay: rp }), { type: "lineLoaded", line: last });
+    s = reduce(reduce({ ...s, idx: 4 }, { type: "recordStart" }), { type: "recordStop" });
+    s = reduce(s, { type: "event", e: { type: "done", next: 5, issues: 0 } });
+    s = reduce(s, { type: "next" });
+    expect([s.idx, s.phase]).toEqual([5, "loading"]);
+    expect(reduce(s, { type: "lineMissing" }).screen).toBe("end");
+  });
+});

@@ -24,7 +24,8 @@ def test_routes_need_token(settings, engine, fake_voice, fake_whisper):
 
 def test_home_lists_fixed_lines(client):
     j = client.get("/home").json()
-    assert set(j["lines"]) == {"greeting", "ask_mode", "ask_again", "ask_situation", "ask_recommend"}
+    assert set(j["lines"]) == {"greeting", "ask_mode", "ask_again", "ask_situation", "ask_recommend", "ask_topic",
+                               "ask_how", "ask_pick", "ask_describe"}
     assert all(len(v["audio"]) == 64 for v in j["lines"].values())
     assert j["images"] == {
         "front": "/assets/ryan-front.png",
@@ -98,7 +99,7 @@ def test_recommend_route(client):
 def test_recommend_route_takes_turned_down(client, fake_claude):
     skip = ["카페에서 주문하는 상황으로 연습해 보면 어때요?"]
     assert client.post("/recommend", json={"skip": skip}).status_code == 200
-    assert [a for n, a in fake_claude.calls if n == "recommend"][-1] == ([], skip)
+    assert [a for n, a in fake_claude.calls if n == "recommend"][-1] == ([], skip, "other")
     assert client.post("/recommend", json={}).status_code == 200  # what the app sent before 2026-11-06
     # the list and each item are limited (REVIEW.md 「맥 서버 보안」: no upload without a size limit)
     for bad in (["x"] * 11, ["x" * 301], "x"):
@@ -278,3 +279,41 @@ def test_saved_routes_need_token(settings, engine, fake_voice, fake_whisper):
     c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
     assert c.get("/saved").status_code == 401
     assert c.post("/saved", json={"rp_id": "000000000000", "idx": 1, "on": True}).status_code == 401
+
+
+# --- situation topics (spec situation-topics) --------------------------------------------------------------------
+
+def test_home_lists_topics(client):
+    topics = client.get("/home").json()["topics"]
+    assert [t["id"] for t in topics] == ["tourist", "usa", "other"]
+    assert len(topics[0]["picks"]) == 3 and all(set(p) == {"id", "title_ko"} for p in topics[0]["picks"])
+
+
+def test_create_from_a_pick(client, fake_claude):
+    from je_server.topics import pick
+
+    rp = client.post("/roleplays", json={"topic": "usa", "pick": "u-hotel-checkin"}).json()
+    assert rp["topic"] == "usa" and rp["lines"][0]["speaker"] == "user"
+    made = [a for n, a in fake_claude.calls if n == "make_script"][-1]
+    assert made == (pick("usa", "u-hotel-checkin").situation, "usa", "user")
+
+
+def test_create_without_topic_is_other(client):
+    # what the app sent before topics (2026-11-07)
+    assert client.post("/roleplays", json={"situation": "길 묻기"}).json()["topic"] == "other"
+
+
+def test_create_rejects_bad_topic_or_pick(client, fake_claude):
+    for body in ({"topic": "nope", "situation": "x"}, {"topic": "usa", "pick": "t-tmoney"},
+                 {"topic": "usa", "pick": "u-none"}, {"topic": "usa"},
+                 {"topic": "usa", "situation": "x", "pick": "u-hotel-checkin"}, {"topic": "usa", "pick": "u" * 41}):
+        r = client.post("/roleplays", json=body)
+        assert r.status_code == 422 and r.json()["code"] == "bad_request", body
+    assert not [c for c in fake_claude.calls if c[0] == "make_script"]
+
+
+def test_recommend_route_takes_the_topic(client, fake_claude):
+    assert client.post("/recommend", json={"skip": [], "topic": "tourist"}).status_code == 200
+    assert [a for n, a in fake_claude.calls if n == "recommend"][-1] == ([], [], "tourist")
+    r = client.post("/recommend", json={"topic": "nope"})
+    assert r.status_code == 422 and r.json()["code"] == "bad_request"

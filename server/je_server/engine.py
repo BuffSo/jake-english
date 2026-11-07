@@ -11,9 +11,9 @@ from pathlib import Path
 
 from . import audio
 from .claude import ClaudeUnavailable
-from . import sounds
+from . import sounds, topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, sound_pairs, words
-from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
+from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, Speaker, ThreeLine
 from .sentences import SentenceBuffer
 from .tts import VoiceError
 from .phrases import PHRASES
@@ -88,10 +88,11 @@ class Engine:
 
     # --- create and prepare -------------------------------------------------------------------
 
-    async def create(self, situation: str) -> Roleplay:
-        frame, draft = await self.claude.make_script(situation)
+    async def create(self, situation: str, topic: str = topics.OTHER, first: Speaker | None = None) -> Roleplay:
+        """A new roleplay in a topic. `first`: who starts, from a list pick (spec situation-topics 5)."""
+        frame, draft = await self.claude.make_script(situation, topics.get(topic), first)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
-                      situation=situation, frame=frame,
+                      situation=situation, frame=frame, topic=topic,
                       lines=[ScriptLine(idx=i, speaker=s, text=t) for i, (s, t) in enumerate(draft)])
         self.store.save(rp)
         for line in rp.lines:
@@ -107,7 +108,8 @@ class Engine:
         old = self.load(rp_id)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
-                      origin=old.origin or old.id)  # a copy of a copy still points at the first (ADR-0011)
+                      origin=old.origin or old.id,  # a copy of a copy still points at the first (ADR-0011)
+                      topic=old.topic)
         self.store.save(rp)
         for line in rp.lines:
             if not self.ready(line):
@@ -243,9 +245,11 @@ class Engine:
 
     # --- situation input ----------------------------------------------------------------------
 
-    async def recommend(self, turned_down: Sequence[str] = ()) -> Said:
-        """Jake suggests a situation, not one of the recent ones or those just turned down on the screen."""
-        text = await self.claude.recommend(self.store.recent_situations(), list(turned_down))
+    async def recommend(self, turned_down: Sequence[str] = (), topic: str = topics.OTHER) -> Said:
+        """Jake suggests a situation in the topic, not one of its recent ones or those just turned down on the
+        screen (spec situation-topics 4)."""
+        text = await self.claude.recommend(self.store.recent_situations(topic=topic), list(turned_down),
+                                           topics.get(topic))
         # heard back: its last sound was once swallowed (2026-11-05, 「…연습하고 싶~」)
         return Said(text=text, audio=await self.voice.say(text, "jake", "korean", urgent=True, check=True))
 
@@ -321,7 +325,9 @@ class Engine:
             # its own record (spec 「잘한 점 후보」)
             earlier = [a for a in self.load(rp_id).attempts.get(idx, []) if a.followed]
             before = earlier[-1].issues if earlier else []
-            text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard, before), issues)
+            # the roleplay's own turns only: a practice runs in an order the app keeps
+            last = mode in ("turn", "retry") and idx == len(self.load(rp_id).lines) - 1
+            text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard, before), issues, last)
             nxt = idx + 1 if mode == "turn" else idx
         elif mode != "turn":
             text = _one(self.said("retry_offscript").text)

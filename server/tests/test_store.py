@@ -1,11 +1,13 @@
+import json
+
 import pytest
 
 from je_server.models import Frame, Roleplay, ScriptLine
 from je_server.store import Store
 
 
-def rp(store, situation="길 묻기", created="2026-11-05T10:00:00"):
-    return Roleplay(id=store.new_id(), created=created, situation=situation,
+def rp(store, situation="길 묻기", created="2026-11-05T10:00:00", topic=None):
+    return Roleplay(id=store.new_id(), created=created, situation=situation, topic=topic,
                     frame=Frame(title_ko="t", user_role_ko="u", ryan_role_ko="r", place_ko="p", goal_ko="g"),
                     lines=[ScriptLine(idx=0, speaker="ryan", text="Hi.")])
 
@@ -34,6 +36,27 @@ def test_recent_situations_newest_first(tmp_path):
     s.save(rp(s, "첫째", "2026-11-05T09:00:00"))
     s.save(rp(s, "둘째", "2026-11-05T10:00:00"))
     assert s.recent_situations() == ["둘째", "첫째"]
+
+
+def test_recent_situations_by_topic(tmp_path):
+    # Jake avoids the recent situations of the topic he suggests for; a record from before topics is 「그 밖의 상황」
+    s = Store(tmp_path)
+    s.save(rp(s, "관광객 길 안내", "2026-11-05T09:00:00", topic="tourist"))
+    s.save(rp(s, "호텔 체크인", "2026-11-05T10:00:00", topic="usa"))
+    s.save(rp(s, "주제 없던 때", "2026-11-05T11:00:00"))
+    assert s.recent_situations(topic="usa") == ["호텔 체크인"]
+    assert s.recent_situations() == ["주제 없던 때"]
+
+
+def test_old_record_without_topic_reads(tmp_path):
+    s = Store(tmp_path)
+    r = rp(s)
+    s.save(r)
+    path = tmp_path / "roleplays" / r.id / "roleplay.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    del raw["topic"]  # written before topics (2026-11-07)
+    path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+    assert s.load(r.id).topic is None and s.recent_situations() == ["길 묻기"]
 
 
 def test_rec_path_is_inside_the_roleplay(tmp_path):

@@ -6,6 +6,9 @@ from fakes import (FakeAnthropic, connection_error, refusal_response, script_jso
                    three_json_with_wrong_stress)
 from je_server.claude import Claude, ClaudeUnavailable
 from je_server.threeline import check
+from je_server.topics import get
+
+OTHER = get("other")
 
 pytestmark = pytest.mark.anyio
 
@@ -18,7 +21,7 @@ def anyio_backend():
 async def test_make_script_retries_when_turns_are_wrong():
     # 2026-11-05 the user found 5 learner lines too many and chose 3
     fake = FakeAnthropic([script_json(user_turns=5), script_json(user_turns=3)])
-    frame, draft = await Claude(fake).make_script("길 묻기")
+    frame, draft = await Claude(fake).make_script("길 묻기", OTHER)
     assert sum(1 for s, _ in draft if s == "user") == 3 and len(fake.requests) == 2
     assert draft[0][0] == "ryan" and draft[-1][0] == "ryan"
     assert all(a[0] != b[0] for a, b in zip(draft, draft[1:]))
@@ -29,12 +32,12 @@ async def test_make_script_retries_when_turns_are_wrong():
 async def test_make_script_gives_up_after_second_bad_script():
     fake = FakeAnthropic([script_json(user_turns=2), script_json(user_turns=4)])
     with pytest.raises(ClaudeUnavailable):
-        await Claude(fake).make_script("길 묻기")
+        await Claude(fake).make_script("길 묻기", OTHER)
 
 
 async def test_requests_use_spec_model_settings():
     fake = FakeAnthropic([script_json(user_turns=3)])
-    await Claude(fake).make_script("길 묻기")
+    await Claude(fake).make_script("길 묻기", OTHER)
     r = fake.requests[0]
     assert r["model"] == "claude-sonnet-5-5" and r["thinking"] == {"type": "between_tools"}
     assert r["output_config"]["effort"] == "low" and r["output_config"]["format"]["type"] == "json_schema"
@@ -67,17 +70,17 @@ async def test_annotate_bad_json_falls_back_to_plain():
 
 async def test_api_failure_becomes_unavailable():
     with pytest.raises(ClaudeUnavailable):
-        await Claude(FakeAnthropic([connection_error()])).recommend([])
+        await Claude(FakeAnthropic([connection_error()])).recommend([], [], OTHER)
 
 
 async def test_refusal_becomes_unavailable():
     with pytest.raises(ClaudeUnavailable):
-        await Claude(FakeAnthropic([refusal_response()])).make_script("길 묻기")
+        await Claude(FakeAnthropic([refusal_response()])).make_script("길 묻기", OTHER)
 
 
 async def test_recommend_uses_haiku_and_avoids_recent():
     fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황으로 연습해 보면 어때요?"})])
-    text = await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"])
+    text = await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], [], OTHER)
     assert text.endswith("어때요?")
     r = fake.requests[0]
     # 존댓말: Jake's cloned voice swallowed the 반말 ending 「싶어.」 4 times in 5, 「싶어요.」 once (2026-11-05).
@@ -94,11 +97,11 @@ async def test_recommend_avoids_turned_down():
     # with 「다른 걸로요」 must not come back
     answer = json.dumps({"request_ko": "호텔 프런트에서 체크인하는 상황으로 연습해 보면 어때요?"})
     fake = FakeAnthropic([answer, answer])
-    await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], ["카페에서 주문하는 상황으로 연습해 보면 어때요?"])
+    await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], ["카페에서 주문하는 상황으로 연습해 보면 어때요?"], OTHER)
     content = fake.requests[0]["messages"][0]["content"]
     assert "케이블카" in content and "방금 거절한 상황:\n- 카페에서 주문하는" in content
     assert "turned down" in str(fake.requests[0]["system"])
-    await Claude(fake).recommend([])  # nothing turned down: the message has no empty list for it
+    await Claude(fake).recommend([], [], OTHER)  # nothing turned down: the message has no empty list for it
     assert "거절" not in fake.requests[1]["messages"][0]["content"]
 
 
@@ -161,7 +164,7 @@ async def test_any_api_status_error_becomes_unavailable():
 
     for code in (400, 401, 429, 503):
         with pytest.raises(ClaudeUnavailable):
-            await Claude(FakeAnthropic([status_error(code)])).make_script("길 묻기")
+            await Claude(FakeAnthropic([status_error(code)])).make_script("길 묻기", OTHER)
     with pytest.raises(ClaudeUnavailable):
         [t async for t in Claude(FakeAnthropic([status_error(400)])).feedback("a", "b", [], [])]
 
@@ -238,3 +241,139 @@ async def test_interpret_asks_again_without_korean_then_gives_up():
     fake = FakeAnthropic([json.dumps({"ko": ""}), "not json"])
     with pytest.raises(ClaudeUnavailable):
         await Claude(fake).interpret(Frame(**FRAME), ("ryan", "How do I get there?"), None, None)
+
+
+# --- situation topics (spec situation-topics 4, 5) ---------------------------------------------------------------
+
+def lines_json(*speakers: str) -> str:
+    from fakes import FRAME
+
+    return json.dumps({"frame": FRAME, "lines": [{"speaker": s, "text": f"Line {i}."} for i, s in enumerate(speakers)]})
+
+
+async def test_make_script_sends_the_topic_roles_and_first():
+    # 2026-11-07 the user: asking the way in the US, the learner speaks first
+    fake = FakeAnthropic([lines_json("user", "ryan", "user", "ryan", "user", "ryan")])
+    _, draft = await Claude(fake).make_script("뉴욕 호텔 프런트에서 체크인한다.", get("usa"), first="user")
+    content = fake.requests[0]["messages"][0]["content"]
+    assert get("usa").roles_en in content and "The learner speaks first." in content
+    assert draft[0][0] == "user"
+
+
+async def test_make_script_lets_the_situation_decide_who_starts():
+    fake = FakeAnthropic([lines_json("ryan", "user", "ryan", "user", "ryan", "user")])
+    await Claude(fake).make_script("공항에서 짐이 안 나와 직원에게 묻는다.", get("usa"))
+    assert "Whoever would naturally speak first" in fake.requests[0]["messages"][0]["content"]
+
+
+async def test_make_script_retries_when_the_first_speaker_is_wrong():
+    # 외국인 관광객: the tourist always asks first (user, 2026-11-07)
+    fake = FakeAnthropic([lines_json("user", "ryan", "user", "ryan", "user"),
+                          lines_json("ryan", "user", "ryan", "user", "ryan", "user")])
+    _, draft = await Claude(fake).make_script("관광객이 길을 묻는다.", get("tourist"))
+    assert len(fake.requests) == 2 and draft[0][0] == "ryan"
+    assert "Ryan speaks first." in fake.requests[0]["messages"][0]["content"]
+    assert "Ryan must speak first" in fake.requests[1]["messages"][0]["content"]
+
+
+def test_script_may_start_and_end_with_either():
+    # the old rule (Ryan first and last) was an AI choice with no recorded reason; the user chose what fits
+    ok = Claude.script_problems
+    u, r = "user", "ryan"
+    assert ok([(s, "Hi.") for s in (u, r, u, r, u)]) == []
+    assert ok([(s, "Hi.") for s in (r, u, r, u, r, u)]) == []
+    assert ok([(s, "Hi.") for s in (u, r, u, r, u)], first="user") == []
+    assert ok([(s, "Hi.") for s in (u, r, u, r, u)], first="ryan") == ["Ryan must speak first"]
+    assert ok([(s, "Hi.") for s in (r, u, r, u, r)], first="user") == ["the learner must speak first",
+                                                                         "the learner must have 3 lines, not 2"]
+    assert ok([(s, "Hi.") for s in (r, u, u, r, u)]) == ["lines must alternate between Ryan and the learner"]
+
+
+def test_script_prompt_allows_real_places_but_not_people():
+    from je_server import prompts
+
+    system = prompts.SCRIPT_SYSTEM
+    assert "Ryan speaks first and Ryan speaks last" not in system
+    assert "Real shops" in system and "never real people" in system
+    assert "exit numbers" in system and "opening hours" in system
+    assert "exit numbers" in prompts.CONTINUE_SYSTEM
+
+
+def test_script_prompts_end_on_the_learner_when_ryan_would_only_echo():
+    # with "whoever would say it", five real scripts in a row still closed on Ryan's "You too!"
+    from je_server import prompts
+
+    for system in (prompts.SCRIPT_SYSTEM, prompts.CONTINUE_SYSTEM):
+        assert "only echo" in system and "end on the learner's line" in system
+
+
+async def test_recommend_stays_in_the_topic():
+    fake = FakeAnthropic([json.dumps({"request_ko": "명동에서 환전소를 묻는 상황으로 연습해 보면 어때요?"})])
+    await Claude(fake).recommend(["관광객이 길을 묻는다."], [], get("tourist"))
+    content = fake.requests[0]["messages"][0]["content"]
+    t = get("tourist")
+    assert t.scenes_en in content and t.example_ko in content
+    assert "목록에 있는 상황:" in content and all(p.title_ko in content for p in t.picks)
+    assert "연습해 보면 어때요?" in str(fake.requests[0]["system"])
+
+
+async def test_recommend_without_a_list_has_no_list_heading():
+    fake = FakeAnthropic([json.dumps({"request_ko": "전화로 주문을 확인하는 상황으로 연습해 보면 어때요?"})])
+    await Claude(fake).recommend([], [], OTHER)
+    assert "목록에 있는 상황" not in fake.requests[0]["messages"][0]["content"]
+
+
+async def test_continue_script_may_end_with_the_learner():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    ends_with_me = json.dumps({"lines": [{"speaker": s, "text": t} for s, t in
+                                         [("user", "a"), ("ryan", "b"), ("user", "Thanks, you too!")]]})
+    fake = FakeAnthropic([ends_with_me])
+    draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 2)
+    assert draft[-1] == ("user", "Thanks, you too!") and len(fake.requests) == 1
+
+
+def test_recommend_system_has_no_scene_of_its_own():
+    # final review: the fixed example was a tourist-in-Korea scene, which could pull 미국 여행 and 그 밖의 상황 toward
+    # it; the scene comes from the topic's example in the message, the system keeps only the sentence form
+    from je_server import prompts
+
+    assert "케이블카" not in prompts.RECOMMEND_SYSTEM and "외국인" not in prompts.RECOMMEND_SYSTEM
+    assert "상황으로 연습해 보면 어때요?" in prompts.RECOMMEND_SYSTEM
+
+
+async def test_offscript_reply_drops_stray_braces():
+    # the phone test: Ryan's reply was stored and read out as "...the US size for you.}"
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
+                                      "reply_en": "I can look up the US size for you.}"})])
+    out = await Claude(fake).offscript(Frame(**FRAME), [], "a", "b")
+    assert out.reply_en == "I can look up the US size for you."
+
+
+async def test_script_lines_drop_stray_braces():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    lines = json.dumps({"lines": [{"speaker": "user", "text": "{Thanks."}, {"speaker": "ryan", "text": "Bye!}"}]})
+    draft = await Claude(FakeAnthropic([lines])).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 1)
+    assert draft == [("user", "Thanks."), ("ryan", "Bye!")]
+    script = json.loads(script_json(user_turns=3))
+    script["lines"][0]["text"] += "}"
+    _, draft = await Claude(FakeAnthropic([json.dumps(script)])).make_script("길 묻기", OTHER)
+    assert not any("}" in t for _, t in draft)
+
+
+async def test_feedback_says_whether_the_line_is_the_last():
+    from je_server import prompts
+
+    fake = FakeAnthropic([["잘했어요."], ["잘했어요."]])
+    c = Claude(fake)
+    [t async for t in c.feedback("Thanks!", "Thanks!", [], [], last=True)]
+    [t async for t in c.feedback("Hi.", "Hi.", [], [])]
+    assert [json.loads(r["messages"][0]["content"])["마지막 대사"] for r in fake.requests] == [True, False]
+    assert "마지막 대사" in prompts.FEEDBACK_SYSTEM and "다음 대사로 넘어가자고 하지 않아요" in prompts.FEEDBACK_SYSTEM
+    assert "마지막 대사여도 한 번 더 해 보자고 해요. 이때는 대화를 마쳤다고 말하지 않아요" in prompts.FEEDBACK_SYSTEM

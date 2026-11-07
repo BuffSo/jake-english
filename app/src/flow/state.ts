@@ -2,6 +2,7 @@
 // still talking) are ignored in one place.
 import type { ErrorCode } from "../api/client";
 import type { AttemptEvent, AttemptMode, Progress, Roleplay, Said, ScriptLine } from "../api/types";
+import type { SituationStart } from "./situation";
 
 // review: 「다시 연습」's menu; past and saved: its two lists (spec review-practice 1, 2, 6). The last conversation of
 // a past situation is the end screen with `past` set (3).
@@ -56,13 +57,16 @@ export type State = {
   // where a roleplay started from 「다시 연습」 goes back to, and its end screen too (spec review-practice 9)
   returnTo: State | null;
   beforeOpen: boolean; // the line before, in saved-sentence practice: hidden until asked (spec review-practice 7)
+  // the topic and step the roleplay's situation was picked from: back from the roleplay or its end screen opens the
+  // situation screen there (spec situation-topics 2); null starts it at the topics
+  situationFrom: SituationStart | null;
 };
 
 export type Action =
   | { type: "home" }
   | { type: "back" }
   | { type: "chooseRoleplay" }
-  | { type: "created"; roleplay: Roleplay; jake?: Said | null }
+  | { type: "created"; roleplay: Roleplay; jake?: Said | null; from?: SituationStart }
   | { type: "lineLoaded"; line: ScriptLine; progress?: Progress }
   | { type: "lineMissing" }
   | { type: "ryanDone" }
@@ -114,6 +118,7 @@ export const initial: State = {
   past: null,
   returnTo: null,
   beforeOpen: false,
+  situationFrom: null,
 };
 
 export const OFFLINE = "맥에 연결할 수 없어요. 맥과 인터넷 연결을 확인해 주세요.";
@@ -219,13 +224,21 @@ export function reduce(s: State, a: Action): State {
       if (s.screen === "roleplay" && s.practice) return leavePractice(s);
       if ((s.screen === "roleplay" || s.screen === "end") && s.returnTo) return restore(s.returnTo);
       if (s.screen === "end" && s.past) return { ...initial, screen: "past" };
-      if (s.screen === "roleplay" || s.screen === "end") return { ...initial, screen: "situation" };
+      if (s.screen === "roleplay" || s.screen === "end")
+        return { ...initial, screen: "situation", situationFrom: s.situationFrom };
       return s;
     case "chooseRoleplay":
       return { ...initial, screen: "situation" };
     case "created":
       if (s.screen !== "situation") return s; // a script that comes back after the learner left
-      return { ...initial, screen: "roleplay", roleplay: a.roleplay, jake: a.jake ?? null, phase: "loading" };
+      return {
+        ...initial,
+        screen: "roleplay",
+        roleplay: a.roleplay,
+        jake: a.jake ?? null,
+        phase: "loading",
+        situationFrom: a.from ?? null,
+      };
     case "lineLoaded":
       if (s.phase !== "loading") return s;
       return {
@@ -345,7 +358,15 @@ export function reduce(s: State, a: Action): State {
       const fromSaved = s.screen === "roleplay" && s.practice?.from === "saved";
       if (s.screen !== "end" && !fromSaved) return s;
       const returnTo = s.returnTo ?? (s.past || fromSaved ? s : null);
-      return { ...initial, screen: "roleplay", roleplay: a.roleplay, jake: fromSaved ? null : s.jake, phase: "loading", returnTo };
+      return {
+        ...initial,
+        screen: "roleplay",
+        roleplay: a.roleplay,
+        jake: fromSaved ? null : s.jake,
+        phase: "loading",
+        returnTo,
+        situationFrom: returnTo ? null : s.situationFrom,
+      };
     }
     case "closingPlayed":
       return { ...s, closingPlayed: true };

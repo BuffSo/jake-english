@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from itertools import product
 
 from . import cmu, sounds
 from .models import Issue
@@ -25,6 +26,7 @@ _ONES = ("zero one two three four five six seven eight nine ten eleven twelve th
 _TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
 _SHORT = {"wanna": "want to", "gonna": "going to", "ok": "okay"}
 _AFTER_A = frozenset({"hundred", "thousand", "dollar"})
+MAX_READING_SETS = 64  # numbers in a line and its transcript; past this, each is read the first way
 
 
 def _number(n: int) -> str:
@@ -52,17 +54,34 @@ def _ordinal(n: int) -> str:
     return " ".join([*head, last])
 
 
-def words(text: str) -> list[str]:
-    """Lowercase words with the transcriber's notation evened out: 10 and ten, $5 and five dollars, 11 AM and
-    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, $100 and a hundred dollars, 2nd and second, wanna and
-    want to, OK and okay are the same words."""
+def _readings(n: int) -> tuple[str, ...]:
+    """The ways a number is read out: the cardinal first (270 is two hundred seventy), then from 100 to 9999 the
+    pairs people say for sizes, rooms and years (two seventy, three oh five, twenty seventeen, fifteen hundred).
+    The voice may read the line's digits either way, and the learner follows the voice (phone test, 2026-11-07)."""
+    out = [_number(n)]
+    if 100 <= n <= 9999:
+        head, tail = divmod(n, 100)
+        if tail == 0:
+            if n >= 1000 and head % 10:  # 1500 is fifteen hundred; 2000 stays two thousand
+                out.append(f"{_number(head)} hundred")
+        elif tail < 10:
+            out.append(f"{_number(head)} oh {_ONES[tail]}")
+        else:
+            out.append(f"{_number(head)} {_number(tail)}")
+    return tuple(out)
+
+
+Token = str | tuple[str, ...]  # a word, or the readings of a number
+
+
+def _tokens(text: str) -> list[Token]:
     t = text.lower().replace("’", "'")
     t = re.sub(r"(?<=\d),(?=\d{3})", "", t)  # 1,000 is one number
     t = re.sub(r"\b([ap])\.?m\b\.?", r"\1m", t)
     t = re.sub(r"\$(\d+)", lambda m: f"{m[1]} dollar" + ("" if m[1] == "1" else "s"), t)
     t = re.sub(r"(\d+)%", r"\1 percent", t)
     t = re.sub(r"\b(\d{1,2}):00\b", r"\1", t)  # 9:00 is nine (o'clock is dropped below)
-    out: list[str] = []
+    out: list[Token] = []
     for w in re.findall(r"[a-z0-9']+", t):
         w = w.strip("'")
         if not w:
@@ -74,15 +93,55 @@ def words(text: str) -> list[str]:
         elif w.isdigit() and len(w) == 2 and w[0] == "0":  # the 05 of 5:05 is "oh five"
             out += ["oh", _ONES[int(w[1])]]
         elif w.isdigit() and int(w) < 1_000_000:
-            out += _number(int(w)).split()
+            r = _readings(int(w))
+            out += r[0].split() if len(r) == 1 else [r]
         else:
             out += _SHORT.get(w, w).split()
+    return out
+
+
+def _read(tokens: list[Token], picks: tuple[int, ...] = ()) -> list[str]:
+    """The words, each number read the way `picks` says in turn (the first way when it runs out)."""
+    out: list[str] = []
+    it = iter(picks)
+    for t in tokens:
+        out += t.split() if isinstance(t, str) else t[next(it, 0)].split()
     # "a hundred", "a dollar fifty": the transcriber writes $100 and $1.50, which read as one hundred, one dollar
     return ["one" if w == "a" and nxt in _AFTER_A else w for w, nxt in zip(out, out[1:] + [""])]
 
 
+def words(text: str) -> list[str]:
+    """Lowercase words with the transcriber's notation evened out: 10 and ten, $5 and five dollars, 11 AM and
+    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, $100 and a hundred dollars, 2nd and second, wanna and
+    want to, OK and okay are the same words. A number is read the first way (`_readings`)."""
+    return _read(_tokens(text))
+
+
+def _paired(target: str, heard: str) -> tuple[list[str], list[str]]:
+    """The line's and the transcript's words, with each number on either side read the way that matches the other
+    side best: 270 in the line and "two seventy" heard are the same words, and so are the other way round."""
+    a, b = _tokens(target), _tokens(heard)
+    ways = [len(t) for t in a + b if not isinstance(t, str)]
+    if not ways:
+        return _read(a), _read(b)
+    sets = 1
+    for n in ways:
+        sets *= n
+    if sets > MAX_READING_SETS:
+        return _read(a), _read(b)
+    na = sum(1 for t in a if not isinstance(t, str))
+    best: tuple[float, list[str], list[str]] | None = None
+    for picks in product(*(range(n) for n in ways)):
+        wa, wb = _read(a, picks[:na]), _read(b, picks[na:])
+        ratio = SequenceMatcher(None, wa, wb, autojunk=False).ratio()
+        if best is None or ratio > best[0]:
+            best = (ratio, wa, wb)
+    assert best is not None
+    return best[1], best[2]
+
+
 def similarity(target: str, heard: str) -> float:
-    a, b = words(target), words(heard)
+    a, b = _paired(target, heard)
     if not a or not b:
         return 0.0
     return SequenceMatcher(None, a, b, autojunk=False).ratio()
@@ -120,6 +179,12 @@ class Comparison:
     matched_words: set[str] = field(default_factory=set)
 
 
+def _same_sound(target_word: str, heard_word: str) -> bool:
+    """Words with a dictionary pronunciation in common sound the same: which one was written is notation."""
+    d = sound_diff(target_word, heard_word)
+    return d is not None and d[0] == 0
+
+
 def _listed(target_word: str, heard_word: str, max_edits: int | None = None) -> tuple[tuple[str, str], str] | None:
     d = sound_diff(target_word, heard_word)
     if d is None or (max_edits is not None and d[0] > max_edits):
@@ -144,8 +209,9 @@ def _restart(line: list[str], at: int, added: list[str]) -> bool:
 
 def compare(target: str, heard: str) -> Comparison:
     # fillers are never points, on either side: the transcriber usually leaves them out (spec 「평가」 2)
-    a = [w for w in words(target) if w not in FILLERS]
-    b = [w for w in words(heard) if w not in FILLERS]
+    wa, wb = _paired(target, heard)
+    a = [w for w in wa if w not in FILLERS]
+    b = [w for w in wb if w not in FILLERS]
     diffs: list[Issue] = []
     matched: set[str] = set()
     count = 0
@@ -157,7 +223,12 @@ def compare(target: str, heard: str) -> Comparison:
         elif tag == "insert" and _restart(a, i1, hb):
             continue
         elif tag == "replace" and len(ta) == len(hb):
-            diffs += [_issue([t], [h], _listed(t, h)) for t, h in zip(ta, hb)]
+            for t, h in zip(ta, hb):
+                if _same_sound(t, h):  # to for two, four for for: how the transcriber wrote it
+                    count += 1
+                    matched.add(t)
+                else:
+                    diffs.append(_issue([t], [h], _listed(t, h)))
         else:
             found = next((f for t in ta for h in hb if (f := _listed(t, h, SPAN_SOUND_MAX_EDITS))), None)
             diffs.append(_issue(ta, hb, found))

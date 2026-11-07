@@ -41,15 +41,33 @@ export type Roleplay = {
   attempts: Record<string, Attempt[]>;
   pos: number;
   origin: string | null; // the first roleplay of its group when copied (ADR-0011)
+  // the situation topic's id; null on roleplays made before topics (spec situation-topics 7)
+  topic: string | null;
 };
 export type Said = { text: string; audio: string };
 // thinking-face picture paths per person, cross-faded while the app waits (/home `images.thinking`)
 export type Thinking = { jake: string[]; ryan: string[] };
+// A situation topic and its prepared list (spec situation-topics 1, 3). The Mac keeps what Claude gets; the app only
+// shows the names and sends the ids back.
+export type Topic = { id: string; name_ko: string; placeholder_ko: string; picks: { id: string; title_ko: string }[] };
 export type Home = {
-  // ask_again: said instead of greeting + ask_mode when the learner comes back (absent on an older server)
-  lines: { greeting: Said; ask_mode: Said; ask_again?: Said; ask_situation: Said; ask_recommend: Said };
+  // ask_again: said instead of greeting + ask_mode when the learner comes back (absent on an older server).
+  // ask_topic, ask_how, ask_pick, ask_describe: the situation screen's steps (spec situation-topics 6), absent on a
+  // server from before topics
+  lines: {
+    greeting: Said;
+    ask_mode: Said;
+    ask_again?: Said;
+    ask_situation: Said;
+    ask_recommend: Said;
+    ask_topic?: Said;
+    ask_how?: Said;
+    ask_pick?: Said;
+    ask_describe?: Said;
+  };
   // jake: Jake's front picture, shown while his suggestion waits for the learner's pick (absent on an older server)
   images: { front: string; listening: string; jake?: string; thinking: Thinking };
+  topics?: Topic[]; // absent on a server from before topics: use flow/situation `topicsOf`
 };
 export type Progress = { no: number; total: number }; // 「내 대사 no/total」
 export type LineWithProgress = ScriptLine & { progress: Progress };
@@ -83,7 +101,7 @@ export type AttemptEvent =
   | { type: "done"; next: number; issues: number };
 
 // Key lists checked against contract/ by the tests; the type checks below keep them in step with the types.
-export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin"] as const;
+export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin", "topic"] as const;
 export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "reply", "error", "done"] as const;

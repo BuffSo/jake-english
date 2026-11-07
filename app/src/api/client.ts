@@ -84,9 +84,12 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
 
   return {
     getHome: () => get<Home>("/home"),
-    recommend: (skip: string[]) => post<Said>("/recommend", { skip }),
+    // Jake's suggestion inside the topic (spec situation-topics 4)
+    recommend: (skip: string[], topic: string) => post<Said>("/recommend", { skip, topic }),
     transcribe: async (fileUri: string) => ((await (await upload("/transcribe", fileUri)).json()) as { text: string }).text,
-    createRoleplay: (situation: string) => post<Roleplay>("/roleplays", { situation }, LONG),
+    // a described or suggested situation, or a list line by its id: the Mac looks up its description and who starts
+    createRoleplay: (choice: { situation: string } | { pick: string }, topic: string) =>
+      post<Roleplay>("/roleplays", { ...choice, topic }, LONG),
     getLine: (id: string, idx: number) => get<LineWithProgress>(`/roleplays/${id}/lines/${idx}`, LONG),
     getThree: (id: string, idx: number) => get<ThreeLine>(`/roleplays/${id}/lines/${idx}/three`, LONG),
     // Sohee's interpretation: the text first, then her sound of it (spec korean-translation 4)

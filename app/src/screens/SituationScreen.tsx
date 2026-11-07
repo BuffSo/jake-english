@@ -1,17 +1,31 @@
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../api";
-import type { Home, Roleplay, Said } from "../api/types";
+import type { Home, Roleplay, Said, Topic } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, createLatch } from "../flow/gate";
+import {
+  backFrom,
+  canStart,
+  clearsTurnedDown,
+  HOW_LABEL,
+  howChoices,
+  lineFor,
+  startStep,
+  topicsOf,
+  type HowChoice,
+  type Origin,
+  type SituationStart,
+  type SituationStep,
+} from "../flow/situation";
 import { turnDown } from "../flow/turnedDown";
 import { whenSilent } from "../flow/whenSilent";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
-import { circleFace, type Face, type Step } from "../ui/faces";
+import { circleFace, type Face } from "../ui/faces";
 import { Named } from "../ui/Named";
 import { FaceCircle } from "../ui/RyanFace";
 import { ThinkingFace } from "../ui/ThinkingFace";
@@ -19,23 +33,40 @@ import { colors, top } from "../ui/theme";
 import { waiterOf } from "../ui/thinking";
 import { messageOf, styles as common, Waiting } from "./common";
 
-type Props = { sounds: SoundQueue; home: Home; onCreated: (rp: Roleplay, jake: Said | null) => void; onBack: () => void };
+type Props = {
+  sounds: SoundQueue;
+  home: Home;
+  // where back from the roleplay comes to: the topic and the step its situation was picked from (null: the topics)
+  start: SituationStart | null;
+  onCreated: (rp: Roleplay, jake: Said | null, from: SituationStart) => void;
+  onBack: () => void;
+};
+type Choice = { situation: string } | { pick: string };
 
 const WANTS_RECOMMEND = /모르겠|추천/;
+const OTHER = "other"; // 「그 밖의 상황」, the plain button under the two topics
 
-export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
+// The situation screen: the topic first, then how to pick the situation (spec situation-topics 2). The steps and
+// what back does are in flow/situation.ts.
+export function SituationScreen({ sounds, home, start, onCreated, onBack }: Props) {
+  const topics = topicsOf(home);
+  const known = start && topics.some((t) => t.id === start.topic) ? start : null;
+  const [topicId, setTopicId] = useState<string | null>(known?.topic ?? null);
+  const [step, setStep] = useState<SituationStep>(startStep(known));
+  const now = useRef<SituationStep>(startStep(known)); // the step as of the last tap, before React re-renders
   const [text, setText] = useState("");
-  const [step, setStep] = useState<Step>("input");
   const [status, setStatus] = useState("");
   const [jake, setJake] = useState<Said | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rec = useRecorder();
   const gate = useRef(createGate()).current; // a double tap or the auto-stop must not send the recording twice
   const gen = useRef(0); // bumped by going back (or leaving): an answer to an earlier request is dropped
-  const turnedDown = useRef<string[]>([]); // Jake's suggestions turned down on this screen, not suggested again
+  const turnedDown = useRef<string[]>([]); // Jake's suggestions turned down in this topic, not suggested again
   const choice = useRef(createLatch()).current; // one answer per suggestion: a double tap must not ask twice
+  const origin = useRef<Origin>(known?.step ?? "how"); // the step the situation is being picked from
   const [jakeFailed, setJakeFailed] = useState(false); // Jake's picture did not load: Ryan's face instead
   const shown = useRef<Face>("listening"); // the circle's face before a wait, kept until the thinking face comes
+  const topic: Topic | null = topics.find((t) => t.id === topicId) ?? null;
 
   useEffect(
     () => () => {
@@ -44,74 +75,113 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     [],
   );
 
+  // Ryan's line for the first step, once
   useEffect(() => {
-    sounds.clear();
-    sounds.enqueue(api.audioSource(home.lines.ask_situation.audio));
-  }, [sounds, home]);
+    say(startStep(known));
+  }, [sounds, home]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Back: the step before on this screen, or the home screen from the first step. Sounds stop, a recording
-  // in progress is deleted without being sent, and a script or transcript still on its way is dropped.
+  function toStep(s: SituationStep) {
+    now.current = s;
+    setStep(s);
+  }
+
+  function say(s: SituationStep) {
+    const key = lineFor(s);
+    const line = key ? home.lines[key] : undefined;
+    sounds.clear();
+    if (line) sounds.enqueue(api.audioSource(line.audio));
+  }
+
+  // a step the learner moves on to: Ryan says its line (going back says nothing again)
+  function go(s: SituationStep) {
+    toStep(s);
+    say(s);
+  }
+
+  // Back: the step before on this screen, or the home screen from the topics. Sounds stop, a recording in progress
+  // is deleted without being sent, and a script or suggestion still on its way is dropped.
   function back() {
     gen.current += 1;
     sounds.clear();
     setError(null);
-    if (step === "input") {
+    const prev = backFrom(step, origin.current);
+    if (prev === null) {
       rec.discard().finally(onBack);
       return;
     }
+    if (step === "describe") rec.discard();
+    if (clearsTurnedDown(prev)) turnedDown.current = [];
     setJake(null);
-    setStep("input");
+    toStep(prev);
   }
   useBackKey(back);
 
-  async function create(situation: string, jakeSaid: Said | null = null) {
+  function chooseTopic(t: Topic) {
+    setTopicId(t.id);
+    turnedDown.current = [];
+    go("how");
+  }
+
+  function chooseHow(c: HowChoice) {
+    setError(null);
+    if (c === "list") {
+      origin.current = "list";
+      go("list");
+    } else if (c === "jake") {
+      origin.current = "how";
+      recommend(); // the button already asked for it: no 「추천받아 볼까요?」 first (spec 2)
+    } else {
+      origin.current = "describe";
+      setText("");
+      go("describe");
+    }
+  }
+
+  async function create(c: Choice, jakeSaid: Said | null = null) {
+    if (!topic || !canStart(now.current)) return;
     const my = gen.current;
-    setStep("working");
+    const from = { topic: topic.id, step: origin.current };
+    toStep("working");
     setStatus("라이언이 대본을 만들고 있어요");
     setError(null);
     try {
       // the script is made while Jake (or Ryan) is still talking; the roleplay screen opens after they finish
-      const rp = await whenSilent(sounds, api.createRoleplay(situation));
-      if (my === gen.current) onCreated(rp, jakeSaid);
+      const rp = await whenSilent(sounds, api.createRoleplay(c, topic.id));
+      if (my === gen.current) onCreated(rp, jakeSaid, from);
     } catch (e) {
       if (my !== gen.current) return;
       setError(messageOf(e));
-      setStep("input");
+      toStep(from.step);
     }
   }
 
-  function askRecommend() {
-    setStep("askRecommend");
-    sounds.clear();
-    sounds.enqueue(api.audioSource(home.lines.ask_recommend.audio));
-  }
-
-  // Jake suggests a situation and the learner picks it or asks for another. The script is not made until they
-  // pick it: one made while they choose would be thrown away on 「다른 걸로요」 (2026-11-06, user).
+  // Jake suggests a situation in the topic and the learner picks it or asks for another. The script is not made
+  // until they pick it: one made while they choose would be thrown away on 「다른 걸로요」 (2026-11-06, user).
   async function recommend() {
+    if (!topic || !canStart(now.current)) return;
     const my = gen.current;
-    setStep("working");
+    toStep("working");
     setStatus("제이크가 상황을 고르고 있어요");
     setJake(null);
     setError(null);
     try {
-      const said = await api.recommend(turnedDown.current);
+      const said = await api.recommend(turnedDown.current, topic.id);
       if (my !== gen.current) return;
       setJake(said);
       sounds.clear();
       sounds.enqueue(api.audioSource(said.audio));
       choice.open();
-      setStep("confirm");
+      toStep("confirm");
     } catch (e) {
       if (my !== gen.current) return;
       setError(messageOf(e));
-      setStep("input");
+      toStep(origin.current);
     }
   }
 
   function pick() {
     if (!jake || !choice.take()) return;
-    create(jake.text, jake);
+    create({ situation: jake.text }, jake);
   }
 
   function another() {
@@ -121,10 +191,10 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     recommend();
   }
 
-  function start() {
+  function startDescribed() {
     const t = text.trim();
-    if (!t || WANTS_RECOMMEND.test(t)) askRecommend();
-    else create(t);
+    if (!t || WANTS_RECOMMEND.test(t)) go("askRecommend");
+    else create({ situation: t });
   }
 
   const startMic = () => gate.run(doStartMic);
@@ -150,17 +220,17 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     try {
       uri = await rec.stop();
       if (my !== gen.current) return; // went back while the recorder was stopping; `finally` deletes it unsent
-      setStep("working");
+      toStep("working");
       setStatus("받아쓰고 있어요");
       const said = await api.transcribe(uri);
       if (my !== gen.current) return;
       setText(said);
-      if (WANTS_RECOMMEND.test(said)) askRecommend();
-      else setStep("input");
+      if (WANTS_RECOMMEND.test(said)) go("askRecommend");
+      else toStep("describe");
     } catch (e) {
       if (my !== gen.current) return;
       setError(messageOf(e));
-      setStep("input");
+      toStep("describe");
     } finally {
       if (uri) {
         try {
@@ -181,6 +251,34 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
     ) : (
       <FaceCircle source={api.imageSource(home.images.listening)} size={160} face="listening" />
     );
+  const key = lineFor(step);
+  const ryanSays = key ? home.lines[key]?.text : undefined;
+
+  if (step === "list" && topic) {
+    // no face here, so more of the list shows; it scrolls as the list grows (spec 2)
+    return (
+      <View style={styles.wrap}>
+        <BackButton onPress={back} floating />
+        <Text style={[common.sub, styles.topic]}>{topic.name_ko}</Text>
+        {ryanSays && <Text style={[common.body, styles.say]}>{ryanSays}</Text>}
+        <ScrollView contentContainerStyle={styles.list}>
+          {topic.picks.map((p) => (
+            <Pressable
+              key={p.id}
+              accessibilityRole="button"
+              onPress={() => create({ pick: p.id })}
+              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            >
+              <Text style={[common.body, styles.cardText]}>{p.title_ko}</Text>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {error && <Text style={common.error}>{error}</Text>}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.wrap}>
       <BackButton onPress={back} floating />
@@ -188,27 +286,35 @@ export function SituationScreen({ sounds, home, onCreated, onBack }: Props) {
         {/* while working, this circle thinks in place, so the screen never shows two faces (2026-11-06) */}
         {step === "working" ? <ThinkingFace who={waiterOf(status)} size={160} fallback={circle} /> : circle}
       </View>
-      <Text style={[common.body, styles.say]}>{home.lines.ask_situation.text}</Text>
-      {step === "input" && (
+      {topic && step !== "topic" && <Text style={[common.sub, styles.topic]}>{topic.name_ko}</Text>}
+      {ryanSays && <Text style={[common.body, styles.say]}>{ryanSays}</Text>}
+      {step === "topic" &&
+        topics.map((t) => (
+          <Button key={t.id} label={t.name_ko} onPress={() => chooseTopic(t)} kind={t.id === OTHER ? "plain" : "primary"} />
+        ))}
+      {step === "how" &&
+        topic &&
+        howChoices(topic).map((c, i) => (
+          <Button key={c} label={HOW_LABEL[c]} onPress={() => chooseHow(c)} kind={i === 0 ? "primary" : "plain"} />
+        ))}
+      {step === "describe" && (
         <>
           <TextInput
             style={styles.input}
             value={text}
             onChangeText={setText}
-            placeholder="예: 길에서 외국인이 지하철역을 물어보는 상황"
+            placeholder={topic?.placeholder_ko}
             multiline
             maxLength={300}
           />
           <Button label={rec.recording ? "■ 말하기 끝" : "🎤 말로 하기"} onPress={rec.recording ? stopMic : startMic} kind="plain" />
-          <Button label="시작" onPress={start} disabled={rec.recording} />
-          <Button label="추천해 줘" onPress={askRecommend} kind="plain" disabled={rec.recording} />
+          <Button label="시작" onPress={startDescribed} disabled={rec.recording} />
         </>
       )}
       {step === "askRecommend" && (
         <>
-          <Text style={[common.body, styles.say]}>{home.lines.ask_recommend.text}</Text>
           <Button label="좋아요" onPress={recommend} />
-          <Button label="아니요" onPress={() => setStep("input")} kind="plain" />
+          <Button label="아니요" onPress={() => toStep("describe")} kind="plain" />
         </>
       )}
       {step === "confirm" && jake && (
@@ -243,6 +349,7 @@ const styles = StyleSheet.create({
   // from just below the floating back button: centring left a wide gap above the picture (2026-11-05, user)
   wrap: { flex: 1, paddingTop: top + 44, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: colors.bg },
   face: { marginBottom: 12 },
+  topic: { marginBottom: 4 },
   say: { marginBottom: 10 },
   jake: { backgroundColor: colors.ryan, borderRadius: 12, padding: 12, marginTop: 2, marginBottom: 8, maxWidth: "92%" },
   input: {
@@ -255,4 +362,18 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     marginBottom: 8,
   },
+  list: { paddingBottom: 12 },
+  // the gray rounded cards of the list, a 「›」 at the end (spec 2; the review lists may take the same look later)
+  card: {
+    backgroundColor: colors.ryan,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  pressed: { opacity: 0.6 },
+  cardText: { flex: 1 },
+  chevron: { fontSize: 22, color: colors.weak, marginLeft: 8 },
 });

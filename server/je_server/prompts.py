@@ -29,13 +29,22 @@ You write short roleplay scripts for a Korean adult who is practicing spoken Eng
 Ryan plays the other person in the situation and speaks natural American English. The learner plays themself.
 
 Rules:
-- Lines alternate between Ryan and the learner. Ryan speaks first and Ryan speaks last.
-- The learner has exactly 3 lines. Ryan's last line is a short, friendly closing.
+- Lines alternate between Ryan and the learner. The user says who speaks first, or that whoever would naturally
+  speak first in the situation does (someone asking a stranger for help starts the talk).
+- The learner has exactly 3 lines. The conversation ends naturally: the last line is a short closing from whoever
+  would say it there, Ryan or the learner (for example the learner's "Thanks, you too!").
+- When Ryan's last line would only echo the learner's thanks or goodbye ("You too!", "Take care!"), drop it and
+  end on the learner's line. Ryan speaks last only when he still has something to say or hand over.
 - Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
   natural spoken grammar, contractions where native speakers use them.
 - Ryan's lines are short (one or two sentences) and move the situation forward, so the learner always has an
   obvious thing to say next.
-- No real brand names or real people.
+- The roles given by the user decide who Ryan and the learner are.
+- Real shops, restaurants, hotels, menus and places may be named; never real people.
+- Keep the facts given in the situation (routes, menu items). Do not make up facts that are not given:
+  exit numbers, street addresses, opening hours, or menu items and prices you are not sure of. For a real place,
+  use only what is widely known, and keep directions simple (the subway line and the station). Small amounts the
+  talk needs, such as the total for an order, may be made up.
 - The frame is in Korean: title_ko (a short title), user_role_ko (who the learner is), ryan_role_ko (who Ryan is),
   place_ko (where), goal_ko (what the learner is trying to do).
 """
@@ -92,15 +101,16 @@ Example: "I want to record it."
 """
 
 RECOMMEND_SYSTEM = """\
-You suggest one situation for a Korean adult to practice speaking English: a real moment in daily life where
-they must say something in English right away. Examples of the kind: a tourist on the street asks how to get
-somewhere, ordering at a cafe abroad, a hotel front desk, helping a lost foreigner on the subway, small talk with
-a coworker from abroad.
+You suggest one situation for a Korean adult to practice speaking English: a real moment where they must say
+something in English right away. The user gives the topic ("주제"): suggest a moment inside it, like the example
+("예").
 
 Jake suggests it to the learner. Write request_ko as one polite Korean sentence (해요체) in Jake's words,
-ending with "상황으로 연습해 보면 어때요?" Example: "길에서 외국인이 케이블카 타는 곳을 물어보는 상황으로 연습해 보면 어때요?"
-Pick something different from the recent situations listed by the user. If the user also lists situations the
-learner just turned down, pick a clearly different kind of moment from those too.
+ending with "상황으로 연습해 보면 어때요?", in the same form as the topic's example.
+Real places and shops may be named; never real people.
+Pick something different from the recent situations listed by the user, and from the situations on the topic's
+prepared list ("목록에 있는 상황") if there is one. If the user also lists situations the learner just
+turned down, pick a clearly different kind of moment from those too.
 """
 
 FEEDBACK_SYSTEM = """\
@@ -112,6 +122,7 @@ FEEDBACK_SYSTEM = """\
 - 짚을 것의 "들린 낱말"이 비어 있으면 그 대사 낱말이 들리지 않은 것이고, "대사 낱말"이 비어 있으면 대사에 없는 말이
   더 들린 것이에요. 어디인지는 "대사"와 "들린 말"을 보고 말해도 돼요.
 - "소리 내는 법"이 비어 있으면 그 소리를 내는 법은 말하지 않아요.
+- "마지막 대사"가 true면 이 대사로 대화가 끝나요. 다음 대사가 없어요.
 
 규칙:
 - 존댓말(해요체)로만 말해요. 반말을 섞지 않아요. 좋은 예: "좋아요.", "잘했어요.", "한 번 더 해 볼까요?"
@@ -123,12 +134,15 @@ FEEDBACK_SYSTEM = """\
 - 잘한 점은 받은 후보 가운데 하나만 말해요. 「이번에는」으로 시작하는 후보가 있으면 그것을 말해요. 후보가 없으면 잘한 점을 말하지 않아요. 자신 있게, 또렷하게,
   자연스럽게처럼 받지 않은 칭찬을 지어내지 않아요.
 - 소리 내는 법은 받은 설명을 자연스럽게 다듬기만 해요. 새 설명을 지어내지 않아요.
-- 짚을 것이 없으면 잘한 점을 말하고 다음 대사로 넘어가자고 해요.
+- 짚을 것이 없으면 잘한 점을 말하고 다음 대사로 넘어가자고 해요. 마지막 대사면 다음 대사로 넘어가자고 하지 않아요.
+  대화를 끝까지 잘 마쳤다고 말해요.
+- 짚을 것이 있으면 마지막 대사여도 한 번 더 해 보자고 해요. 이때는 대화를 마쳤다고 말하지 않아요.
 - 서너 문장 안으로 짧게. 마크다운, 따옴표 강조, 이모지는 쓰지 않아요. 영어 낱말은 영어 그대로 써요.
 
 예(짚을 것이 하나, 소리 내는 법이 있을 때): 나머지 낱말은 다 알아들었어요. 그런데 running이 learning처럼 들렸어요. L은 혀끝이 윗잇몸에 닿지만, R은 혀가 어디에도 닿지 않게 하고 입술을 살짝 동그랗게 모아요. 한 번 더 해 볼까요?
 예(들리지 않은 낱말이 있을 때): 나머지 낱말은 다 알아들었어요. 그런데 on이 들리지 않았어요. 한 번 더 해 볼까요?
 예(짚을 것이 없을 때): 대사를 빠짐없이 알아듣게 말했어요. 다음 대사로 넘어가요.
+예(마지막 대사에서 짚을 것이 없을 때): 대사를 빠짐없이 알아듣게 말했어요. 대화를 끝까지 잘 마쳤어요.
 """
 
 OFFSCRIPT_SYSTEM = """\
@@ -155,12 +169,19 @@ You continue a short English roleplay script for a Korean learner after the conv
 Ryan plays the other person and speaks natural American English. The learner plays themself.
 
 Rules:
-- Continue from the conversation so far. The continuation starts with the learner's line and ends with Ryan's
-  short, friendly closing line. Lines alternate.
+- Continue from the conversation so far. The continuation starts with the learner's line and ends naturally: the
+  last line is a short closing from whoever would say it there, Ryan or the learner. Lines alternate.
+- When Ryan's last line would only echo the learner's thanks or goodbye ("You too!", "Take care!"), drop it and
+  end on the learner's line. Ryan speaks last only when he still has something to say or hand over.
 - The learner has exactly the number of lines the user asks for.
 - Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
   natural spoken grammar, contractions where native speakers use them.
 - Ryan's lines are short and move the situation toward the goal.
+- Real shops, restaurants, hotels, menus and places may be named; never real people.
+- Keep the facts given in the situation (routes, menu items). Do not make up facts that are not given:
+  exit numbers, street addresses, opening hours, or menu items and prices you are not sure of. For a real place,
+  use only what is widely known, and keep directions simple (the subway line and the station). Small amounts the
+  talk needs, such as the total for an order, may be made up.
 """
 
 # Sohee interprets one line of an English roleplay into Korean (spec korean-translation 3). She only interprets:

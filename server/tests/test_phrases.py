@@ -19,3 +19,11 @@ def test_asking_again_neither_greets_nor_assumes_a_finished_roleplay():
     again = PHRASES["ask_again"]
     assert "안녕" not in again and "라이언입니다" not in again and "수고" not in again
     assert again != PHRASES["ask_mode"]
+
+
+def test_topic_steps_have_ryans_lines():
+    # spec situation-topics 6: topic, how to pick, the list, describing it
+    assert PHRASES["ask_topic"] == "어떤 주제로 연습해 볼까요?"
+    assert PHRASES["ask_how"] == "어떻게 상황을 정할까요?"
+    assert PHRASES["ask_pick"] == "해 보고 싶은 상황을 골라 주세요."
+    assert PHRASES["ask_describe"] == "어떤 상황인지 말하거나 써 주세요."
