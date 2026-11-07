@@ -104,7 +104,8 @@ class Engine:
             await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
         old = self.load(rp_id)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
-                      situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines])
+                      situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
+                      origin=old.origin or old.id)  # a copy of a copy still points at the first (ADR-0011)
         self.store.save(rp)
         for line in rp.lines:
             if not self.ready(line):
@@ -354,7 +355,8 @@ class Engine:
             yield {"type": "reply", "line": reply.model_dump(mode="json")}
         timings["total"] = time.perf_counter() - t0
         await self.save_attempt(rp_id, idx, Attempt(n=n, mode=mode, heard=heard, followed=followed, issues=issues,
-                                                    say_ko="".join(said), audio=keys, timings=timings),
+                                                    say_ko="".join(said), audio=keys, timings=timings,
+                                                    at=datetime.now().isoformat(timespec="seconds")),
                                 pos=nxt if (mode == "turn" and not failed) else None)
         log.info("attempt %s/%d n=%d followed=%s issues=%d transcribed=%.2f first_text=%.2f first_audio=%.2f "
                  "total=%.2f", rp_id, idx, n, followed, len(issues), timings.get("transcribed", 0),

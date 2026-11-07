@@ -75,6 +75,8 @@ class Attempt(BaseModel):
     say_ko: str
     audio: list[str]
     timings: dict[str, float]
+    # when it was recorded, ISO to the second; None on tries made before 2026-11-07 (ADR-0011)
+    at: str | None = None
 
 
 class Roleplay(BaseModel):
@@ -85,6 +87,8 @@ class Roleplay(BaseModel):
     lines: list[ScriptLine]
     attempts: dict[int, list[Attempt]] = {}
     pos: int = 0
+    # the first roleplay of its group when made by 「이 상황 다시 하기」; None on that first one (ADR-0011)
+    origin: str | None = None
 
 
 class Said(BaseModel):
