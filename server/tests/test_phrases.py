@@ -27,3 +27,16 @@ def test_topic_steps_have_ryans_lines():
     assert PHRASES["ask_how"] == "어떻게 상황을 정할까요?"
     assert PHRASES["ask_pick"] == "해 보고 싶은 상황을 골라 주세요."
     assert PHRASES["ask_describe"] == "어떤 상황인지 말하거나 써 주세요."
+
+
+def test_first_screen_asks_what_to_practise():
+    # spec review-screens 1: 「복습하기」 is not a way of talking, so Ryan asks what to practise
+    assert PHRASES["ask_mode"] == "오늘은 무엇을 연습해 볼까요?"
+    assert PHRASES["ask_again"] == "이번에는 무엇을 연습해 볼까요?"
+
+
+def test_ryan_says_daehwa_not_roleplay():
+    # spec review-screens 6: on screen and in Ryan's fixed lines the roleplay is 「대화」
+    assert PHRASES["closing_retry"].startswith("대화 끝! 수고했어요.")
+    assert PHRASES["closing_clean"].startswith("대화 끝! 수고했어요.")
+    assert not [k for k, v in PHRASES.items() if "역할극" in v]
