@@ -11,7 +11,6 @@ import { initial, reduce } from "./src/flow/state";
 import { EndScreen } from "./src/screens/EndScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { PastScreen } from "./src/screens/PastScreen";
-import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { RoleplayScreen } from "./src/screens/RoleplayScreen";
 import { SavedScreen } from "./src/screens/SavedScreen";
 import { SituationScreen } from "./src/screens/SituationScreen";
@@ -53,8 +52,6 @@ export default function App() {
         onBack={() => dispatch({ type: "home" })}
       />
     );
-  } else if (state.screen === "review") {
-    screen = <ReviewScreen dispatch={dispatch} />;
   } else if (state.screen === "past") {
     screen = <PastScreen dispatch={dispatch} />;
   } else if (state.screen === "saved") {

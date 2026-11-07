@@ -4,9 +4,9 @@ import type { ErrorCode } from "../api/client";
 import type { AttemptEvent, AttemptMode, Progress, Roleplay, Said, ScriptLine } from "../api/types";
 import type { SituationStart } from "./situation";
 
-// review: 「다시 연습」's menu; past and saved: its two lists (spec review-practice 1, 2, 6). The last conversation of
-// a past situation is the end screen with `past` set (3).
-export type Screen = "home" | "situation" | "roleplay" | "end" | "review" | "past" | "saved";
+// past and saved: the two tabs of 「복습하기」 (spec review-screens 2; it was a menu of two buttons before). The last
+// conversation of a past situation is the end screen with `past` set (spec review-practice 3).
+export type Screen = "home" | "situation" | "roleplay" | "end" | "past" | "saved";
 export type Phase = "loading" | "ryan" | "ready" | "recording" | "evaluating" | "evaluated" | "error";
 // a learner bubble keeps the script line next to what was heard (spec roleplay-practice 2), and its line number
 // for 「이 줄 다시」 (9)
@@ -184,7 +184,7 @@ export function practiceFor(s: State, b: Pick<Bubble, "kind" | "idx">): "mine" |
   return null;
 }
 
-// Whether going back needs 「역할극을 그만둘까요?」 first: only when a roleplay in progress would be lost. Back from
+// Whether going back needs 「대화를 그만둘까요?」 first: only when a roleplay in progress would be lost. Back from
 // a practice returns to the roleplay or the end screen, so nothing is lost. Back is the only way out of the screen
 // since 「처음으로」 went (2026-11-06 user).
 export function askFirst(s: State): boolean {
@@ -219,8 +219,8 @@ export function reduce(s: State, a: Action): State {
       return { ...initial };
     case "back":
       // the on-screen back button and the phone's back key: the screen before this one
-      if (s.screen === "situation" || s.screen === "review") return { ...initial };
-      if (s.screen === "past" || s.screen === "saved") return { ...initial, screen: "review" };
+      // 「복습하기」 goes home from either tab: switching tabs is not a step back (spec review-screens 2)
+      if (s.screen === "situation" || s.screen === "past" || s.screen === "saved") return { ...initial };
       if (s.screen === "roleplay" && s.practice) return leavePractice(s);
       if ((s.screen === "roleplay" || s.screen === "end") && s.returnTo) return restore(s.returnTo);
       if (s.screen === "end" && s.past) return { ...initial, screen: "past" };
@@ -375,11 +375,14 @@ export function reduce(s: State, a: Action): State {
     case "interpret":
       return s.line ? { ...s, interpreting: a.open } : s;
     case "openReview":
-      return s.screen === "home" ? { ...initial, screen: "review" } : s;
+      // 「복습하기」 opens on the past tab (spec review-screens 2)
+      return s.screen === "home" ? { ...initial, screen: "past" } : s;
     case "openPast":
-      return s.screen === "review" ? { ...initial, screen: "past" } : s;
-    case "openSaved":
-      return s.screen === "review" ? { ...initial, screen: "saved" } : s;
+    case "openSaved": {
+      // the tabs, taken only on 「복습하기」
+      const tab = a.type === "openPast" ? "past" : "saved";
+      return s.screen === "past" || s.screen === "saved" ? { ...initial, screen: tab } : s;
+    }
     case "openPastRun":
       if (s.screen !== "past") return s;
       return { ...initial, screen: "end", past: { group: a.group, title: a.title }, closingPlayed: true };

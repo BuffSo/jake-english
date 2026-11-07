@@ -441,11 +441,11 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
   });
 });
 
-// --- 다시 연습 (spec review-practice 1, 3, 7, 9) ------------------------------------------------------------------
+// --- 복습하기 (spec review-practice 1, 3, 7, 9; review-screens 2: the menu became two tabs) -------------------------
 
-describe("다시 연습", () => {
-  const review = reduce(initial, { type: "openReview" });
-  const pastList = reduce(review, { type: "openPast" });
+describe("복습하기", () => {
+  const review = reduce(initial, { type: "openReview" }); // opens on the past tab
+  const pastList = review;
   const savedList = reduce(review, { type: "openSaved" });
   const pastView = reduce(pastList, { type: "openPastRun", group: rp.id, title: "길 묻기" });
   const shown = reduce(pastView, { type: "pastLoaded", roleplay: rp });
@@ -453,16 +453,26 @@ describe("다시 연습", () => {
   const copy = { ...rp, id: "cccccccccccc", origin: rp.id } as Roleplay;
   const evaluated = (s: State): State => ({ ...s, phase: "evaluated" });
 
-  test("home opens review, review back goes home", () => {
-    expect(review.screen).toBe("review");
+  test("home opens 복습하기 on the past tab; back from either tab goes home", () => {
+    expect(review.screen).toBe("past");
     expect(reduce(review, { type: "back" })).toEqual(initial);
+    expect(reduce(savedList, { type: "back" })).toEqual(initial);
   });
 
-  test("review opens past and saved; back from them returns to review", () => {
-    expect(pastList.screen).toBe("past");
+  test("the tabs switch between past and saved", () => {
     expect(savedList.screen).toBe("saved");
-    expect(reduce(pastList, { type: "back" }).screen).toBe("review");
-    expect(reduce(savedList, { type: "back" }).screen).toBe("review");
+    expect(reduce(savedList, { type: "openPast" }).screen).toBe("past");
+  });
+
+  test("the tabs are taken only on 복습하기", () => {
+    expect(reduce(initial, { type: "openPast" })).toBe(initial);
+    expect(reduce(initial, { type: "openSaved" })).toBe(initial);
+    expect(reduce(at("ready"), { type: "openSaved" })).toEqual(at("ready"));
+    expect(reduce(review, { type: "openReview" })).toBe(review);
+  });
+
+  test("a saved practice asked for before switching to the past tab does not start", () => {
+    expect(reduce(pastList, { type: "startSaved", runs: [rp], order: [1] })).toBe(pastList);
   });
 
   test("openPastRun shows the end screen as a past view without closing words", () => {
@@ -472,7 +482,7 @@ describe("다시 연습", () => {
     expect(pastView.closingPlayed).toBe(true);
     expect(shown.roleplay).toBe(rp);
     expect(reduce(at("ready"), { type: "pastLoaded", roleplay: rpB })).toEqual(at("ready"));
-    expect(reduce(review, { type: "openPastRun", group: rp.id, title: "x" })).toBe(review);
+    expect(reduce(savedList, { type: "openPastRun", group: rp.id, title: "x" })).toBe(savedList);
   });
 
   test("back from a past view returns to the past list", () => {
