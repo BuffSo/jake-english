@@ -19,7 +19,7 @@ import { StarButton, StarMark } from "../ui/Star";
 import { colors, top } from "../ui/theme";
 import { useInterpret } from "../ui/useInterpret";
 import { useSaved } from "../ui/useSaved";
-import { messageOf, styles as common, Waiting } from "./common";
+import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
 type Source = ReturnType<typeof api.audioSource>;
@@ -219,7 +219,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
             />
           );
         })}
-        {error && <Text style={common.error}>{error}</Text>}
+        {error && <ErrorText text={error} />}
       </ScrollView>
       {/* no 「처음으로」: back goes to a new situation, one more back to the first screen (2026-11-06 user) */}
       {summary && rp && (

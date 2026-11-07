@@ -16,13 +16,14 @@ import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
+import { keepWords } from "../ui/keepWords";
 import { Named } from "../ui/Named";
 import { StarButton, StarMark } from "../ui/Star";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { useInterpret } from "../ui/useInterpret";
 import { useSaved } from "../ui/useSaved";
 import { colors, top } from "../ui/theme";
-import { codeOf, messageOf, styles as common, Waiting } from "./common";
+import { codeOf, ErrorText, messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
 type Rate = 0.6 | 0.8 | 1;
@@ -486,7 +487,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             <Text style={[styles.link, !canCopy && styles.off]}>{copying ? "준비하고 있어요" : "이 상황 다시 하기 ›"}</Text>
           </Pressable>
         )}
-        {copyError && <Text style={common.error}>{copyError}</Text>}
+        {copyError && <ErrorText text={copyError} />}
       </View>
       <ScrollView
         ref={scroll}
@@ -586,7 +587,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           </Named>
         )}
         {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" onShow={toEnd} />}
-        {state.message && <Text style={state.phase === "error" ? common.error : styles.notice}>{state.message}</Text>}
+        {state.message &&
+          (state.phase === "error" ? <ErrorText text={state.message} /> : <Text style={styles.notice}>{keepWords(state.message)}</Text>)}
       </ScrollView>
 
       {/* No 「처음으로」 at the bottom: back does nearly the same, one screen at a time (2026-11-06 user). Without it

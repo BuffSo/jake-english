@@ -10,7 +10,7 @@ import { ChoiceCard } from "../ui/ChoiceCard";
 import { keepWords } from "../ui/keepWords";
 import { RyanPortrait } from "../ui/RyanFace";
 import { colors, top } from "../ui/theme";
-import { messageOf, styles as common } from "./common";
+import { ErrorText, messageOf, styles as common } from "./common";
 
 type Props = {
   sounds: SoundQueue;
@@ -92,7 +92,7 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
       )}
       {error && (
         <>
-          <Text style={common.error}>{error}</Text>
+          <ErrorText text={error} />
           <Button label="다시 시도" onPress={load} />
         </>
       )}

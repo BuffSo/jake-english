@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { ApiError, type ErrorCode } from "../api/client";
 import { OFFLINE } from "../flow/state";
 import { Dots, SHOW_AFTER, ThinkingFace, useLate } from "../ui/ThinkingFace";
+import { keepWords } from "../ui/keepWords";
 import { colors } from "../ui/theme";
 import type { Who } from "../ui/thinking";
 
@@ -38,10 +39,19 @@ export function Waiting({ text, who, onShow }: { text: string; who?: Who; onShow
   );
 }
 
+// Every error on screen, so each goes through `keepWords` (todo 12-2): the Mac's own words (`say.text`) and the
+// connection errors are long Korean. The red style is not exported, so an error drawn without this does not compile.
+export function ErrorText({ text }: { text: string }) {
+  return <Text style={own.error}>{keepWords(text)}</Text>;
+}
+
+const own = StyleSheet.create({
+  error: { color: colors.danger, fontSize: 16, marginVertical: 8 },
+});
+
 export const styles = StyleSheet.create({
   wait: { alignItems: "center", padding: 24 },
   waitText: { marginTop: 12, fontSize: 17, color: colors.sub, textAlign: "center" },
-  error: { color: colors.danger, fontSize: 16, marginVertical: 8 },
   title: { fontSize: 22, fontWeight: "700", color: colors.text },
   body: { fontSize: 18, color: colors.text, lineHeight: 26 },
   sub: { fontSize: 15, color: colors.sub },

@@ -35,7 +35,7 @@ import { FaceCircle } from "../ui/RyanFace";
 import { ThinkingFace } from "../ui/ThinkingFace";
 import { colors, top } from "../ui/theme";
 import { waiterOf } from "../ui/thinking";
-import { messageOf, styles as common, Waiting } from "./common";
+import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 
 type Props = {
   sounds: SoundQueue;
@@ -271,7 +271,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
             </ListCard>
           ))}
         </ScrollView>
-        {error && <Text style={common.error}>{error}</Text>}
+        {error && <ErrorText text={error} />}
       </View>
     );
   }
@@ -327,7 +327,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
           <Waiting text={status} />
         </>
       )}
-      {error && <Text style={common.error}>{error}</Text>}
+      {error && <ErrorText text={error} />}
     </View>
   );
 }

@@ -12,7 +12,7 @@ import { Button } from "../ui/Button";
 import { keepWords } from "../ui/keepWords";
 import { ListCard } from "../ui/ListCard";
 import { colors } from "../ui/theme";
-import { messageOf, styles as common } from "./common";
+import { ErrorText, messageOf, styles as common } from "./common";
 
 export function PastTab({ dispatch }: { dispatch: Dispatch<Action> }) {
   const [items, setItems] = useState<PastItem[] | null>(null);
@@ -44,7 +44,7 @@ export function PastTab({ dispatch }: { dispatch: Dispatch<Action> }) {
       ))}
       {error && (
         <>
-          <Text style={common.error}>{error}</Text>
+          <ErrorText text={error} />
           <Button label="다시 시도" onPress={load} />
         </>
       )}
