@@ -338,3 +338,5 @@ def test_aside_prompt_keeps_the_teacher_rules():
     p = prompts.ASIDE_SYSTEM
     for must in ("해요체", "읽는 법 보기", "처럼 들렸어요", "다시"):
         assert must in p
+    # the app calls the roleplay 「대화」 (review-screens, user 2026-11-07); Ryan says it the same way
+    assert "「역할극」이라고 하지 않고 「대화」라고 해요" in p
