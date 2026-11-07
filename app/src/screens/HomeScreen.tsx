@@ -6,6 +6,7 @@ import type { Home, Said } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { homeLines } from "../flow/homeLines";
 import { Button } from "../ui/Button";
+import { ChoiceCard } from "../ui/ChoiceCard";
 import { RyanPortrait } from "../ui/RyanFace";
 import { colors, top } from "../ui/theme";
 import { messageOf, styles as common } from "./common";
@@ -66,9 +67,25 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
               {l.text}
             </Text>
           ))}
-          <Button label="상황 역할극" onPress={onRoleplay} />
-          {/* new or again: the first screen splits only these two (spec review-practice 1) */}
-          <Button label="다시 연습" onPress={onReview} />
+          {/* new or again: the first screen splits only these two (spec review-practice 1); each says what it does
+              in a line, and the two colours tell them apart (spec review-screens 1) */}
+          <View style={styles.choices}>
+            <ChoiceCard
+              icon="💬"
+              title="대화 연습하기"
+              line="상황을 정하면 라이언과 영어로 주고받아요"
+              color={colors.primary}
+              onPress={onRoleplay}
+            />
+            <View style={styles.gap} />
+            <ChoiceCard
+              icon="↻"
+              title="복습하기"
+              line="지난 상황과 모아 둔 문장을 다시 말해 봐요"
+              color={colors.review}
+              onPress={onReview}
+            />
+          </View>
         </>
       )}
       {error && (
@@ -86,4 +103,6 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, paddingTop: top, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: colors.bg },
   face: { marginBottom: 16 },
   say: { marginBottom: 8 },
+  choices: { marginTop: 14 },
+  gap: { height: 12 },
 });

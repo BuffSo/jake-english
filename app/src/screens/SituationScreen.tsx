@@ -1,6 +1,6 @@
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../api";
 import type { Home, Roleplay, Said, Topic } from "../api/types";
@@ -27,6 +27,7 @@ import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { circleFace, type Face } from "../ui/faces";
 import { Named } from "../ui/Named";
+import { ListCard } from "../ui/ListCard";
 import { FaceCircle } from "../ui/RyanFace";
 import { ThinkingFace } from "../ui/ThinkingFace";
 import { colors, top } from "../ui/theme";
@@ -263,15 +264,9 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
         {ryanSays && <Text style={[common.body, styles.say]}>{ryanSays}</Text>}
         <ScrollView contentContainerStyle={styles.list}>
           {topic.picks.map((p) => (
-            <Pressable
-              key={p.id}
-              accessibilityRole="button"
-              onPress={() => create({ pick: p.id })}
-              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-            >
-              <Text style={[common.body, styles.cardText]}>{p.title_ko}</Text>
-              <Text style={styles.chevron}>›</Text>
-            </Pressable>
+            <ListCard key={p.id} onPress={() => create({ pick: p.id })}>
+              <Text style={common.body}>{p.title_ko}</Text>
+            </ListCard>
           ))}
         </ScrollView>
         {error && <Text style={common.error}>{error}</Text>}
@@ -362,18 +357,6 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     marginBottom: 8,
   },
+  // the gray rounded cards, the same as the lists of 「복습하기」 (spec review-screens 5)
   list: { paddingBottom: 12 },
-  // the gray rounded cards of the list, a 「›」 at the end (spec 2; the review lists may take the same look later)
-  card: {
-    backgroundColor: colors.ryan,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  pressed: { opacity: 0.6 },
-  cardText: { flex: 1 },
-  chevron: { fontSize: 22, color: colors.weak, marginLeft: 8 },
 });
