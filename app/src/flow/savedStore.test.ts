@@ -69,3 +69,23 @@ test("unsaving a saved sentence turns it off", async () => {
   await done;
   expect(store.has("Sure.")).toBe(false);
 });
+
+test("a list that could not be loaded says so until it loads", async () => {
+  let fail = true;
+  const store = createSavedStore({
+    list: async () => {
+      if (fail) throw new Error("offline");
+      return [];
+    },
+    set: async () => {},
+    onFail: () => {},
+    changed: () => {},
+  });
+  await store.refresh();
+  expect(store.items()).toBeNull();
+  expect(store.lastError()).toBeInstanceOf(Error);
+  fail = false;
+  await store.refresh();
+  expect(store.lastError()).toBeNull();
+  expect(store.items()).toEqual([]);
+});

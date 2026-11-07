@@ -595,3 +595,13 @@ describe("다시 연습", () => {
     expect(s).toEqual(initial);
   });
 });
+
+test("a past view knows its lines, so practice shows the line before (final review)", () => {
+  const past = reduce(reduce(reduce(reduce(initial, { type: "openReview" }), { type: "openPast" }), {
+    type: "openPastRun",
+    group: rp.id,
+    title: "길 묻기",
+  }), { type: "pastLoaded", roleplay: rp });
+  const s = reduce(past, { type: "startPractice", kind: "mine", order: [1] });
+  expect(s.seen[0]).toEqual(rp.lines[0]);
+});

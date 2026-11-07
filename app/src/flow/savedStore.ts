@@ -15,16 +15,18 @@ export type SavedStore = ReturnType<typeof createSavedStore>;
 export function createSavedStore(deps: Deps) {
   let items: SavedItem[] | null = null;
   let keys = new Set<string>();
+  let error: unknown = null; // why the last list could not be loaded, shown when there is no list yet
   const busy = new Set<string>(); // sentences whose change is on its way: a second tap waits (double taps)
 
   async function refresh(): Promise<void> {
     try {
       items = await deps.list();
       keys = new Set(items.map((i) => i.key));
-      deps.changed();
-    } catch {
-      // keep what was shown; the next screen that opens asks again
+      error = null;
+    } catch (e) {
+      error = e; // keep what was shown; the next screen that opens asks again
     }
+    deps.changed();
   }
 
   async function toggle(rpId: string, idx: number, text: string): Promise<void> {
@@ -49,6 +51,7 @@ export function createSavedStore(deps: Deps) {
 
   return {
     items: () => items,
+    lastError: () => error,
     has: (text: string) => keys.has(sentenceKey(text)),
     pending: (text: string) => busy.has(sentenceKey(text)),
     refresh,

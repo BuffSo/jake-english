@@ -376,7 +376,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                 <Text style={styles.link}>{open[idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
               </Pressable>
               <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
-              {star && <StarButton saved={star.saved} onPress={star.onPress} disabled={star.busy} />}
+              {star && <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />}
             </View>
             {follow && (
               <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} inRow />
@@ -420,7 +420,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
               {practiceFor(state, b) === "mine" && (
                 <PractiseLink label="이 줄 다시 ›" disabled={!canPractise} onPress={() => practise("mine", idx)} inRow />
               )}
-              {star && <StarButton saved={star.saved} onPress={star.onPress} disabled={star.busy} />}
+              {star && <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />}
             </View>
           )}
         </Pressable>

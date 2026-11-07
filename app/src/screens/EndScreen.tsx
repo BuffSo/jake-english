@@ -245,7 +245,7 @@ function RyanLine(props: LineProps & { onFollow: () => void }) {
           <Pressable onPress={onFollow} hitSlop={8}>
             <Text style={styles.again}>따라 말하기 ›</Text>
           </Pressable>
-          <StarButton saved={star.saved} onPress={star.onPress} disabled={star.busy} />
+          <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />
         </View>
       )}
     </Pressable>
@@ -277,7 +277,7 @@ function MyLine(props: LineProps & { id: string; onPair: (p: { first: TryRef; th
           <Pressable onPress={onAgain} hitSlop={8}>
             <Text style={styles.again}>이 줄 다시 ›</Text>
           </Pressable>
-          <StarButton saved={star.saved} onPress={star.onPress} disabled={star.busy} />
+          <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />
         </View>
       )}
     </Pressable>

@@ -9,6 +9,7 @@ import { dayKo } from "../flow/review";
 import type { Action } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
+import { InRowButton } from "../ui/InRowButton";
 import { colors, top } from "../ui/theme";
 import { useSaved } from "../ui/useSaved";
 import { messageOf, styles as common, Waiting } from "./common";
@@ -65,9 +66,13 @@ export function SavedScreen({ dispatch }: { dispatch: Dispatch<Action> }) {
           >
             <View style={styles.top}>
               <Text style={[styles.tag, i.speaker === "ryan" ? styles.ryan : styles.mine]}>{i.speaker === "ryan" ? "라이언" : "나"}</Text>
-              <Pressable hitSlop={8} onPress={() => saved.toggle(i.rp_id, i.idx, i.text)} disabled={saved.pending(i.text)}>
-                <Text style={styles.remove}>빼기 ✕</Text>
-              </Pressable>
+              {/* not disabled while it is on its way: a second tap would open the practice of the row (final review) */}
+              <InRowButton
+                label="빼기 ✕"
+                onPress={() => saved.toggle(i.rp_id, i.idx, i.text)}
+                dim={saved.pending(i.text)}
+                textStyle={styles.remove}
+              />
             </View>
             <Text style={styles.text}>{i.text}</Text>
             <Text style={common.sub}>
@@ -75,6 +80,12 @@ export function SavedScreen({ dispatch }: { dispatch: Dispatch<Action> }) {
             </Text>
           </Pressable>
         ))}
+        {items === null && saved.lastError() !== null && (
+          <>
+            <Text style={common.error}>{messageOf(saved.lastError())}</Text>
+            <Button label="다시 시도" onPress={() => saved.refresh()} />
+          </>
+        )}
         {starting && <Waiting text="준비하고 있어요" />}
         {error && <Text style={common.error}>{error}</Text>}
       </ScrollView>

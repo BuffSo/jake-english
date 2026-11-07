@@ -363,7 +363,9 @@ export function reduce(s: State, a: Action): State {
       if (s.screen !== "past") return s;
       return { ...initial, screen: "end", past: { group: a.group, title: a.title }, closingPlayed: true };
     case "pastLoaded":
-      return s.screen === "end" && s.past ? { ...s, roleplay: a.roleplay } : s;
+      // the lines are known at once, so a practice from here shows the line before (spec roleplay-practice 4)
+      if (s.screen !== "end" || !s.past) return s;
+      return { ...s, roleplay: a.roleplay, seen: Object.fromEntries(a.roleplay.lines.map((l) => [l.idx, l])) };
     case "startSaved": {
       if (s.screen !== "saved" || a.order.length === 0 || a.runs.length !== a.order.length) return s;
       const kind = kindAt(a.runs[0], a.order[0]);

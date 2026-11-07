@@ -33,7 +33,7 @@ export function LineToSay({ text, three, open, onToggle, ko, star }: Props) {
           </Pressable>
         )}
         <KoButton view={ko.view} onPress={ko.onToggle} />
-        {star && <StarButton saved={star.saved} onPress={star.onPress} disabled={star.busy} />}
+        {star && <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />}
       </View>
     </View>
   );
