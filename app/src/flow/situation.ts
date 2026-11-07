@@ -50,6 +50,15 @@ export function backFrom(step: SituationStep, origin: Origin): SituationStep | n
   }
 }
 
+// Where the screen opens when the learner comes back from a roleplay: the step its situation was picked from, in the
+// same topic (spec situation-topics 2, 6). A topic the server no longer has starts at the topics, and a list that
+// has since emptied opens how to pick instead of a list without cards (todo 05).
+export function resumeFrom(start: SituationStart | null, topics: Topic[]): SituationStart | null {
+  const topic = start ? topics.find((t) => t.id === start.topic) : undefined;
+  if (!start || !topic) return null;
+  return start.step === "list" && topic.picks.length === 0 ? { ...start, step: "how" } : start;
+}
+
 export function startStep(start: SituationStart | null): SituationStep {
   return start ? start.step : "topic";
 }

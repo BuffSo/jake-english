@@ -14,6 +14,7 @@ import {
   HOW_LABEL,
   howChoices,
   lineFor,
+  resumeFrom,
   startStep,
   topicsOf,
   type HowChoice,
@@ -52,7 +53,7 @@ const OTHER = "other"; // 「그 밖의 상황」, the plain button under the tw
 // what back does are in flow/situation.ts.
 export function SituationScreen({ sounds, home, start, onCreated, onBack }: Props) {
   const topics = topicsOf(home);
-  const known = start && topics.some((t) => t.id === start.topic) ? start : null;
+  const known = resumeFrom(start, topics);
   const [topicId, setTopicId] = useState<string | null>(known?.topic ?? null);
   const [step, setStep] = useState<SituationStep>(startStep(known));
   const now = useRef<SituationStep>(startStep(known)); // the step as of the last tap, before React re-renders
