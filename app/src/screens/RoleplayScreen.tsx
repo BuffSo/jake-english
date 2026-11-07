@@ -80,7 +80,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     };
   }, []);
 
-  // load the current line (the server waits until its notes and sound are ready)
+  // load the current line (the server waits until its sound is ready; a learner's notes may come later, fetched below)
   useEffect(() => {
     if (state.phase !== "loading") return;
     let alive = true;

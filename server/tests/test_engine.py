@@ -208,6 +208,8 @@ async def test_a_line_whose_sound_failed_still_gets_its_notes(engine, fake_claud
     assert line.audio is None and line.three is None
     fake_claude.annotate_gate.set()
     assert (await engine.three(rp.id, 1)).words
+    # the notes went on from the background call; they were not started again
+    assert sum(1 for n, a in fake_claude.calls if n == "annotate" and a[0] == DRAFT_USER[0]) == 1
 
 
 async def test_notes_asked_while_made_in_the_background_share_one_call(engine, fake_claude):
@@ -215,6 +217,9 @@ async def test_notes_asked_while_made_in_the_background_share_one_call(engine, f
 
     fake_claude.annotate_gate = asyncio.Event()
     rp = await engine.create("길 묻기")
+    await asyncio.sleep(0)
+    # made in the background as soon as the script is there, before anyone asks (spec dont-wait-for-line-notes 1)
+    assert ("annotate", (rp.lines[1].text, engine.context(rp, 1))) in fake_claude.calls
     asks = [asyncio.create_task(engine.three(rp.id, 1)) for _ in range(2)]
     await asyncio.sleep(0)
     fake_claude.annotate_gate.set()
