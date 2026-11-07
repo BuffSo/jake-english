@@ -95,6 +95,9 @@ class Roleplay(BaseModel):
     # the situation topic's id (je_server.topics); None on roleplays made before topics, read as "other"
     # (spec situation-topics 7)
     topic: str | None = None
+    # the list line's id (je_server.topics) when picked from a topic's list; runs of one pick share one group
+    # (spec fixed-list-scripts 5, ADR-0013). None on other roleplays and on records from before.
+    pick: str | None = None
 
 
 class Saved(BaseModel):
