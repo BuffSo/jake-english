@@ -116,7 +116,7 @@ class Engine:
                              for i, (s, t) in enumerate(p.script)])
         self.store.save(rp)
         for line in rp.lines:
-            if not self.ready(line):
+            if not self.prepared(line):
                 self.schedule(rp.id, line.idx)
         return rp
 
@@ -149,51 +149,53 @@ class Engine:
                       topic=old.topic, pick=old.pick)
         self.store.save(rp)
         for line in rp.lines:
-            if not self.ready(line):
+            if not self.prepared(line):
                 self.schedule(rp.id, line.idx)
         return rp
 
     def schedule(self, rp_id: str, idx: int) -> asyncio.Task:
+        """Starts what the line still lacks and returns its sound task. The learner's notes are made beside it on
+        the task `three` shares, so the line does not wait for them (spec dont-wait-for-line-notes 1); being made
+        apart, a sound that fails fast cannot leave the line without its notes either (PR #15 review)."""
+        _, line = self.get_line(rp_id, idx)
+        if line.speaker == "user" and line.three is None:
+            self._three_task(rp_id, idx)
         key = (rp_id, idx)
         task = self.tasks.get(key)
         if task is None or (task.done() and (task.cancelled() or task.exception() is not None)):
-            task = asyncio.create_task(self._prepare(rp_id, idx))
+            task = asyncio.create_task(self._sound(rp_id, idx))
             task.add_done_callback(_quiet)
             self.tasks[key] = task
         return task
 
     @staticmethod
     def ready(line: ScriptLine) -> bool:
+        """The line can be shown: its model sound is made. The learner's notes come apart (spec
+        dont-wait-for-line-notes 1): the line starts as plain text and they open only when asked."""
+        return line.audio is not None
+
+    @staticmethod
+    def prepared(line: ScriptLine) -> bool:
+        """Nothing is left to make: the sound, and the notes of a learner's line (Ryan's are made when asked)."""
         return line.audio is not None and (line.speaker == "ryan" or line.three is not None)
 
-    async def _prepare(self, rp_id: str, idx: int) -> None:
-        """Notes and model sound are made at the same time; the sound does not need the notes."""
-        rp, line = self.get_line(rp_id, idx)
-
-        async def notes():
-            if line.speaker == "user" and line.three is None:
-                async with self.sem:
-                    three = await self.claude.annotate(line.text, self.context(rp, idx))
-                await self.update_line(rp_id, idx, line.text, three=three)
-
-        async def sound():
-            if line.audio is None:
-                key = await self.voice.say(line.text, "ryan", "english", urgent=False, rank=idx)
-                await self.update_line(rp_id, idx, line.text, audio=key)
-
-        # both finish before either failure is raised: a sound that fails fast must not leave the line without
-        # its notes, since the roleplay screen does not ask for them again (PR #15 review)
-        results = await asyncio.gather(notes(), sound(), return_exceptions=True)
-        for r in results:
-            if isinstance(r, BaseException):
-                raise r
+    async def _sound(self, rp_id: str, idx: int) -> None:
+        _, line = self.get_line(rp_id, idx)
+        if line.audio is None:
+            key = await self.voice.say(line.text, "ryan", "english", urgent=False, rank=idx)
+            await self.update_line(rp_id, idx, line.text, audio=key)
 
     async def line(self, rp_id: str, idx: int) -> ScriptLine:
+        """The line once its sound is made; the learner's notes go on in the background (a server restarted
+        mid-way starts them again here)."""
         _, line = self.get_line(rp_id, idx)
+        if self.prepared(line):
+            return line
+        task = self.schedule(rp_id, idx)
         if self.ready(line):
             return line
         try:
-            await asyncio.wait_for(asyncio.shield(self.schedule(rp_id, idx)), LINE_WAIT)
+            await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
         except VoiceError:
             # the line comes without its sound rather than as an error: the roleplay moves on after a pause and
             # shadow practice can still record it (final review); the next request tries the sound again
@@ -216,11 +218,16 @@ class Engine:
         return {"no": min(before + 1, total), "total": total}
 
     async def three(self, rp_id: str, idx: int) -> ThreeLine:
-        """Notes on demand (Ryan's lines). Asks for the same line at once share one Claude call (PR #15 review:
-        the end screen asks for every Ryan line and the shadow screen asks again)."""
+        """A line's notes: Ryan's are made when asked; the learner's are being made in the background and this
+        waits for that same call (spec dont-wait-for-line-notes 1). Asks for the same line at once share one Claude
+        call (PR #15 review: the end screen asks for every Ryan line and the shadow screen asks again)."""
         _, line = self.get_line(rp_id, idx)
         if line.three is not None:
             return line.three
+        return await asyncio.shield(self._three_task(rp_id, idx))
+
+    def _three_task(self, rp_id: str, idx: int) -> asyncio.Task:
+        """The one task making this line's notes, started if none is running."""
         key = (rp_id, idx)
         task = self.threes.get(key)
         if task is None or task.done():
@@ -228,7 +235,7 @@ class Engine:
             task.add_done_callback(_quiet)
             task.add_done_callback(lambda _: self.threes.pop(key, None))
             self.threes[key] = task
-        return await asyncio.shield(task)
+        return task
 
     async def _make_three(self, rp_id: str, idx: int) -> ThreeLine:
         rp, line = self.get_line(rp_id, idx)

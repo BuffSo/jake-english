@@ -16,8 +16,11 @@ pytestmark = pytest.mark.anyio
 
 
 async def ready(engine, rp):
+    """Every line's sound, and the learner's notes, which come apart from the line now."""
     for l in rp.lines:
         await engine.line(rp.id, l.idx)
+        if l.speaker == "user":
+            await engine.three(rp.id, l.idx)
 
 
 def changed_script(monkeypatch):
@@ -45,7 +48,7 @@ async def test_pick_again_joins_the_group_and_calls_no_claude(engine, fake_claud
     second = await engine.create_pick(*SNEAKER)
     third = await engine.create_pick(*SNEAKER)
     assert second.origin == first.id and third.origin == first.id  # a later run still points at the first
-    assert all(engine.ready(l) for l in second.lines + third.lines)  # notes and sounds came with it
+    assert all(engine.prepared(l) for l in second.lines + third.lines)  # notes and sounds came with it
     assert fake_claude.calls[calls:] == []
 
 
@@ -85,7 +88,7 @@ async def test_changed_line_is_made_again(engine, monkeypatch):
     second = await engine.create_pick(*SNEAKER)
     assert second.origin == first.id and second.lines[0].text == CHANGED
     assert second.lines[0].three is None and second.lines[0].audio is None
-    assert all(engine.ready(l) for l in second.lines[1:])
+    assert all(engine.prepared(l) for l in second.lines[1:])
 
 
 async def test_blank_note_is_made_again(engine):
