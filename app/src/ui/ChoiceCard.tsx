@@ -6,9 +6,10 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { keepWords } from "./keepWords";
 import { colors } from "./theme";
 
-type Props = { icon: string; title: string; line: string; color: string; onPress: () => void };
+// `iconSize`: a plain sign such as ↻ draws smaller than an emoji at the same size, so it may ask for more
+type Props = { icon: string; iconSize?: number; title: string; line: string; color: string; onPress: () => void };
 
-export function ChoiceCard({ icon, title, line, color, onPress }: Props) {
+export function ChoiceCard({ icon, iconSize = 26, title, line, color, onPress }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -16,7 +17,7 @@ export function ChoiceCard({ icon, title, line, color, onPress }: Props) {
       onPress={onPress}
       style={({ pressed }) => [styles.card, { backgroundColor: color }, pressed && styles.pressed]}
     >
-      <Text style={styles.icon}>{icon}</Text>
+      <Text style={[styles.icon, { fontSize: iconSize }]}>{icon}</Text>
       <View style={styles.body}>
         <Text style={styles.title}>{keepWords(title)}</Text>
         <Text style={styles.line}>{keepWords(line)}</Text>
@@ -29,7 +30,7 @@ export function ChoiceCard({ icon, title, line, color, onPress }: Props) {
 const styles = StyleSheet.create({
   card: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 14, flexDirection: "row", alignItems: "center" },
   pressed: { opacity: 0.7 },
-  icon: { width: 34, textAlign: "center", fontSize: 26, fontWeight: "700", color: "#FFFFFF", marginRight: 10 },
+  icon: { width: 36, textAlign: "center", fontWeight: "700", color: "#FFFFFF", marginRight: 10 },
   body: { flex: 1 },
   title: { fontSize: 18, fontWeight: "600", color: "#FFFFFF", lineHeight: 24 },
   line: { fontSize: 14, color: colors.onColorSub, lineHeight: 20, marginTop: 3 },

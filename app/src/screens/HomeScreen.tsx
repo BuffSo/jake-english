@@ -81,6 +81,7 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
             <View style={styles.gap} />
             <ChoiceCard
               icon="↻"
+              iconSize={34}
               title="복습하기"
               line="지난 상황과 모아 둔 문장을 다시 말해 봐요"
               color={colors.review}
