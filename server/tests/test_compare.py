@@ -35,10 +35,10 @@ def test_far_apart_words_in_a_span_get_no_sound():
 
 
 def test_far_apart_word_pair_gets_no_sound():
-    # a number misheard as another word swaps four sounds; one of them (S, TH) is on the list, but it is not a sound
-    # the learner changed (guide 「남은 것」, 2026-11-07). Same limit as inside a span whose word count changed.
-    [i] = compare("It's seventy dollars.", "It's thousand dollars.").diffs
-    assert (i.target, i.heard, i.sound, i.explain) == ("seventy", "thousand", None, "")
+    # a number written as an unrelated word swaps several sounds; one of them (F, P) is on the list, but it is not a
+    # sound the learner changed (guide 「남은 것」, 2026-11-07). Same limit as inside a span whose word count changed.
+    [i] = compare("It's fifteen dollars.", "It's pity dollars.").diffs  # three sounds apart
+    assert (i.target, i.heard, i.sound, i.explain) == ("fifteen", "pity", None, "")
     [i] = compare("I'm running late.", "I'm learning late.").diffs  # two sounds apart (R/L, AH/ER): still a tip
     assert set(i.sound) == {"R", "L"} and "혀" in i.explain
 

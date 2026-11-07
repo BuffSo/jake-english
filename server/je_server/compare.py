@@ -21,8 +21,9 @@ SOUND_LETTERS = {"R": "R", "L": "L", "F": "F", "P": "P", "V": "V", "B": "B", "TH
 
 FILLERS = frozenset({"um", "uh", "uhm", "umm", "er", "erm", "hmm", "mm"})
 # Only a word pair this close in dictionary sounds gets a listed sound, one to one or inside a span whose word count
-# changed. Farther apart, the transcriber heard another word (seventy as thousand swaps four sounds, one of them S/TH),
-# not one sound said differently (guide PRONUNCIATION_따라말하기_짚기 「남은 것」, 2026-11-08).
+# changed. Farther apart, the transcriber heard another word, not one sound said differently: a number written as an
+# unrelated word swaps several sounds, and one of them may be on the list (guide PRONUNCIATION_따라말하기_짚기
+# 「남은 것」, 2026-11-08).
 SOUND_MAX_EDITS = 2
 _ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
          "seventeen eighteen nineteen").split()
