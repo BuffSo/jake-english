@@ -31,6 +31,8 @@ export type Attempt = {
   audio: string[];
   timings: Record<string, number>;
   at: string | null; // when it was recorded; null on tries made before 2026-11-07 (ADR-0011)
+  // not followed, so teacher Ryan answered: not a turn (spec offscript-aside 6); absent on older tries
+  aside?: boolean;
 };
 export type Roleplay = {
   id: string;
@@ -96,7 +98,6 @@ export type AttemptEvent =
   | { type: "heard"; text: string; followed: boolean }
   | { type: "text"; delta: string }
   | { type: "audio"; key: string }
-  | { type: "reply"; line: ScriptLine }
   | { type: "error"; code: string; say: Said | null }
   | { type: "done"; next: number; issues: number };
 
@@ -104,7 +105,7 @@ export type AttemptEvent =
 export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin", "topic"] as const;
 export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
-export const EVENT_TYPES = ["heard", "text", "audio", "reply", "error", "done"] as const;
+export const EVENT_TYPES = ["heard", "text", "audio", "error", "done"] as const;
 export const SUMMARY_KEYS = ["say", "lines"] as const;
 export const TRY_KEYS = ["n", "mode", "heard", "followed", "issues", "point_ko"] as const;
 export const ISSUE_KEYS = ["target", "heard", "say_ko"] as const;
