@@ -324,3 +324,12 @@ async def test_continue_script_may_end_with_the_learner():
     fake = FakeAnthropic([ends_with_me])
     draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 2)
     assert draft[-1] == ("user", "Thanks, you too!") and len(fake.requests) == 1
+
+
+def test_recommend_system_has_no_scene_of_its_own():
+    # final review: the fixed example was a tourist-in-Korea scene, which could pull 미국 여행 and 그 밖의 상황 toward
+    # it; the scene comes from the topic's example in the message, the system keeps only the sentence form
+    from je_server import prompts
+
+    assert "케이블카" not in prompts.RECOMMEND_SYSTEM and "외국인" not in prompts.RECOMMEND_SYSTEM
+    assert "상황으로 연습해 보면 어때요?" in prompts.RECOMMEND_SYSTEM

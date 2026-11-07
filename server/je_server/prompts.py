@@ -104,7 +104,7 @@ something in English right away. The user gives the topic ("주제"): suggest a 
 ("예").
 
 Jake suggests it to the learner. Write request_ko as one polite Korean sentence (해요체) in Jake's words,
-ending with "상황으로 연습해 보면 어때요?" Example: "길에서 외국인이 케이블카 타는 곳을 물어보는 상황으로 연습해 보면 어때요?"
+ending with "상황으로 연습해 보면 어때요?", in the same form as the topic's example.
 Real places and shops may be named; never real people.
 Pick something different from the recent situations listed by the user, and from the situations on the topic's
 prepared list ("목록에 있는 상황") if there is one. If the user also lists situations the learner just
