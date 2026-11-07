@@ -67,3 +67,17 @@ async def test_save_unknown_line_is_not_found(engine):
     with pytest.raises(NotFound):
         await engine.set_saved(rp.id, 99, True)
     assert engine.store.load_saved() == []
+
+
+async def test_resave_after_line_lost(engine):
+    """A saved line that no longer resolves must not block saving the sentence again (PR #27 review)."""
+    rp = await engine.create("길 묻기")
+    await engine.set_saved(rp.id, 3, True)  # "Go straight and turn left."
+    lost = engine.store.load(rp.id)
+    lost.lines[3].text = "Turn right at the bank."
+    engine.store.save(lost)
+    other = await engine.create("길 묻기")
+    await engine.set_saved(other.id, 3, True)
+    [item] = engine.saved()
+    assert (item["rp_id"], item["idx"]) == (other.id, 3)
+    assert len(engine.store.load_saved()) == 1

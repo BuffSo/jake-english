@@ -519,17 +519,24 @@ class Engine:
         out = []
         items = self.store.load_saved()  # in the order saved, so two saves in one second keep their order
         for _, s in sorted(enumerate(items), key=lambda p: (p[1].at, p[0]), reverse=True):
-            try:
-                rp = self.store.load(s.rp_id)
-            except KeyError:
-                continue
-            here = rp.lines[s.idx] if s.idx < len(rp.lines) else None
-            line = here if here and sentence_key(here.text) == s.key else next(
-                (l for l in rp.lines if sentence_key(l.text) == s.key), None)
-            if line is not None:
+            found = self._resolve(s)
+            if found is not None:
+                rp, line = found
                 out.append({"key": s.key, "rp_id": rp.id, "idx": line.idx, "speaker": line.speaker, "text": line.text,
                             "title_ko": rp.frame.title_ko, "at": s.at})
         return out
+
+    def _resolve(self, s: Saved) -> tuple[Roleplay, ScriptLine] | None:
+        """The roleplay and line a saved entry points at: its own line while it still says the sentence, else the
+        first line of that roleplay that does; None when the roleplay or the sentence is gone."""
+        try:
+            rp = self.store.load(s.rp_id)
+        except KeyError:
+            return None
+        here = rp.lines[s.idx] if s.idx < len(rp.lines) else None
+        line = here if here and sentence_key(here.text) == s.key else next(
+            (l for l in rp.lines if sentence_key(l.text) == s.key), None)
+        return (rp, line) if line is not None else None
 
     async def set_saved(self, rp_id: str, idx: int, on: bool) -> dict:
         """Saves or unsaves the line's sentence; one entry per sentence wherever it was saved (spec 5)."""
@@ -537,9 +544,13 @@ class Engine:
         key = sentence_key(line.text)
         async with self.saved_lock:
             items = self.store.load_saved()
-            if on and all(s.key != key for s in items):
-                items.append(Saved(key=key, rp_id=rp_id, idx=idx, at=datetime.now().isoformat(timespec="seconds")))
-            elif not on:
+            if on:
+                # an entry whose line is gone is not on the list, so it must not keep the sentence from being saved
+                # again (PR #27 review): it is replaced by this line
+                items = [s for s in items if s.key != key or self._resolve(s) is not None]
+                if all(s.key != key for s in items):
+                    items.append(Saved(key=key, rp_id=rp_id, idx=idx, at=datetime.now().isoformat(timespec="seconds")))
+            else:
                 items = [s for s in items if s.key != key]
             self.store.save_saved(items)
         return {"key": key, "on": on}
