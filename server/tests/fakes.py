@@ -140,6 +140,10 @@ class FakeClaude:
         self.interpret_calls: list[dict] = []
         self.interpret_gate = None  # an asyncio.Event to hold interpret until set
         self.script_last = "ryan"  # who ends the scripts make_script gives
+        self.aside_calls: list[dict] = []
+        self.aside_pieces = ["괜찮아요, 말이 꼬일 수 있어요. ", "다시 해 볼까요?"]
+        # pieces given before aside() fails; 0 fails at once. Not fail_next: background notes may take that first.
+        self.aside_fail_after: int | None = None
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -177,6 +181,16 @@ class FakeClaude:
                                     "issues": [i.model_dump() for i in issues], "last": last})
         self._maybe_fail()
         for piece in self.feedback_pieces:
+            yield piece
+
+    async def aside(self, frame, history, line, heard, heard_ko, issues, earlier):
+        self.aside_calls.append({"frame": frame.model_dump(), "history": history, "line": line, "heard": heard,
+                                 "heard_ko": heard_ko, "issues": [i.model_dump() for i in issues],
+                                 "earlier": list(earlier)})
+        self._maybe_fail()
+        for n, piece in enumerate(self.aside_pieces):
+            if self.aside_fail_after is not None and n >= self.aside_fail_after:
+                raise ClaudeUnavailable("fake")
             yield piece
 
     async def offscript(self, frame, history, expected, heard):

@@ -377,3 +377,43 @@ async def test_feedback_says_whether_the_line_is_the_last():
     assert [json.loads(r["messages"][0]["content"])["마지막 대사"] for r in fake.requests] == [True, False]
     assert "마지막 대사" in prompts.FEEDBACK_SYSTEM and "다음 대사로 넘어가자고 하지 않아요" in prompts.FEEDBACK_SYSTEM
     assert "마지막 대사여도 한 번 더 해 보자고 해요. 이때는 대화를 마쳤다고 말하지 않아요" in prompts.FEEDBACK_SYSTEM
+
+
+async def test_aside_streams_korean_on_the_writer_and_sends_only_text():
+    from fakes import FRAME
+    from je_server import prompts
+    from je_server.claude import LIVE_OPTIONS
+    from je_server.models import Frame, Issue
+
+    fake = FakeAnthropic([["괜찮아요. ", "다시 해 볼까요?"]])
+    issue = Issue(target="large", heard="launch", sound=("R", "N"), explain="")
+    out = [d async for d in Claude(fake).aside(
+        Frame(**FRAME), [("ryan", "What size?")], "A large one, please.", "A launch one, peace.", None,
+        [issue], [("다시 할게요", "괜찮아요. 다시 해 볼까요?")])]
+    assert out == ["괜찮아요. ", "다시 해 볼까요?"]
+    req = fake.requests[0]
+    assert req["model"] == "claude-sonnet-5-5" and req["system"] == prompts.ASIDE_SYSTEM
+    assert req["output_config"]["effort"] == "low" and fake.options[-1] == LIVE_OPTIONS
+    body = json.loads(req["messages"][0]["content"])
+    assert body["대사"] == "A large one, please." and body["들린 말(영어 받아쓰기)"] == "A launch one, peace."
+    assert body["들린 말(한국어 받아쓰기)"] == ""
+    assert body["짚을 것"] == [{"대사 낱말": "large", "들린 낱말": "launch", "소리 내는 법": ""}]
+    assert body["앞서 선생님에게 한 말"] == [{"들린 말": "다시 할게요", "라이언의 답": "괜찮아요. 다시 해 볼까요?"}]
+    assert body["지금까지 대화"] == [{"speaker": "ryan", "text": "What size?"}]
+
+
+async def test_aside_connection_error_is_unavailable():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([connection_error()])
+    with pytest.raises(ClaudeUnavailable):
+        [d async for d in Claude(fake).aside(Frame(**FRAME), [], "a", "b", None, [], [])]
+
+
+def test_aside_prompt_keeps_the_teacher_rules():
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    for must in ("해요체", "읽는 법 보기", "처럼 들렸어요", "다시"):
+        assert must in p

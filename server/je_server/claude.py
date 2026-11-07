@@ -268,14 +268,40 @@ class Claude:
             "대사": line,
             "들린 말": heard,
             "잘한 점 후보": praise,
-            "짚을 것": [{"대사 낱말": i.target, "들린 낱말": i.heard, "소리 내는 법": i.explain} for i in issues],
+            "짚을 것": _points(issues),
             "마지막 대사": last,
         }
         kw = {k: v for k, v in self.quick.items() if k != "effort"}
+        async for text in self._stream(kw, prompts.FEEDBACK_SYSTEM, found, 800):
+            yield text
+
+    # --- teacher Ryan, when the line was not followed -------------------------------------------
+
+    async def aside(self, frame: Frame, history: Draft, line: str, heard: str, heard_ko: str | None,
+                    issues: list[Issue], earlier: list[tuple[str, str]]) -> AsyncIterator[str]:
+        """Streams teacher Ryan's Korean answer to a recording that did not follow the line (spec offscript-aside
+        3), on the writer model. `heard` is the English transcript, `heard_ko` the Korean one when auto-detection
+        heard Korean, `issues` what the Mac found against the line, `earlier` the asides before on this line as
+        (heard, Ryan's answer). Only text goes out (ADR-0004)."""
+        body = {
+            **self._talk(frame, history),
+            "대사": line,
+            "들린 말(영어 받아쓰기)": heard,
+            "들린 말(한국어 받아쓰기)": heard_ko or "",
+            "짚을 것": _points(issues),
+            "앞서 선생님에게 한 말": [{"들린 말": h, "라이언의 답": a} for h, a in earlier],
+        }
+        async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600):
+            yield text
+
+    async def _stream(self, kw: dict[str, Any], system: str, body: dict, max_tokens: int) -> AsyncIterator[str]:
+        """A live call streamed as text; an empty output_config is left out."""
+        if not kw.get("output_config", True):
+            kw = {k: v for k, v in kw.items() if k != "output_config"}
         try:
             async with self._client(live=True).messages.stream(
-                **kw, max_tokens=800, system=prompts.FEEDBACK_SYSTEM,
-                messages=[{"role": "user", "content": json.dumps(found, ensure_ascii=False)}],
+                **kw, max_tokens=max_tokens, system=system,
+                messages=[{"role": "user", "content": json.dumps(body, ensure_ascii=False)}],
             ) as stream:
                 async for text in stream.text_stream:
                     yield text
@@ -284,3 +310,8 @@ class Claude:
         except anthropic.APIStatusError as e:
             log.info("claude api status %d", e.status_code)
             raise ClaudeUnavailable(f"status {e.status_code}") from e
+
+
+def _points(issues: list[Issue]) -> list[dict[str, str]]:
+    """The Mac's points as the prompts name them."""
+    return [{"대사 낱말": i.target, "들린 낱말": i.heard, "소리 내는 법": i.explain} for i in issues]
