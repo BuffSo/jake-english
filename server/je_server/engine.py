@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import audio
+from .asr import WhisperError
 from .claude import ClaudeUnavailable
 from . import topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
@@ -309,7 +310,12 @@ class Engine:
                 # recording that does not follow the line is asked again: a near one may be the line begun and then
                 # Korean, translated (phone test 2026-11-08). Accented English heard as Korean then loses its points;
                 # the text cannot tell the two apart (auto-detection also translates English into Korean).
-                auto, lang = await self.whisper.transcribe_auto(wav)
+                try:
+                    auto, lang = await self.whisper.transcribe_auto(wav)
+                except WhisperError:
+                    # only a check for Korean: the English transcript stands (todo offscript-aside minors 2)
+                    log.info("auto transcription failed")
+                    auto, lang = "", ""
                 if lang == "korean" and HANGUL.search(auto):
                     heard_ko = auto
             # a try at the line that came out wrong: English and close to it, so it gets the Mac's points

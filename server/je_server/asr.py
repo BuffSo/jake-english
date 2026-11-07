@@ -1,8 +1,8 @@
 """Transcription with whisper.cpp's whisper-server, kept running on 127.0.0.1.
 
 Each request names its language: turn recordings are English first (no script hint, spec 「평가」), then
-auto-detected when they do not follow the line, so Korean is heard too (spec offscript-aside 2); situation input
-is auto-detected. Transcripts are never logged.
+auto-detected when they do not follow the line, so Korean is heard too (spec offscript-aside 2); when that second
+one fails, the English one stands. Situation input is auto-detected. Transcripts are never logged.
 """
 from __future__ import annotations
 
@@ -16,6 +16,10 @@ import httpx
 from . import audio
 
 BRACKETS = re.compile(r"\[[^\]]*\]|\([^)]*\)")
+
+
+class WhisperError(Exception):
+    """whisper-server did not answer: down, an HTTP error, or a body that is not JSON."""
 
 
 def _clean(text: str) -> str:
@@ -62,13 +66,16 @@ class Whisper:
         return _clean(j.get("text", "")), str(j.get("language") or "").lower()
 
     async def _infer(self, wav: Path, lang: str, fmt: str) -> dict:
-        r = await self.client.post(
-            "/inference",
-            files={"file": ("audio.wav", wav.read_bytes(), "audio/wav")},
-            data={"language": lang, "response_format": fmt},
-        )
-        r.raise_for_status()
-        return r.json()
+        try:
+            r = await self.client.post(
+                "/inference",
+                files={"file": ("audio.wav", wav.read_bytes(), "audio/wav")},
+                data={"language": lang, "response_format": fmt},
+            )
+            r.raise_for_status()
+            return r.json()
+        except (httpx.HTTPError, ValueError) as e:  # ValueError: a body that is not JSON
+            raise WhisperError(type(e).__name__) from e
 
     async def stop(self) -> None:
         if self.proc and self.proc.returncode is None:

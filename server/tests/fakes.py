@@ -235,6 +235,7 @@ class FakeWhisper:
         self.langs: list[str] = []
         self.auto_text: str | None = None  # what auto-detection hears; None: the same as `text`
         self.auto_lang = "english"
+        self.auto_fail = False  # transcribe_auto raises WhisperError, as when whisper-server cannot answer
 
     async def start(self):
         pass
@@ -248,6 +249,10 @@ class FakeWhisper:
         return self.text
 
     async def transcribe_auto(self, wav):
+        from je_server.asr import WhisperError
+
         self.calls += 1
         self.langs.append("auto")
+        if self.auto_fail:
+            raise WhisperError("fake")
         return (self.auto_text if self.auto_text is not None else self.text), self.auto_lang

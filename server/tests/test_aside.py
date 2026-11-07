@@ -234,3 +234,23 @@ async def test_first_turn_after_a_korean_aside_moves_on(engine_with_rp, speech_b
     fake_whisper.text, fake_whisper.auto_text = rp.lines[user_idx].text, None
     ev = await run(engine, rp_id, user_idx, speech_bytes)
     assert ev[-1]["next"] == user_idx + 1 and engine.store.load(rp_id).pos == user_idx + 1
+
+
+async def test_auto_transcription_failing_goes_on_in_english(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    # the second transcription is a check for Korean; when whisper-server cannot answer it, the English one stands
+    # (todo offscript-aside minors 2)
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Wait, let me try that again."
+    fake_whisper.auto_fail = True
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[0] == {"type": "heard", "text": "Wait, let me try that again.", "followed": False}
+    assert fake_claude.aside_calls[-1]["heard_ko"] is None and said(ev) and ev[-1]["type"] == "done"
+
+
+async def test_auto_transcription_failing_keeps_the_macs_points(engine_with_rp, speech_bytes, fake_whisper,
+                                                               fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's light over hair."
+    fake_whisper.auto_fail = True
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[-1] == {"type": "done", "next": user_idx + 1, "issues": 2}
