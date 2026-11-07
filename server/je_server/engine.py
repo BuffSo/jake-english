@@ -302,14 +302,16 @@ class Engine:
             heard = await self.whisper.transcribe(wav, "en")
             close = similarity(line.text, heard) if words(heard) else 0.0
             followed = close >= FOLLOW_MIN
-            # a try at the line that came out wrong: English, with the Mac's points. Auto-detection called 5 of 36
-            # followed English tries Korean on this Mac (2026-11-07), so it is not asked about these.
-            near = not followed and close >= NEAR_MIN
-            if not followed and not near:
-                # forced to English, whisper translates Korean or leaves it in Hangul (spec offscript-aside 2)
+            if not followed:
+                # forced to English, whisper translates Korean or leaves it in Hangul (spec offscript-aside 2). Every
+                # recording that does not follow the line is asked again: a near one may be the line begun and then
+                # Korean, translated (phone test 2026-11-08). Accented English heard as Korean then loses its points;
+                # the text cannot tell the two apart (auto-detection also translates English into Korean).
                 auto, lang = await self.whisper.transcribe_auto(wav)
                 if lang == "korean" and HANGUL.search(auto):
                     heard_ko = auto
+            # a try at the line that came out wrong: English and close to it, so it gets the Mac's points
+            near = not followed and heard_ko is None and close >= NEAR_MIN
         finally:
             with contextlib.suppress(FileNotFoundError):
                 wav.unlink()

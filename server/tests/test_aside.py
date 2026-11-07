@@ -69,17 +69,18 @@ async def test_korean_heard_sends_no_issues(engine_with_rp, speech_bytes, fake_w
     assert fake_claude.aside_calls[-1]["issues"] == []
 
 
-async def test_accented_try_heard_as_korean_keeps_the_english_and_its_points(engine_with_rp, speech_bytes,
-                                                                            fake_whisper, fake_claude):
-    # final review + a count on this Mac: auto-detection called 5 of 36 followed English tries Korean, so a try
-    # close to the line is taken as English and is not transcribed again
+async def test_line_then_korean_is_an_aside(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    # phone test 2026-11-08: the learner began the line, then said in Korean that they need more practice. Forced to
+    # English, whisper translated the Korean, the text came out 0.38 like the line, and Ryan pointed at the
+    # translation as words "heard differently". A recording that does not follow the line is always transcribed
+    # again; Korean makes it an aside.
     engine, rp_id, user_idx = engine_with_rp
-    fake_whisper.text = "It's light over hair."  # 0.5 against the line
-    fake_whisper.auto_text, fake_whisper.auto_lang = "잇츠 라이트 오버 헤어", "korean"
+    fake_whisper.text = "It's right... I should practice more."  # 0.4 against the line
+    fake_whisper.auto_text, fake_whisper.auto_lang = "잇츠 라잇... 연습을 좀 더 해야겠다", "korean"
     ev = await run(engine, rp_id, user_idx, speech_bytes)
-    assert ev[0]["text"] == "It's light over hair." and fake_whisper.langs == ["en"]
-    sent = fake_claude.aside_calls[-1]
-    assert sent["heard_ko"] is None and [i["target"] for i in sent["issues"]] == ["right", "there"]
+    assert fake_whisper.langs == ["en", "auto"] and ev[0]["text"] == "잇츠 라잇... 연습을 좀 더 해야겠다"
+    assert fake_claude.aside_calls[-1]["issues"] == [] and ev[-1] == {"type": "done", "next": user_idx, "issues": 0}
+    assert engine.store.load(rp_id).attempts[user_idx][-1].aside is True
 
 
 async def test_far_english_sends_no_points(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
@@ -98,7 +99,7 @@ async def test_near_miss_sends_the_macs_points(engine_with_rp, speech_bytes, fak
     issues = fake_claude.aside_calls[-1]["issues"]
     assert [(i["target"], i["heard"]) for i in issues] == [("right", "light"), ("there", "hair")]
     assert set(issues[0]["sound"]) == {"R", "L"} and issues[0]["explain"]
-    assert ev[-1]["issues"] == 2
+    assert ev[-1]["issues"] == 2 and fake_whisper.langs == ["en", "auto"]  # English, so a try at the line
 
 
 async def test_auto_language_not_korean_keeps_english(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
