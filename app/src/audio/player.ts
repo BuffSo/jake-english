@@ -4,9 +4,12 @@ import { createAudioPlayer, type AudioSource } from "expo-audio";
 
 const STUCK_MS = 30_000; // a sound that never finishes (bad file, lost connection) must not block the queue
 
+// a sound, or a stretch of quiet between two (the first and this run's recording, spec review-practice 4)
+type Item = { src: AudioSource } | { pause: number };
+
 export class SoundQueue {
   private player = createAudioPlayer(null);
-  private queue: AudioSource[] = [];
+  private queue: Item[] = [];
   private playing = false;
   private idle: (() => void)[] = [];
   private watchdog: ReturnType<typeof setTimeout> | undefined;
@@ -20,7 +23,16 @@ export class SoundQueue {
   }
 
   enqueue(src: AudioSource): void {
-    this.queue.push(src);
+    this.add({ src });
+  }
+
+  // quiet for `ms` before what is queued next; it counts as playing, so nothing cuts in, and clear() drops it
+  enqueuePause(ms: number): void {
+    this.add({ pause: ms });
+  }
+
+  private add(item: Item): void {
+    this.queue.push(item);
     if (!this.playing) this.next();
   }
 
@@ -57,8 +69,8 @@ export class SoundQueue {
 
   private next(): void {
     clearTimeout(this.watchdog);
-    const src = this.queue.shift();
-    if (!src) {
+    const item = this.queue.shift();
+    if (!item) {
       this.setPlaying(false);
       const cbs = this.idle;
       this.idle = [];
@@ -66,7 +78,11 @@ export class SoundQueue {
       return;
     }
     this.setPlaying(true);
-    this.player.replace(src);
+    if ("pause" in item) {
+      this.watchdog = setTimeout(() => this.next(), item.pause);
+      return;
+    }
+    this.player.replace(item.src);
     this.player.play();
     this.watchdog = setTimeout(() => this.next(), STUCK_MS);
   }

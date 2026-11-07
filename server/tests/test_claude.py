@@ -35,6 +35,17 @@ async def test_make_script_gives_up_after_second_bad_script():
         await Claude(fake).make_script("길 묻기", OTHER)
 
 
+async def test_make_script_keeps_a_list_picks_first_speaker():
+    # todo 05-2 (situation-topics final review 3): a list line where the learner speaks first, and Claude starts
+    # with Ryan anyway: the script is asked for again and the learner-first one is kept
+    usa = get("usa")
+    fake = FakeAnthropic([script_json(user_turns=3), script_json(user_turns=3, first="user")])
+    _, draft = await Claude(fake).make_script("호텔 체크인", usa, first="user")
+    assert len(fake.requests) == 2 and draft[0][0] == "user"
+    assert "The learner speaks first." in fake.requests[0]["messages"][0]["content"]
+    assert "the learner must speak first" in fake.requests[1]["messages"][0]["content"]
+
+
 async def test_requests_use_spec_model_settings():
     fake = FakeAnthropic([script_json(user_turns=3)])
     await Claude(fake).make_script("길 묻기", OTHER)

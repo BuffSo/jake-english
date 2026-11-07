@@ -1,5 +1,5 @@
 import type { Topic } from "../api/types";
-import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, startStep, topicsOf, canStart } from "./situation";
+import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, resumeFrom, startStep, topicsOf, canStart } from "./situation";
 
 const usa: Topic = { id: "usa", name_ko: "미국 여행", placeholder_ko: "예", picks: [{ id: "u-hotel-checkin", title_ko: "뉴욕 호텔 체크인" }] };
 const other: Topic = { id: "other", name_ko: "그 밖의 상황", placeholder_ko: "예", picks: [] };
@@ -62,4 +62,23 @@ test("nothing new starts while the screen is already waiting", () => {
   // guide APP_Expo_앱_뼈대와_서버_연결: a new button that asks the server must not ask twice)
   expect(canStart("working")).toBe(false);
   for (const s of ["topic", "how", "list", "describe", "askRecommend", "confirm"] as const) expect(canStart(s)).toBe(true);
+});
+
+// todo 05-1: back from a roleplay comes to the step its situation was picked from, but not to an empty list
+describe("resumeFrom", () => {
+  const empty: Topic = { ...usa, picks: [] };
+
+  test("keeps the step of a known topic", () => {
+    expect(resumeFrom({ topic: "usa", step: "list" }, [usa])).toEqual({ topic: "usa", step: "list" });
+    expect(resumeFrom({ topic: "usa", step: "describe" }, [usa])).toEqual({ topic: "usa", step: "describe" });
+  });
+
+  test("opens how-to-pick when the topic's list is now empty", () => {
+    expect(resumeFrom({ topic: "usa", step: "list" }, [empty])).toEqual({ topic: "usa", step: "how" });
+  });
+
+  test("starts at the topics for a topic the server no longer has, or nothing to resume", () => {
+    expect(resumeFrom({ topic: "gone", step: "list" }, [usa])).toBeNull();
+    expect(resumeFrom(null, [usa])).toBeNull();
+  });
 });

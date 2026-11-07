@@ -1,0 +1,15 @@
+{
+ "topics": [
+  {
+   "id": "usa",
+   "name_ko": "미국 여행",
+   "placeholder_ko": "예: 공항에서 짐을 찾는 상황",
+   "picks": [
+    {
+     "id": "u-example",
+     "title_ko": "카페에서 주문하기"
+    }
+   ]
+  }
+ ]
+}

@@ -445,13 +445,15 @@ class Engine:
             out.append((l.speaker, text))
         return out
 
-    def summary(self, rp_id: str) -> dict:
+    def summary(self, rp_id: str, rps: list[Roleplay] | None = None) -> dict:
         """The end screen: every line with the learner's tries made inside the roleplay (spec roleplay-practice 3).
         Practice after the roleplay is left out: 「주고받은 말」 is what was said, and Ryan's reply to a line said
-        differently answers that try. The closing words go by the same tries."""
+        differently answers that try. The closing words go by the same tries. `rps`: every record, when the caller
+        has just read them (`latest`), so they are not read again (todo 01, ADR-0011 「영향」)."""
         rp = self.load(rp_id)
         group = group_of(rp)
-        runs = [r for r in self.store.all() if group_of(r) == group]  # for 「처음 녹음」 (spec review-practice 4)
+        all_rps = self.store.all() if rps is None else rps
+        runs = [r for r in all_rps if group_of(r) == group]  # for 「처음 녹음」 (spec review-practice 4)
         lines, issues_left = [], False
         for l in rp.lines:
             # asides stay off the end screen and out of its closing words (spec offscript-aside 6)
@@ -475,10 +477,11 @@ class Engine:
 
     def latest(self, group: str) -> dict:
         """The newest run of a script the learner spoke in, with its end-screen summary (spec review-practice 3)."""
-        rp = latest_run(self.store.all(), group)
+        rps = self.store.all()
+        rp = latest_run(rps, group)
         if rp is None:
             raise NotFound(group)
-        return {"roleplay": rp.model_dump(mode="json"), "summary": self.summary(rp.id)}
+        return {"roleplay": rp.model_dump(mode="json"), "summary": self.summary(rp.id, rps)}
 
     def saved(self) -> list[dict]:
         """Saved sentences, newest first (spec review-practice 6). The line is found again by its sentence when the
@@ -499,6 +502,9 @@ class Engine:
         try:
             rp = self.store.load(s.rp_id)
         except KeyError:
+            return None
+        except ValueError:  # an unreadable record is skipped like in `Store.all`, not the whole list (todo 01)
+            log.warning("unreadable roleplay %s", s.rp_id)
             return None
         here = rp.lines[s.idx] if s.idx < len(rp.lines) else None
         line = here if here and sentence_key(here.text) == s.key else next(
