@@ -70,3 +70,10 @@ export function lineFor(step: SituationStep): keyof Home["lines"] | null {
 export function clearsTurnedDown(next: SituationStep): boolean {
   return next === "topic";
 }
+
+// A tap that asks the server (a list card, 「시작」, Jake) starts nothing while the screen is already waiting: a second
+// quick tap before the re-render would send the request twice (PR #28 review; guide APP_Expo_앱_뼈대와_서버_연결
+// 「버튼을 두 번 누르면 같은 요청이 두 번 간다」).
+export function canStart(now: SituationStep): boolean {
+  return now !== "working";
+}

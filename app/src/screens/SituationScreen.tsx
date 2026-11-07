@@ -9,6 +9,7 @@ import { useRecorder } from "../audio/useRecorder";
 import { createGate, createLatch } from "../flow/gate";
 import {
   backFrom,
+  canStart,
   clearsTurnedDown,
   HOW_LABEL,
   howChoices,
@@ -52,6 +53,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
   const known = start && topics.some((t) => t.id === start.topic) ? start : null;
   const [topicId, setTopicId] = useState<string | null>(known?.topic ?? null);
   const [step, setStep] = useState<SituationStep>(startStep(known));
+  const now = useRef<SituationStep>(startStep(known)); // the step as of the last tap, before React re-renders
   const [text, setText] = useState("");
   const [status, setStatus] = useState("");
   const [jake, setJake] = useState<Said | null>(null);
@@ -78,6 +80,11 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
     say(startStep(known));
   }, [sounds, home]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function toStep(s: SituationStep) {
+    now.current = s;
+    setStep(s);
+  }
+
   function say(s: SituationStep) {
     const key = lineFor(s);
     const line = key ? home.lines[key] : undefined;
@@ -87,7 +94,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
 
   // a step the learner moves on to: Ryan says its line (going back says nothing again)
   function go(s: SituationStep) {
-    setStep(s);
+    toStep(s);
     say(s);
   }
 
@@ -105,7 +112,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
     if (step === "describe") rec.discard();
     if (clearsTurnedDown(prev)) turnedDown.current = [];
     setJake(null);
-    setStep(prev);
+    toStep(prev);
   }
   useBackKey(back);
 
@@ -131,10 +138,10 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
   }
 
   async function create(c: Choice, jakeSaid: Said | null = null) {
-    if (!topic) return;
+    if (!topic || !canStart(now.current)) return;
     const my = gen.current;
     const from = { topic: topic.id, step: origin.current };
-    setStep("working");
+    toStep("working");
     setStatus("라이언이 대본을 만들고 있어요");
     setError(null);
     try {
@@ -144,16 +151,16 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
     } catch (e) {
       if (my !== gen.current) return;
       setError(messageOf(e));
-      setStep(from.step);
+      toStep(from.step);
     }
   }
 
   // Jake suggests a situation in the topic and the learner picks it or asks for another. The script is not made
   // until they pick it: one made while they choose would be thrown away on 「다른 걸로요」 (2026-11-06, user).
   async function recommend() {
-    if (!topic) return;
+    if (!topic || !canStart(now.current)) return;
     const my = gen.current;
-    setStep("working");
+    toStep("working");
     setStatus("제이크가 상황을 고르고 있어요");
     setJake(null);
     setError(null);
@@ -164,11 +171,11 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
       sounds.clear();
       sounds.enqueue(api.audioSource(said.audio));
       choice.open();
-      setStep("confirm");
+      toStep("confirm");
     } catch (e) {
       if (my !== gen.current) return;
       setError(messageOf(e));
-      setStep(origin.current);
+      toStep(origin.current);
     }
   }
 
@@ -213,17 +220,17 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
     try {
       uri = await rec.stop();
       if (my !== gen.current) return; // went back while the recorder was stopping; `finally` deletes it unsent
-      setStep("working");
+      toStep("working");
       setStatus("받아쓰고 있어요");
       const said = await api.transcribe(uri);
       if (my !== gen.current) return;
       setText(said);
       if (WANTS_RECOMMEND.test(said)) go("askRecommend");
-      else setStep("describe");
+      else toStep("describe");
     } catch (e) {
       if (my !== gen.current) return;
       setError(messageOf(e));
-      setStep("describe");
+      toStep("describe");
     } finally {
       if (uri) {
         try {
@@ -307,7 +314,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
       {step === "askRecommend" && (
         <>
           <Button label="좋아요" onPress={recommend} />
-          <Button label="아니요" onPress={() => setStep("describe")} kind="plain" />
+          <Button label="아니요" onPress={() => toStep("describe")} kind="plain" />
         </>
       )}
       {step === "confirm" && jake && (

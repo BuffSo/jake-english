@@ -1,5 +1,5 @@
 import type { Topic } from "../api/types";
-import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, startStep, topicsOf } from "./situation";
+import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, startStep, topicsOf, canStart } from "./situation";
 
 const usa: Topic = { id: "usa", name_ko: "미국 여행", placeholder_ko: "예", picks: [{ id: "u-hotel-checkin", title_ko: "뉴욕 호텔 체크인" }] };
 const other: Topic = { id: "other", name_ko: "그 밖의 상황", placeholder_ko: "예", picks: [] };
@@ -55,4 +55,11 @@ test("an older Mac server without topics still opens the screen", () => {
   expect(howChoices(t[0])).toEqual(["jake", "describe"]);
   const usaOnly = [usa];
   expect(topicsOf({ topics: usaOnly })).toBe(usaOnly);
+});
+
+test("nothing new starts while the screen is already waiting", () => {
+  // PR #28 review: a second quick tap on a list card could send a second POST /roleplays before the re-render (the
+  // guide APP_Expo_앱_뼈대와_서버_연결: a new button that asks the server must not ask twice)
+  expect(canStart("working")).toBe(false);
+  for (const s of ["topic", "how", "list", "describe", "askRecommend", "confirm"] as const) expect(canStart(s)).toBe(true);
 });
