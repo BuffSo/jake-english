@@ -17,6 +17,16 @@ export const HOW_LABEL: Record<HowChoice, string> = {
   describe: "직접 말하거나 쓰기",
 };
 
+// A Mac server from before topics sends none: the screen still opens, with 「그 밖의 상황」 only, which works with
+// that server as before (it ignores the topic it is sent). The new app crashed on it (final review, 2026-11-07).
+const BEFORE_TOPICS: Topic[] = [
+  { id: "other", name_ko: "그 밖의 상황", placeholder_ko: "예: 길에서 외국인이 지하철역을 물어보는 상황", picks: [] },
+];
+
+export function topicsOf(home: Pick<Home, "topics">): Topic[] {
+  return home.topics?.length ? home.topics : BEFORE_TOPICS;
+}
+
 // 「목록에서 고르기」 only when the topic has a list: 「그 밖의 상황」 starts without one (spec 2)
 export function howChoices(t: Topic): HowChoice[] {
   return t.picks.length > 0 ? ["list", "jake", "describe"] : ["jake", "describe"];

@@ -1,5 +1,5 @@
 import type { Topic } from "../api/types";
-import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, startStep } from "./situation";
+import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, startStep, topicsOf } from "./situation";
 
 const usa: Topic = { id: "usa", name_ko: "미국 여행", placeholder_ko: "예", picks: [{ id: "u-hotel-checkin", title_ko: "뉴욕 호텔 체크인" }] };
 const other: Topic = { id: "other", name_ko: "그 밖의 상황", placeholder_ko: "예", picks: [] };
@@ -46,4 +46,13 @@ test("going back to the topics forgets the suggestions turned down", () => {
   expect(clearsTurnedDown("topic")).toBe(true);
   expect(clearsTurnedDown("how")).toBe(false);
   expect(clearsTurnedDown("describe")).toBe(false);
+});
+
+test("an older Mac server without topics still opens the screen", () => {
+  // final review: the new app crashed on 「상황 역할극」 when the Mac server was older (no `topics` in /home)
+  const t = topicsOf({});
+  expect(t.map((x) => [x.id, x.picks.length])).toEqual([["other", 0]]);
+  expect(howChoices(t[0])).toEqual(["jake", "describe"]);
+  const usaOnly = [usa];
+  expect(topicsOf({ topics: usaOnly })).toBe(usaOnly);
 });

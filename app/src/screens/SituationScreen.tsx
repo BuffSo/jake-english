@@ -14,6 +14,7 @@ import {
   howChoices,
   lineFor,
   startStep,
+  topicsOf,
   type HowChoice,
   type Origin,
   type SituationStart,
@@ -47,7 +48,8 @@ const OTHER = "other"; // 「그 밖의 상황」, the plain button under the tw
 // The situation screen: the topic first, then how to pick the situation (spec situation-topics 2). The steps and
 // what back does are in flow/situation.ts.
 export function SituationScreen({ sounds, home, start, onCreated, onBack }: Props) {
-  const known = start && home.topics.some((t) => t.id === start.topic) ? start : null;
+  const topics = topicsOf(home);
+  const known = start && topics.some((t) => t.id === start.topic) ? start : null;
   const [topicId, setTopicId] = useState<string | null>(known?.topic ?? null);
   const [step, setStep] = useState<SituationStep>(startStep(known));
   const [text, setText] = useState("");
@@ -62,7 +64,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
   const origin = useRef<Origin>(known?.step ?? "how"); // the step the situation is being picked from
   const [jakeFailed, setJakeFailed] = useState(false); // Jake's picture did not load: Ryan's face instead
   const shown = useRef<Face>("listening"); // the circle's face before a wait, kept until the thinking face comes
-  const topic: Topic | null = home.topics.find((t) => t.id === topicId) ?? null;
+  const topic: Topic | null = topics.find((t) => t.id === topicId) ?? null;
 
   useEffect(
     () => () => {
@@ -280,7 +282,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
       {topic && step !== "topic" && <Text style={[common.sub, styles.topic]}>{topic.name_ko}</Text>}
       {ryanSays && <Text style={[common.body, styles.say]}>{ryanSays}</Text>}
       {step === "topic" &&
-        home.topics.map((t) => (
+        topics.map((t) => (
           <Button key={t.id} label={t.name_ko} onPress={() => chooseTopic(t)} kind={t.id === OTHER ? "plain" : "primary"} />
         ))}
       {step === "how" &&

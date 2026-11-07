@@ -52,21 +52,22 @@ export type Thinking = { jake: string[]; ryan: string[] };
 export type Topic = { id: string; name_ko: string; placeholder_ko: string; picks: { id: string; title_ko: string }[] };
 export type Home = {
   // ask_again: said instead of greeting + ask_mode when the learner comes back (absent on an older server).
-  // ask_topic, ask_how, ask_pick, ask_describe: the situation screen's steps (spec situation-topics 6)
+  // ask_topic, ask_how, ask_pick, ask_describe: the situation screen's steps (spec situation-topics 6), absent on a
+  // server from before topics
   lines: {
     greeting: Said;
     ask_mode: Said;
     ask_again?: Said;
     ask_situation: Said;
     ask_recommend: Said;
-    ask_topic: Said;
-    ask_how: Said;
-    ask_pick: Said;
-    ask_describe: Said;
+    ask_topic?: Said;
+    ask_how?: Said;
+    ask_pick?: Said;
+    ask_describe?: Said;
   };
   // jake: Jake's front picture, shown while his suggestion waits for the learner's pick (absent on an older server)
   images: { front: string; listening: string; jake?: string; thinking: Thinking };
-  topics: Topic[];
+  topics?: Topic[]; // absent on a server from before topics: use flow/situation `topicsOf`
 };
 export type Progress = { no: number; total: number }; // 「내 대사 no/total」
 export type LineWithProgress = ScriptLine & { progress: Progress };
