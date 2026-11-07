@@ -44,6 +44,9 @@ ANNOTATE_TRIES = 3
 INTERPRET_TRIES = 2
 HANGUL = re.compile(r"[가-힣]")
 QUOTES = "\"'“”‘’「」『』"
+# Ryan's live answers never show double quotes (phone test 2026-11-08: Haiku quoted the transcript in them). 「」 stay:
+# teacher Ryan puts meanings in them. Single quotes stay too: they are apostrophes in English words (I'll).
+DOUBLE_QUOTES = str.maketrans("", "", "\"“”")
 
 
 # Calls made while the learner waits in a turn (feedback, off-script reply). The app gives up after 30s without a
@@ -261,7 +264,7 @@ class Claude:
             yield text
 
     async def _stream(self, kw: dict[str, Any], system: str, body: dict, max_tokens: int) -> AsyncIterator[str]:
-        """A live call streamed as text; an empty output_config is left out."""
+        """A live call streamed as text, without double quotes; an empty output_config is left out."""
         if not kw.get("output_config", True):
             kw = {k: v for k, v in kw.items() if k != "output_config"}
         try:
@@ -270,7 +273,8 @@ class Claude:
                 messages=[{"role": "user", "content": json.dumps(body, ensure_ascii=False)}],
             ) as stream:
                 async for text in stream.text_stream:
-                    yield text
+                    if text := text.translate(DOUBLE_QUOTES):
+                        yield text
         except (anthropic.APIConnectionError, httpx2.TransportError) as e:
             # the SDK raises a transport error met while reading the stream (a dropped connection, a read timeout
             # between pieces) as it is, not as APIConnectionError (final review, 2026-11-07)
