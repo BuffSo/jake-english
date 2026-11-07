@@ -7,10 +7,12 @@ import {
   ISSUE_KEYS,
   LINE_KEYS,
   PAST_KEYS,
+  PICK_KEYS,
   ROLEPLAY_KEYS,
   SAVED_KEYS,
   SUMMARY_KEYS,
   SYLLABLE_KEYS,
+  TOPIC_KEYS,
   TRANSCRIPT_KEYS,
   TRY_KEYS,
 } from "./types";
@@ -19,6 +21,7 @@ import lineUser from "../../../contract/line-user.json";
 import summary from "../../../contract/summary.json";
 import past from "../../../contract/past.json";
 import saved from "../../../contract/saved.json";
+import homeTopics from "../../../contract/home-topics.json";
 
 const sorted = (a: readonly string[]) => [...a].sort();
 
@@ -54,4 +57,11 @@ test("summary example has the keys the end screen reads", () => {
 test("past and saved examples have the keys the review screens read", () => {
   for (const i of past.items) expect(sorted(Object.keys(i))).toEqual(sorted(PAST_KEYS));
   for (const i of saved.items) expect(sorted(Object.keys(i))).toEqual(sorted(SAVED_KEYS));
+});
+
+test("home topics example has the keys the situation screen reads", () => {
+  for (const t of homeTopics.topics) {
+    expect(sorted(Object.keys(t))).toEqual(sorted(TOPIC_KEYS));
+    for (const p of t.picks) expect(sorted(Object.keys(p))).toEqual(sorted(PICK_KEYS));
+  }
 });

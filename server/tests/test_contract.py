@@ -42,3 +42,14 @@ def test_saved_example_has_the_engine_shape():
     raw = json.loads((CONTRACT / "saved.json").read_text(encoding="utf-8"))
     assert set(raw) == {"items"}
     assert all(set(i) == {"key", "rp_id", "idx", "speaker", "text", "title_ko", "at"} for i in raw["items"])
+
+
+def test_home_topics_example_has_the_engine_shape():
+    # situation-topics final review: the app draws the topic and list buttons from /home's `topics`
+    from je_server.topics import public
+
+    raw = json.loads((CONTRACT / "home-topics.json").read_text(encoding="utf-8"))
+    [real, *_] = [t for t in public() if t["picks"]]
+    assert set(raw) == {"topics"}
+    for t in raw["topics"]:
+        assert set(t) == set(real) and all(set(p) == set(real["picks"][0]) for p in t["picks"])
