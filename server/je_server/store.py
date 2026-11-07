@@ -1,6 +1,7 @@
 """Records on the Mac, outside the repository (spec 「녹음과 기록」). Recordings are never deleted here."""
 from __future__ import annotations
 
+import logging
 import os
 import re
 import secrets
@@ -10,6 +11,7 @@ from pathlib import Path
 from .models import Roleplay
 
 ID = re.compile(r"^[0-9a-f]{12}$")
+log = logging.getLogger("je_server")
 
 
 class Store:
@@ -44,12 +46,19 @@ class Store:
             raise KeyError(rp_id)
         return Roleplay.model_validate_json(path.read_text(encoding="utf-8"))
 
-    def recent_situations(self, n: int = 10) -> list[str]:
+    def all(self) -> list[Roleplay]:
+        """Every roleplay on the Mac, for 「다시 연습」 (ADR-0011). A file that cannot be read is skipped."""
         found = []
         for d in self.roleplays.iterdir():
             if ID.match(d.name) and (d / "roleplay.json").exists():
-                rp = Roleplay.model_validate_json((d / "roleplay.json").read_text(encoding="utf-8"))
-                found.append((rp.created, rp.situation))
+                try:
+                    found.append(Roleplay.model_validate_json((d / "roleplay.json").read_text(encoding="utf-8")))
+                except ValueError:
+                    log.warning("unreadable roleplay %s", d.name)
+        return found
+
+    def recent_situations(self, n: int = 10) -> list[str]:
+        found = [(rp.created, rp.situation) for rp in self.all()]
         return [s for _, s in sorted(found, reverse=True)[:n]]
 
     def next_rec(self, rp_id: str, idx: int) -> tuple[int, Path]:

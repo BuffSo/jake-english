@@ -27,7 +27,12 @@ def test_summary_example_has_the_engine_shape():
     raw = json.loads((CONTRACT / "summary.json").read_text(encoding="utf-8"))
     assert set(raw) == {"say", "lines"}
     for l in raw["lines"]:
-        assert set(l) == {"line", "tries"} and ScriptLine.model_validate(l["line"]).model_dump(mode="json") == l["line"]
+        assert set(l) == {"line", "tries", "first"} and ScriptLine.model_validate(l["line"]).model_dump(mode="json") == l["line"]
         for t in l["tries"]:
             assert set(t) == {"n", "mode", "heard", "followed", "issues", "point_ko"}
             assert all(set(i) == {"target", "heard", "say_ko"} for i in t["issues"])
+
+
+def test_past_example_has_the_engine_shape():
+    raw = json.loads((CONTRACT / "past.json").read_text(encoding="utf-8"))
+    assert set(raw) == {"items"} and all(set(i) == {"group", "title_ko", "first", "latest"} for i in raw["items"])

@@ -180,6 +180,24 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         except ClaudeUnavailable:
             raise claude_down() from None
 
+    @router.get("/roleplays/{rp_id}")
+    def roleplay(rp_id: str = PathParam(pattern=ID)) -> dict:
+        try:
+            return engine().load(rp_id).model_dump(mode="json")
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
+    @router.get("/past")
+    def past() -> dict:
+        return {"items": engine().past()}
+
+    @router.get("/groups/{group}/latest")
+    def latest(group: str = PathParam(pattern=ID)) -> dict:
+        try:
+            return engine().latest(group)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
     @router.post("/roleplays/{rp_id}/copy")
     async def copy(rp_id: str = PathParam(pattern=ID)) -> dict:
         try:

@@ -17,6 +17,7 @@ from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, ScriptLine, Thr
 from .sentences import SentenceBuffer
 from .tts import VoiceError
 from .phrases import PHRASES
+from .review import first_try, group_of, latest_run, past_items
 from .store import Store
 from .tts import audio_key
 
@@ -483,6 +484,8 @@ class Engine:
         Practice after the roleplay is left out: 「주고받은 말」 is what was said, and Ryan's reply to a line said
         differently answers that try. The closing words go by the same tries."""
         rp = self.load(rp_id)
+        group = group_of(rp)
+        runs = [r for r in self.store.all() if group_of(r) == group]  # for 「처음 녹음」 (spec review-practice 4)
         lines, issues_left = [], False
         for l in rp.lines:
             tries = [a for a in rp.attempts.get(l.idx, []) if a.mode in ("turn", "retry")] if l.speaker == "user" else []
@@ -494,8 +497,20 @@ class Engine:
                  # to follow the line, which is not a point (final review)
                  # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
                  "point_ko": a.say_ko if a.mode == "turn" and not a.followed and not a.issues else ""}
-                for a in tries]})
+                for a in tries], "first": first_try(runs, rp, l.idx)})
         return {"say": self.said("closing_retry" if issues_left else "closing_clean").model_dump(), "lines": lines}
+
+    # --- 다시 연습 (spec review-practice, ADR-0011): read from the records, no Claude call -----------------------
+
+    def past(self) -> list[dict]:
+        return past_items(self.store.all())
+
+    def latest(self, group: str) -> dict:
+        """The newest run of a script the learner spoke in, with its end-screen summary (spec review-practice 3)."""
+        rp = latest_run(self.store.all(), group)
+        if rp is None:
+            raise NotFound(group)
+        return {"roleplay": rp.model_dump(mode="json"), "summary": self.summary(rp.id)}
 
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
         async with self.lock(rp_id):

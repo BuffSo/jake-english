@@ -97,3 +97,19 @@ async def test_summary_says_each_issue_in_korean(engine_with_rp):
     [t] = tries(engine.summary(rp_id), user_idx)
     assert t["issues"] == [{"target": "coffee", "heard": "copy", "say_ko": "「coffee」 → 「copy」처럼 들렸어요"},
                            {"target": "on", "heard": "", "say_ko": "「on」 → 들리지 않았어요"}]
+
+
+async def test_summary_first_points_at_earlier_run(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's right over there."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    first = engine.store.load(rp_id)  # both tries land in the same second here; in use the first run is days earlier
+    first.attempts[user_idx][0].at = "2026-11-05T10:00:00"
+    engine.store.save(first)
+    again = await engine.copy(rp_id)
+    await engine.line(again.id, user_idx)
+    await run(engine, again.id, user_idx, speech_bytes)
+    line_of = lambda s, idx: next(l for l in s["lines"] if l["line"]["idx"] == idx)
+    assert line_of(engine.summary(again.id), user_idx)["first"] == {"rp_id": rp_id, "idx": user_idx, "n": 1}
+    assert line_of(engine.summary(rp_id), user_idx)["first"] is None
+    assert line_of(engine.summary(again.id), 0)["first"] is None
