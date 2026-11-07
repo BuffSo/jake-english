@@ -90,7 +90,8 @@ class Roleplay(BaseModel):
     lines: list[ScriptLine]
     attempts: dict[int, list[Attempt]] = {}
     pos: int = 0
-    # the first roleplay of its group when made by 「이 상황 다시 하기」; None on that first one (ADR-0011)
+    # the first roleplay of its group when made by 「이 상황 다시 하기」 or by picking the same list line again;
+    # None on that first one (ADR-0011, ADR-0013)
     origin: str | None = None
     # the situation topic's id (je_server.topics); None on roleplays made before topics, read as "other"
     # (spec situation-topics 7)

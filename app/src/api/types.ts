@@ -42,7 +42,7 @@ export type Roleplay = {
   lines: ScriptLine[];
   attempts: Record<string, Attempt[]>;
   pos: number;
-  origin: string | null; // the first roleplay of its group when copied (ADR-0011)
+  origin: string | null; // the first roleplay of its group when copied or picked again from a list (ADR-0011, 0013)
   // the situation topic's id; null on roleplays made before topics (spec situation-topics 7)
   topic: string | null;
   // the list line's id when picked from a topic's list (spec fixed-list-scripts 5); null otherwise
