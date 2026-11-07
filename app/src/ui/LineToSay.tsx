@@ -6,13 +6,16 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { ThreeLine } from "../api/types";
 import { KoButton, KoLine, type KoProps } from "./Interpret";
+import { StarButton } from "./Star";
 import { notesView } from "./notesView";
 import { colors } from "./theme";
 import { ThreeLineView } from "./ThreeLine";
 
-type Props = { text: string; three: ThreeLine | "loading" | null; open: boolean; onToggle: () => void; ko: KoProps };
+// star: 「☆ 모아 두기」, always shown on the line to say (spec review-practice 5)
+type Star = { saved: boolean; busy?: boolean; onPress: () => void };
+type Props = { text: string; three: ThreeLine | "loading" | null; open: boolean; onToggle: () => void; ko: KoProps; star?: Star };
 
-export function LineToSay({ text, three, open, onToggle, ko }: Props) {
+export function LineToSay({ text, three, open, onToggle, ko, star }: Props) {
   const view = notesView(three, open);
   return (
     <View style={styles.wrap}>
@@ -30,6 +33,7 @@ export function LineToSay({ text, three, open, onToggle, ko }: Props) {
           </Pressable>
         )}
         <KoButton view={ko.view} onPress={ko.onToggle} />
+        {star && <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />}
       </View>
     </View>
   );

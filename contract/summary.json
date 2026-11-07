@@ -15,7 +15,8 @@
     "ko": null,
     "ko_audio": null
    },
-   "tries": []
+   "tries": [],
+   "first": null
   },
   {
    "line": {
@@ -43,7 +44,8 @@
      ],
      "point_ko": ""
     }
-   ]
+   ],
+   "first": null
   },
   {
    "line": {
@@ -56,7 +58,8 @@
     "ko": null,
     "ko_audio": null
    },
-   "tries": []
+   "tries": [],
+   "first": null
   },
   {
    "line": {
@@ -78,7 +81,12 @@
      "issues": [],
      "point_ko": "이럴 때는 A large one, please처럼 말하면 더 자연스러워요."
     }
-   ]
+   ],
+   "first": {
+    "rp_id": "a1b2c3d4e5f6",
+    "idx": 1,
+    "n": 1
+   }
   }
  ]
 }

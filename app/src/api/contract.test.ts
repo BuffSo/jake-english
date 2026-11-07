@@ -2,10 +2,23 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { NdjsonSplitter } from "./ndjson";
-import { EVENT_TYPES, ISSUE_KEYS, LINE_KEYS, ROLEPLAY_KEYS, SUMMARY_KEYS, SYLLABLE_KEYS, TRY_KEYS } from "./types";
+import {
+  EVENT_TYPES,
+  ISSUE_KEYS,
+  LINE_KEYS,
+  PAST_KEYS,
+  ROLEPLAY_KEYS,
+  SAVED_KEYS,
+  SUMMARY_KEYS,
+  SYLLABLE_KEYS,
+  TRANSCRIPT_KEYS,
+  TRY_KEYS,
+} from "./types";
 import roleplay from "../../../contract/roleplay.json";
 import lineUser from "../../../contract/line-user.json";
 import summary from "../../../contract/summary.json";
+import past from "../../../contract/past.json";
+import saved from "../../../contract/saved.json";
 
 const sorted = (a: readonly string[]) => [...a].sort();
 
@@ -29,10 +42,16 @@ test("every example event type is known", () => {
 test("summary example has the keys the end screen reads", () => {
   expect(sorted(Object.keys(summary))).toEqual(sorted(SUMMARY_KEYS));
   for (const l of summary.lines) {
+    expect(sorted(Object.keys(l))).toEqual(sorted(TRANSCRIPT_KEYS));
     expect(sorted(Object.keys(l.line))).toEqual(sorted(LINE_KEYS));
     for (const t of l.tries) {
       expect(sorted(Object.keys(t))).toEqual(sorted(TRY_KEYS));
       for (const i of t.issues) expect(sorted(Object.keys(i))).toEqual(sorted(ISSUE_KEYS));
     }
   }
+});
+
+test("past and saved examples have the keys the review screens read", () => {
+  for (const i of past.items) expect(sorted(Object.keys(i))).toEqual(sorted(PAST_KEYS));
+  for (const i of saved.items) expect(sorted(Object.keys(i))).toEqual(sorted(SAVED_KEYS));
 });

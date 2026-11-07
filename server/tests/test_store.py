@@ -52,3 +52,20 @@ def test_find_rec_does_not_create_folders(tmp_path):
     assert s.find_rec("../etc", 1, 1) is None
     s.rec_path(r.id, 1, 1).write_bytes(b"m4a")
     assert s.find_rec(r.id, 1, 1).read_bytes() == b"m4a"
+
+
+def test_old_record_loads(tmp_path):
+    """A roleplay.json written before 2026-11-07 has no origin and no try times (ADR-0011)."""
+    import json
+
+    s = Store(tmp_path)
+    r = rp(s)
+    raw = json.loads(r.model_dump_json())
+    raw.pop("origin", None)
+    raw["attempts"] = {"0": [{"n": 1, "mode": "shadow", "heard": "Hi.", "followed": True, "issues": [],
+                              "say_ko": "", "audio": [], "timings": {}}]}
+    d = tmp_path / "roleplays" / r.id
+    d.mkdir(parents=True)
+    (d / "roleplay.json").write_text(json.dumps(raw), encoding="utf-8")
+    old = s.load(r.id)
+    assert old.origin is None and old.attempts[0][0].at is None

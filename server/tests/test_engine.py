@@ -245,3 +245,21 @@ async def test_ko_audio_is_sohee_urgent_checked_and_kept(engine, fake_voice):
     assert engine.store.load(rp.id).lines[0].ko_audio == key
     n = len(fake_voice.calls)
     assert await engine.ko_audio(rp.id, 0) == key and len(fake_voice.calls) == n
+
+
+async def test_copy_points_at_the_first_roleplay(engine):
+    rp = await engine.create("길 묻기")
+    c1 = await engine.copy(rp.id)
+    c2 = await engine.copy(c1.id)
+    assert rp.origin is None and c1.origin == rp.id and c2.origin == rp.id
+    assert engine.load(c2.id).origin == rp.id
+
+
+async def test_attempt_records_when(engine_with_rp, speech_bytes, fake_whisper):
+    import re
+
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's right over there."
+    [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
+    at = engine.load(rp_id).attempts[user_idx][0].at
+    assert at is not None and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d", at)

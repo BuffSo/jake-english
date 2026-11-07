@@ -77,6 +77,12 @@ class NewRoleplay(BaseModel):
     situation: str = Field(min_length=1, max_length=300)
 
 
+class SavedChange(BaseModel):
+    rp_id: str = Field(pattern=ID)
+    idx: int = Field(ge=0)
+    on: bool
+
+
 class Recommend(BaseModel):
     # Jake's suggestions turned down on the situation screen (「다른 걸로요」, 2026-11-06), so they do not come
     # back. Limited like the situation itself; the app keeps the last TURNED_DOWN_MAX.
@@ -179,6 +185,35 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             return (await engine().create(body.situation.strip())).model_dump(mode="json")
         except ClaudeUnavailable:
             raise claude_down() from None
+
+    @router.get("/roleplays/{rp_id}")
+    def roleplay(rp_id: str = PathParam(pattern=ID)) -> dict:
+        try:
+            return engine().load(rp_id).model_dump(mode="json")
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
+    @router.get("/past")
+    def past() -> dict:
+        return {"items": engine().past()}
+
+    @router.get("/groups/{group}/latest")
+    def latest(group: str = PathParam(pattern=ID)) -> dict:
+        try:
+            return engine().latest(group)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
+    @router.get("/saved")
+    def saved() -> dict:
+        return {"items": engine().saved()}
+
+    @router.post("/saved")
+    async def set_saved(body: SavedChange) -> dict:
+        try:
+            return await engine().set_saved(body.rp_id, body.idx, body.on)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
 
     @router.post("/roleplays/{rp_id}/copy")
     async def copy(rp_id: str = PathParam(pattern=ID)) -> dict:

@@ -121,3 +121,31 @@ test("Sohee's interpretation: the text, then its sound", async () => {
   const urls = f.mock.calls.map((c) => (c as unknown as [string])[0]);
   expect(urls).toEqual([`${URL}/roleplays/abcdef012345/lines/2/ko`, `${URL}/roleplays/abcdef012345/lines/2/ko/audio`]);
 });
+
+describe("다시 연습 calls", () => {
+  const call = (f: jest.Mock, i = 0) => f.mock.calls[i] as unknown as [string, RequestInit];
+
+  test("getRoleplay, pastRun and the lists ask the right paths", async () => {
+    const f = jest.fn(async () => json(200, { items: [{ group: "a1b2c3d4e5f6" }] }));
+    const api = makeApi(URL, TOKEN, f as never, noFile);
+    await api.getRoleplay("a1b2c3d4e5f6");
+    await api.pastRun("a1b2c3d4e5f6");
+    expect(await api.past()).toEqual([{ group: "a1b2c3d4e5f6" }]);
+    expect(await api.saved()).toEqual([{ group: "a1b2c3d4e5f6" }]);
+    expect(f.mock.calls.map((c) => (c as unknown as [string])[0])).toEqual([
+      `${URL}/roleplays/a1b2c3d4e5f6`,
+      `${URL}/groups/a1b2c3d4e5f6/latest`,
+      `${URL}/past`,
+      `${URL}/saved`,
+    ]);
+  });
+
+  test("setSaved posts the line and whether it is on", async () => {
+    const f = jest.fn(async () => json(200, { key: "sure", on: true }));
+    expect(await makeApi(URL, TOKEN, f as never, noFile).setSaved("a1b2c3d4e5f6", 2, true)).toEqual({ key: "sure", on: true });
+    const [url, init] = call(f);
+    expect(url).toBe(`${URL}/saved`);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ rp_id: "a1b2c3d4e5f6", idx: 2, on: true });
+  });
+});

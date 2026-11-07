@@ -13,10 +13,11 @@ from . import audio
 from .claude import ClaudeUnavailable
 from . import sounds
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, sound_pairs, words
-from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, ScriptLine, ThreeLine
+from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
 from .sentences import SentenceBuffer
 from .tts import VoiceError
 from .phrases import PHRASES
+from .review import first_try, group_of, latest_run, past_items, sentence_key
 from .store import Store
 from .tts import audio_key
 
@@ -44,6 +45,7 @@ class Engine:
         self.left: dict[str, int] = {}  # learner lines the running rebuild is writing
         self.threes: dict[tuple[str, int], asyncio.Task] = {}  # notes asked for on demand, one call per line
         self.kos: dict[tuple[str, int], asyncio.Task] = {}  # Sohee's Korean asked for, one call per line
+        self.saved_lock = asyncio.Lock()  # the saved-sentence file is read and written one change at a time
 
     # --- fixed phrases ------------------------------------------------------------------------
 
@@ -104,7 +106,8 @@ class Engine:
             await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
         old = self.load(rp_id)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
-                      situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines])
+                      situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
+                      origin=old.origin or old.id)  # a copy of a copy still points at the first (ADR-0011)
         self.store.save(rp)
         for line in rp.lines:
             if not self.ready(line):
@@ -354,7 +357,8 @@ class Engine:
             yield {"type": "reply", "line": reply.model_dump(mode="json")}
         timings["total"] = time.perf_counter() - t0
         await self.save_attempt(rp_id, idx, Attempt(n=n, mode=mode, heard=heard, followed=followed, issues=issues,
-                                                    say_ko="".join(said), audio=keys, timings=timings),
+                                                    say_ko="".join(said), audio=keys, timings=timings,
+                                                    at=datetime.now().isoformat(timespec="seconds")),
                                 pos=nxt if (mode == "turn" and not failed) else None)
         log.info("attempt %s/%d n=%d followed=%s issues=%d transcribed=%.2f first_text=%.2f first_audio=%.2f "
                  "total=%.2f", rp_id, idx, n, followed, len(issues), timings.get("transcribed", 0),
@@ -481,6 +485,8 @@ class Engine:
         Practice after the roleplay is left out: 「주고받은 말」 is what was said, and Ryan's reply to a line said
         differently answers that try. The closing words go by the same tries."""
         rp = self.load(rp_id)
+        group = group_of(rp)
+        runs = [r for r in self.store.all() if group_of(r) == group]  # for 「처음 녹음」 (spec review-practice 4)
         lines, issues_left = [], False
         for l in rp.lines:
             tries = [a for a in rp.attempts.get(l.idx, []) if a.mode in ("turn", "retry")] if l.speaker == "user" else []
@@ -492,8 +498,62 @@ class Engine:
                  # to follow the line, which is not a point (final review)
                  # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
                  "point_ko": a.say_ko if a.mode == "turn" and not a.followed and not a.issues else ""}
-                for a in tries]})
+                for a in tries], "first": first_try(runs, rp, l.idx)})
         return {"say": self.said("closing_retry" if issues_left else "closing_clean").model_dump(), "lines": lines}
+
+    # --- 다시 연습 (spec review-practice, ADR-0011): read from the records, no Claude call -----------------------
+
+    def past(self) -> list[dict]:
+        return past_items(self.store.all())
+
+    def latest(self, group: str) -> dict:
+        """The newest run of a script the learner spoke in, with its end-screen summary (spec review-practice 3)."""
+        rp = latest_run(self.store.all(), group)
+        if rp is None:
+            raise NotFound(group)
+        return {"roleplay": rp.model_dump(mode="json"), "summary": self.summary(rp.id)}
+
+    def saved(self) -> list[dict]:
+        """Saved sentences, newest first (spec review-practice 6). The line is found again by its sentence when the
+        script was rebuilt after it was saved; one that is gone is left out of the list but kept in the file."""
+        out = []
+        items = self.store.load_saved()  # in the order saved, so two saves in one second keep their order
+        for _, s in sorted(enumerate(items), key=lambda p: (p[1].at, p[0]), reverse=True):
+            found = self._resolve(s)
+            if found is not None:
+                rp, line = found
+                out.append({"key": s.key, "rp_id": rp.id, "idx": line.idx, "speaker": line.speaker, "text": line.text,
+                            "title_ko": rp.frame.title_ko, "at": s.at})
+        return out
+
+    def _resolve(self, s: Saved) -> tuple[Roleplay, ScriptLine] | None:
+        """The roleplay and line a saved entry points at: its own line while it still says the sentence, else the
+        first line of that roleplay that does; None when the roleplay or the sentence is gone."""
+        try:
+            rp = self.store.load(s.rp_id)
+        except KeyError:
+            return None
+        here = rp.lines[s.idx] if s.idx < len(rp.lines) else None
+        line = here if here and sentence_key(here.text) == s.key else next(
+            (l for l in rp.lines if sentence_key(l.text) == s.key), None)
+        return (rp, line) if line is not None else None
+
+    async def set_saved(self, rp_id: str, idx: int, on: bool) -> dict:
+        """Saves or unsaves the line's sentence; one entry per sentence wherever it was saved (spec 5)."""
+        _, line = self.get_line(rp_id, idx)
+        key = sentence_key(line.text)
+        async with self.saved_lock:
+            items = self.store.load_saved()
+            if on:
+                # an entry whose line is gone is not on the list, so it must not keep the sentence from being saved
+                # again (PR #27 review): it is replaced by this line
+                items = [s for s in items if s.key != key or self._resolve(s) is not None]
+                if all(s.key != key for s in items):
+                    items.append(Saved(key=key, rp_id=rp_id, idx=idx, at=datetime.now().isoformat(timespec="seconds")))
+            else:
+                items = [s for s in items if s.key != key]
+            self.store.save_saved(items)
+        return {"key": key, "on": on}
 
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
         async with self.lock(rp_id):

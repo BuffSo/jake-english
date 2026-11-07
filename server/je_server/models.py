@@ -75,6 +75,8 @@ class Attempt(BaseModel):
     say_ko: str
     audio: list[str]
     timings: dict[str, float]
+    # when it was recorded, ISO to the second; None on tries made before 2026-11-07 (ADR-0011)
+    at: str | None = None
 
 
 class Roleplay(BaseModel):
@@ -85,6 +87,18 @@ class Roleplay(BaseModel):
     lines: list[ScriptLine]
     attempts: dict[int, list[Attempt]] = {}
     pos: int = 0
+    # the first roleplay of its group when made by 「이 상황 다시 하기」; None on that first one (ADR-0011)
+    origin: str | None = None
+
+
+class Saved(BaseModel):
+    """A sentence the learner saved to practise (spec review-practice 5). The line's words, speaker and situation
+    are read from the roleplay, not kept twice (ADR-0011)."""
+
+    key: str  # sentence_key of the line's text: one entry per sentence
+    rp_id: str
+    idx: int
+    at: str  # when it was saved, ISO to the second
 
 
 class Said(BaseModel):

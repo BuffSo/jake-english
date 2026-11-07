@@ -1,6 +1,6 @@
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState, type ComponentRef, type Dispatch } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 
 import { api } from "../api";
 import { ApiError } from "../api/client";
@@ -10,16 +10,19 @@ import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, stopThenSend } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
+import { scrollToShow, tapRow } from "../flow/review";
 import { askFirst, canReplay, leavesScreen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
 import { Named } from "../ui/Named";
+import { StarButton, StarMark } from "../ui/Star";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { useInterpret } from "../ui/useInterpret";
+import { useSaved } from "../ui/useSaved";
 import { colors, top } from "../ui/theme";
-import { codeOf, styles as common, Waiting } from "./common";
+import { codeOf, messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
 type Rate = 0.6 | 0.8 | 1;
@@ -53,6 +56,16 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const koOpenNow = useRef(koOpen);
   const sayOpenNow = useRef(state.interpreting);
   sayOpenNow.current = state.interpreting;
+  // past bubbles show only what was said; one opens its buttons at a time (spec review-practice 8). The key is
+  // "<place>:<line>", so two bubbles of one line (「다시 해 보기」) open apart.
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const view = useRef({ offset: 0, height: 0 }); // the conversation's scroll, to bring an opened bubble into view
+  const toShow = useRef<string | null>(null);
+  const saved = useSaved();
+  // 「이 상황 다시 하기」 from saved-sentence practice (spec review-practice 7)
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const copyGate = useRef(createGate()).current;
   const interp = useInterpret(rp.id, sounds, (auto) =>
     mounted.current &&
     (auto ? mayAutoPlay("roleplay", now.current.phase, sounds.isPlaying()) : mayReplay("roleplay", now.current.phase)),
@@ -218,6 +231,50 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (open) interp.open(idx, lineAt(idx), stillOpen(idx, true));
   }
 
+  // one bubble open at a time; closing one closes its notes and Sohee's line too, so the screen is plain again, and
+  // the one that opens starts plain (`tapRow`). A folded bubble shows neither (PR #27 review).
+  function toggleBubble(key: string) {
+    const { open: next, close } = tapRow(openRow, key);
+    const shut = Object.fromEntries(close.map((i) => [i, false]));
+    setOpen((o) => ({ ...o, ...shut }));
+    koOpenNow.current = { ...koOpenNow.current, ...shut };
+    setKoOpen(koOpenNow.current);
+    setOpenRow(next);
+    toShow.current = next;
+  }
+
+  // an opened bubble has drawn its buttons: bring them on screen if they are below it (spec review-practice 8)
+  function laidOut(key: string, e: LayoutChangeEvent) {
+    if (toShow.current !== key) return;
+    toShow.current = null;
+    const y = scrollToShow(e.nativeEvent.layout, view.current);
+    if (y !== null) scroll.current?.scrollTo({ y, animated: true });
+  }
+
+  // 「☆ 모아 두기」 for a line this screen holds (spec review-practice 5)
+  function starAt(idx: number) {
+    const l = lineAt(idx);
+    if (!l) return null;
+    return { saved: saved.has(l.text), busy: saved.pending(l.text), onPress: () => saved.toggle(rp.id, idx, l.text) };
+  }
+
+  function replaySituation() {
+    copyGate.run(async () => {
+      if (!canReplay(now.current.phase) || sounds.isPlaying()) return;
+      setCopying(true);
+      setCopyError(null);
+      sounds.clear();
+      try {
+        const copy = await api.copyRoleplay(rp.id);
+        if (mounted.current) dispatch({ type: "restarted", roleplay: copy });
+      } catch (e) {
+        if (mounted.current) setCopyError(messageOf(e));
+      } finally {
+        if (mounted.current) setCopying(false);
+      }
+    });
+  }
+
   // Sohee's line and its button for a past bubble
   function Ko({ idx }: { idx: number }) {
     const line = lineAt(idx);
@@ -304,31 +361,81 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (canPractise) dispatch({ type: "practiseLine", kind, idx });
   }
 
-  // `follow`: the bubble is a past Ryan line that can be practised (`practiceFor`)
-  // The bubble itself takes no tap: 「읽는 법 보기」 and 「통역」 each have a button (spec korean-translation 2)
-  function RyanBubble({ idx, text, follow }: { idx?: number; text: string; follow?: boolean }) {
+  // `follow`: the bubble is a past Ryan line that can be practised (`practiceFor`). `row`: a past bubble, which
+  // shows only the line until tapped and then its buttons (spec review-practice 8); without it (the line Ryan is
+  // saying now) the buttons show as before and there is no 「모아 두기」.
+  function RyanBubble({ idx, text, follow, row }: { idx?: number; text: string; follow?: boolean; row?: string }) {
     const three = idx !== undefined ? threes[idx] : undefined;
+    const folds = row !== undefined && idx !== undefined;
+    const opened = folds && openRow === row;
+    const star = folds ? starAt(idx) : null;
+    const body = (
+      <>
+        <Text style={styles.ryanText}>
+          {text}
+          {star?.saved && !opened && <Text> </Text>}
+          {star?.saved && !opened && <StarMark />}
+        </Text>
+        {idx !== undefined && (!folds || opened) && open[idx] && three === "loading" && (
+          <Text style={common.sub}>세 줄을 만들고 있어요…</Text>
+        )}
+        {idx !== undefined && (!folds || opened) && open[idx] && three && three !== "loading" && <ThreeLineView three={three} />}
+        {idx !== undefined && (!folds || opened) && <Ko idx={idx} />}
+        {idx !== undefined && (!folds || opened) && (
+          <View style={styles.links}>
+            <View style={styles.linkGroup}>
+              <Pressable onPress={() => toggleThree(idx)} hitSlop={8}>
+                <Text style={styles.link}>{open[idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
+              </Pressable>
+              <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
+              {star && <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />}
+            </View>
+            {follow && (
+              <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} inRow />
+            )}
+          </View>
+        )}
+      </>
+    );
     return (
-      <Named part="ryan">
-        <View style={[styles.bubble, styles.ryan]}>
-          <Text style={styles.ryanText}>{text}</Text>
-          {idx !== undefined && open[idx] && three === "loading" && <Text style={common.sub}>세 줄을 만들고 있어요…</Text>}
-          {idx !== undefined && open[idx] && three && three !== "loading" && <ThreeLineView three={three} />}
-          {idx !== undefined && <Ko idx={idx} />}
-          {idx !== undefined && (
-            <View style={styles.links}>
-              <View style={styles.linkGroup}>
-                <Pressable onPress={() => toggleThree(idx)} hitSlop={8}>
-                  <Text style={styles.link}>{open[idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
-                </Pressable>
-                <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
-              </View>
-              {follow && (
-                <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} inRow />
+      <Named part="ryan" onLayout={row ? (e) => laidOut(row, e) : undefined}>
+        {folds ? (
+          <Pressable onPress={() => toggleBubble(row)} style={[styles.bubble, styles.ryan, opened && styles.ryanOpen]}>
+            {body}
+          </Pressable>
+        ) : (
+          <View style={[styles.bubble, styles.ryan]}>{body}</View>
+        )}
+      </Named>
+    );
+  }
+
+  // A past bubble of mine: the script line, what was heard under it, and its buttons once tapped (review-practice 8)
+  function MyBubble({ at, b }: { at: number; b: (typeof state.history)[number] }) {
+    const idx = b.idx;
+    const row = idx !== undefined ? `${at}:${idx}` : undefined;
+    const opened = row !== undefined && openRow === row;
+    const star = idx !== undefined ? starAt(idx) : null;
+    return (
+      <Named part="mine" onLayout={row ? (e) => laidOut(row, e) : undefined}>
+        <Pressable onPress={() => row && toggleBubble(row)} style={[styles.bubble, styles.user, opened && styles.userOpen]}>
+          <Text style={styles.plainText}>
+            {b.script}
+            {star?.saved && !opened && <Text> </Text>}
+            {star?.saved && !opened && <StarMark />}
+          </Text>
+          <Text style={styles.heardLine}>들린 말: {b.text}</Text>
+          {opened && idx !== undefined && <Ko idx={idx} />}
+          {opened && idx !== undefined && (
+            <View style={[styles.linkGroup, styles.gap]}>
+              <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
+              {practiceFor(state, b) === "mine" && (
+                <PractiseLink label="이 줄 다시 ›" disabled={!canPractise} onPress={() => practise("mine", idx)} inRow />
               )}
+              {star && <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />}
             </View>
           )}
-        </View>
+        </Pressable>
       </Named>
     );
   }
@@ -339,23 +446,29 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     (line?.speaker === "user" || shadow) && ["ready", "recording", "evaluating", "evaluated", "error"].includes(state.phase);
   const practice = state.practice;
   const midway = practice?.from === "roleplay"; // one past line, back to the roleplay after it
+  const fromSaved = practice?.from === "saved"; // saved sentences, maybe from several roleplays (spec review-practice 7)
   const title = practice
-    ? midway
-      ? practice.kind === "mine"
-        ? "이 줄 다시"
-        : "따라 말하기"
-      : practice.kind === "mine"
-        ? "내 대사 다시 연습"
-        : "라이언 대사 따라 말하기"
+    ? fromSaved
+      ? "모아 둔 문장"
+      : midway
+        ? practice.kind === "mine"
+          ? "이 줄 다시"
+          : "따라 말하기"
+        : practice.kind === "mine"
+          ? "내 대사 다시 연습"
+          : "라이언 대사 따라 말하기"
     : rp.frame.title_ko;
   const count = practice
-    ? midway
+    ? midway || (fromSaved && practice.order.length === 1)
       ? null
       : `${practice.at + 1}/${practice.order.length}`
     : state.progress && state.progress.total > 0
       ? `내 대사 ${state.progress.no}/${state.progress.total}`
       : null;
-  const before = practice?.kind === "mine" && line ? state.seen[line.idx - 1] : undefined;
+  const before = practice?.kind === "mine" && line && !fromSaved ? state.seen[line.idx - 1] : undefined;
+  // in saved practice the line before is hidden until asked (「앞 대화 보기」), whoever said it
+  const savedBefore = fromSaved && line ? rp.lines[line.idx - 1] : undefined;
+  const canCopy = fromSaved && canReplay(state.phase) && !playing && !copying;
 
   return (
     <View style={styles.wrap}>
@@ -370,8 +483,20 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             ? rp.frame.title_ko
             : `나: ${rp.frame.user_role_ko} · 라이언: ${rp.frame.ryan_role_ko} · ${rp.frame.place_ko}`}
         </Text>
+        {fromSaved && (
+          <Pressable onPress={replaySituation} hitSlop={8} style={styles.replay}>
+            <Text style={[styles.link, !canCopy && styles.off]}>{copying ? "준비하고 있어요" : "이 상황 다시 하기 ›"}</Text>
+          </Pressable>
+        )}
+        {copyError && <Text style={common.error}>{copyError}</Text>}
       </View>
-      <ScrollView ref={scroll} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        ref={scroll}
+        contentContainerStyle={styles.scroll}
+        onLayout={(e) => (view.current.height = e.nativeEvent.layout.height)}
+        onScroll={(e) => (view.current.offset = e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={32}
+      >
         {/* who says each bubble, like a messenger: others left in gray, me right in blue (2026-11-06 user) */}
         {state.jake && !practice && (
           <Named part="jake">
@@ -383,27 +508,15 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         )}
         {state.history.map((b, i) =>
           b.kind === "ryan" ? (
-            <RyanBubble key={i} idx={b.idx} text={b.text} follow={practiceFor(state, b) === "shadow"} />
+            <RyanBubble
+              key={i}
+              idx={b.idx}
+              text={b.text}
+              follow={practiceFor(state, b) === "shadow"}
+              row={b.idx !== undefined ? `${i}:${b.idx}` : undefined}
+            />
           ) : b.kind === "user" && b.script ? (
-            <Named key={i} part="mine">
-              <View style={[styles.bubble, styles.user]}>
-                <Text style={styles.label}>대본</Text>
-                <Text style={styles.plainText}>{b.script}</Text>
-                {b.idx !== undefined && (
-                  <>
-                    <Ko idx={b.idx} />
-                    <View style={styles.linkRow}>
-                      <KoButton view={koViewAt(b.idx)} onPress={() => toggleKo(b.idx!)} />
-                    </View>
-                  </>
-                )}
-                <Text style={[styles.label, styles.gap]}>들린 말</Text>
-                <Text style={styles.plainText}>{b.text}</Text>
-                {practiceFor(state, b) === "mine" && b.idx !== undefined && (
-                  <PractiseLink label="이 줄 다시 ›" disabled={!canPractise} onPress={() => practise("mine", b.idx!)} />
-                )}
-              </View>
-            </Named>
+            <MyBubble key={i} at={i} b={b} />
           ) : (
             <Named key={i} part={b.kind === "user" ? "mine" : "feedback"}>
               <View style={[styles.bubble, b.kind === "user" ? styles.user : styles.feedback]}>
@@ -430,6 +543,22 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </Pressable>
           </Named>
         )}
+        {savedBefore && (
+          <Pressable onPress={() => dispatch({ type: "toggleBefore" })} hitSlop={8} style={styles.beforeToggle}>
+            <Text style={styles.link}>{state.beforeOpen ? "앞 대화 접기" : "앞 대화 보기 ›"}</Text>
+          </Pressable>
+        )}
+        {myTurn && savedBefore && state.beforeOpen && (
+          <Named part={savedBefore.speaker === "ryan" ? "ryan" : "mine"}>
+            <Pressable
+              onPress={() => playBefore(savedBefore.audio)}
+              style={[styles.bubble, savedBefore.speaker === "ryan" ? styles.ryan : styles.user]}
+            >
+              <Text style={styles.beforeText}>{savedBefore.text}</Text>
+              <Text style={styles.hint}>눌러서 듣기</Text>
+            </Pressable>
+          </Named>
+        )}
         {/* the line to say, Ryan's own in shadow practice: the learner says it, so it is on their side */}
         {myTurn && line && (
           <Named part="now">
@@ -445,6 +574,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                   onToggle: () => toggleSayKo(line.idx),
                   onReplay: () => interp.replay(line.idx, line, here()),
                 }}
+                star={{ saved: saved.has(line.text), busy: saved.pending(line.text), onPress: () => saved.toggle(rp.id, line.idx, line.text) }}
               />
             </View>
           </Named>
@@ -462,6 +592,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             idx={state.reply.idx}
             text={state.reply.text}
             follow={practiceFor(state, { kind: "ryan", idx: state.reply.idx }) === "shadow"}
+            row={`reply:${state.reply.idx}`}
           />
         )}
         {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" onShow={toEnd} />}
@@ -528,8 +659,12 @@ const styles = StyleSheet.create({
   titleText: { flexShrink: 1 },
   // in my blue, like my bubbles (2026-11-06 user); it was yellow, which is Ryan's feedback
   count: { fontSize: 14, fontWeight: "700", color: colors.primary, backgroundColor: colors.user, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  label: { fontSize: 12, color: colors.sub },
-  gap: { marginTop: 6 },
+  gap: { marginTop: 8 },
+  heardLine: { fontSize: 14, color: colors.sub, marginTop: 4 },
+  ryanOpen: { backgroundColor: "#E9ECEF" },
+  userOpen: { backgroundColor: "#D0EBFF" },
+  beforeToggle: { alignSelf: "flex-end", marginTop: 4 },
+  replay: { alignSelf: "flex-start", marginTop: 6 },
   beforeText: { fontSize: 15, color: colors.sub, lineHeight: 22 },
   scroll: { padding: 16, paddingBottom: 32 },
   bubble: { borderRadius: 14, padding: 12, marginVertical: 5, maxWidth: "92%" },
