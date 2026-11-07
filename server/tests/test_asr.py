@@ -63,3 +63,23 @@ def test_the_voice_hears_with_whisper(settings):
 
     services = build_services(settings)
     assert services.voice.hear == services.whisper.hear
+
+
+async def test_transcribe_auto_returns_text_and_language(tmp_path):
+    seen = {}
+
+    def handler(request: httpx.Request):
+        seen["body"] = request.read()
+        return httpx.Response(200, json={"text": " 다시 할게요 [BLANK_AUDIO]\n", "language": "korean"})
+
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    assert await whisper_with(handler).transcribe_auto(wav) == ("다시 할게요", "korean")
+    assert b"\r\n\r\nauto\r\n" in seen["body"] and b"verbose_json" in seen["body"]
+
+
+async def test_transcribe_auto_without_language_is_empty_name(tmp_path):
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    w = whisper_with(lambda r: httpx.Response(200, json={"text": "Hello"}))
+    assert await w.transcribe_auto(wav) == ("Hello", "")

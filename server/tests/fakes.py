@@ -240,6 +240,8 @@ class FakeWhisper:
         self.text = text
         self.calls = 0
         self.langs: list[str] = []
+        self.auto_text: str | None = None  # what auto-detection hears; None: the same as `text`
+        self.auto_lang = "english"
 
     async def start(self):
         pass
@@ -251,3 +253,8 @@ class FakeWhisper:
         self.calls += 1
         self.langs.append(lang)
         return self.text
+
+    async def transcribe_auto(self, wav):
+        self.calls += 1
+        self.langs.append("auto")
+        return (self.auto_text if self.auto_text is not None else self.text), self.auto_lang

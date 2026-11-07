@@ -1,7 +1,8 @@
 """Transcription with whisper.cpp's whisper-server, kept running on 127.0.0.1.
 
-Each request names its language: turn recordings are English (no script hint, spec 「평가」),
-situation input is auto-detected. Transcripts are never logged.
+Each request names its language: turn recordings are English first (no script hint, spec 「평가」), then
+auto-detected when they do not follow the line, so Korean is heard too (spec offscript-aside 2); situation input
+is auto-detected. Transcripts are never logged.
 """
 from __future__ import annotations
 
@@ -15,6 +16,10 @@ import httpx
 from . import audio
 
 BRACKETS = re.compile(r"\[[^\]]*\]|\([^)]*\)")
+
+
+def _clean(text: str) -> str:
+    return " ".join(BRACKETS.sub(" ", text).split())
 
 
 class Whisper:
@@ -48,14 +53,22 @@ class Whisper:
             wav.unlink(missing_ok=True)
 
     async def transcribe(self, wav: Path, lang: Literal["en", "ko", "auto"]) -> str:
+        return _clean((await self._infer(wav, lang, "json")).get("text", ""))
+
+    async def transcribe_auto(self, wav: Path) -> tuple[str, str]:
+        """The text and the language whisper detected ("korean", "english"; "" when it does not say). Forced to
+        English, whisper translates Korean speech or leaves it in Hangul (2026-11-07)."""
+        j = await self._infer(wav, "auto", "verbose_json")
+        return _clean(j.get("text", "")), str(j.get("language") or "").lower()
+
+    async def _infer(self, wav: Path, lang: str, fmt: str) -> dict:
         r = await self.client.post(
             "/inference",
             files={"file": ("audio.wav", wav.read_bytes(), "audio/wav")},
-            data={"language": lang, "response_format": "json"},
+            data={"language": lang, "response_format": fmt},
         )
         r.raise_for_status()
-        text = BRACKETS.sub(" ", r.json().get("text", ""))
-        return " ".join(text.split())
+        return r.json()
 
     async def stop(self) -> None:
         if self.proc and self.proc.returncode is None:
