@@ -440,3 +440,158 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     expect(modelKey(second)).not.toBe(modelKey(first));
   });
 });
+
+// --- 다시 연습 (spec review-practice 1, 3, 7, 9) ------------------------------------------------------------------
+
+describe("다시 연습", () => {
+  const review = reduce(initial, { type: "openReview" });
+  const pastList = reduce(review, { type: "openPast" });
+  const savedList = reduce(review, { type: "openSaved" });
+  const pastView = reduce(pastList, { type: "openPastRun", group: rp.id, title: "길 묻기" });
+  const shown = reduce(pastView, { type: "pastLoaded", roleplay: rp });
+  const rpB = { ...rp, id: "bbbbbbbbbbbb" } as Roleplay;
+  const copy = { ...rp, id: "cccccccccccc", origin: rp.id } as Roleplay;
+  const evaluated = (s: State): State => ({ ...s, phase: "evaluated" });
+
+  test("home opens review, review back goes home", () => {
+    expect(review.screen).toBe("review");
+    expect(reduce(review, { type: "back" })).toEqual(initial);
+  });
+
+  test("review opens past and saved; back from them returns to review", () => {
+    expect(pastList.screen).toBe("past");
+    expect(savedList.screen).toBe("saved");
+    expect(reduce(pastList, { type: "back" }).screen).toBe("review");
+    expect(reduce(savedList, { type: "back" }).screen).toBe("review");
+  });
+
+  test("openPastRun shows the end screen as a past view without closing words", () => {
+    expect(pastView.screen).toBe("end");
+    expect(pastView.past).toEqual({ group: rp.id, title: "길 묻기" });
+    expect(pastView.roleplay).toBeNull();
+    expect(pastView.closingPlayed).toBe(true);
+    expect(shown.roleplay).toBe(rp);
+    expect(reduce(at("ready"), { type: "pastLoaded", roleplay: rpB })).toEqual(at("ready"));
+    expect(reduce(review, { type: "openPastRun", group: rp.id, title: "x" })).toBe(review);
+  });
+
+  test("back from a past view returns to the past list", () => {
+    const s = reduce(shown, { type: "back" });
+    expect(s.screen).toBe("past");
+    expect(s.past).toBeNull();
+  });
+
+  test("practice from a past view comes back to it", () => {
+    let s = reduce(shown, { type: "startPractice", kind: "mine", order: [1] });
+    s = evaluated(reduce(s, { type: "lineLoaded", line: userLine }));
+    s = reduce(s, { type: "next" });
+    expect(s.screen).toBe("end");
+    expect(s.past).toEqual(shown.past);
+    expect(s.roleplay).toBe(rp);
+  });
+
+  test("restarted from a past view returns there", () => {
+    let s = reduce(shown, { type: "restarted", roleplay: copy });
+    expect(s.screen).toBe("roleplay");
+    expect(s.roleplay).toBe(copy);
+    expect(s.returnTo).toBe(shown);
+    expect(s.past).toBeNull();
+    expect(reduce(s, { type: "back" })).toBe(shown);
+    // played to the end, then back from its end screen
+    const done = reduce(s, { type: "lineMissing" });
+    expect(done.screen).toBe("end");
+    expect(reduce(done, { type: "back" })).toBe(shown);
+    // again from that end screen: still back to the first past view
+    s = reduce(done, { type: "restarted", roleplay: { ...copy, id: "dddddddddddd" } as Roleplay });
+    expect(s.returnTo).toBe(shown);
+  });
+
+  test("restarted from a normal end keeps going to the situation screen", () => {
+    const s = reduce(end(), { type: "restarted", roleplay: copy });
+    expect(s.returnTo).toBeNull();
+    expect(reduce(s, { type: "back" }).screen).toBe("situation");
+  });
+
+  test("saved practice walks lines across roleplays", () => {
+    let s = reduce(savedList, { type: "startSaved", runs: [rp, rpB], order: [1, 0] });
+    expect(s.screen).toBe("roleplay");
+    expect(s.roleplay).toBe(rp);
+    expect(s.idx).toBe(1);
+    expect(s.mode).toBe("practice");
+    expect(s.practice).toMatchObject({ kind: "mine", from: "saved", at: 0, order: [1, 0] });
+    expect(s.phase).toBe("loading");
+    s = evaluated(reduce(s, { type: "lineLoaded", line: userLine }));
+    s = reduce(s, { type: "next" });
+    expect(s.roleplay).toBe(rpB);
+    expect(s.idx).toBe(0);
+    expect(s.mode).toBe("shadow");
+    expect(s.practice?.kind).toBe("shadow");
+    expect(s.phase).toBe("loading");
+    expect(s.history).toEqual([]);
+    s = evaluated(reduce(s, { type: "lineLoaded", line: ryanLine }));
+    s = reduce(s, { type: "next" });
+    expect(s.screen).toBe("saved");
+    expect(s.practice).toBeNull();
+    expect(s.roleplay).toBeNull();
+  });
+
+  test("startSaved is only taken on the saved list and with lines", () => {
+    expect(reduce(review, { type: "startSaved", runs: [rp], order: [1] })).toBe(review);
+    expect(reduce(savedList, { type: "startSaved", runs: [], order: [] })).toBe(savedList);
+  });
+
+  test("back from saved practice returns to the saved list", () => {
+    const s = reduce(reduce(savedList, { type: "startSaved", runs: [rp], order: [1] }), { type: "back" });
+    expect(s.screen).toBe("saved");
+    expect(s.practice).toBeNull();
+  });
+
+  test("a missing line in saved practice moves on", () => {
+    let s = reduce(savedList, { type: "startSaved", runs: [rp, rpB], order: [1, 0] });
+    s = reduce(s, { type: "lineMissing" });
+    expect(s.screen).toBe("roleplay");
+    expect(s.roleplay).toBe(rpB);
+    expect(s.idx).toBe(0);
+    s = reduce(s, { type: "lineMissing" });
+    expect(s.screen).toBe("saved");
+  });
+
+  test("restarted from saved practice returns to the same line", () => {
+    let p = reduce(savedList, { type: "startSaved", runs: [rp, rpB], order: [1, 0] });
+    p = evaluated(reduce(p, { type: "lineLoaded", line: userLine }));
+    p = reduce(p, { type: "next" });
+    p = reduce(p, { type: "lineLoaded", line: ryanLine });
+    const s = reduce(p, { type: "restarted", roleplay: copy });
+    expect(s.screen).toBe("roleplay");
+    expect(s.roleplay).toBe(copy);
+    expect(s.practice).toBeNull();
+    expect(s.returnTo).toBe(p);
+    const back = reduce(s, { type: "back" });
+    expect(back.practice?.at).toBe(1);
+    expect(back.roleplay).toBe(rpB);
+    expect(back.idx).toBe(0);
+    expect(back.phase).toBe("loading");
+    expect(back.line).toBeNull();
+    expect(back.history).toEqual([]);
+    expect(back.practiceNo).toBe(p.practiceNo + 1);
+  });
+
+  test("toggleBefore opens the previous line and a new line closes it", () => {
+    let s = reduce(reduce(savedList, { type: "startSaved", runs: [rp], order: [1] }), { type: "lineLoaded", line: userLine });
+    expect(s.beforeOpen).toBe(false);
+    s = reduce(s, { type: "toggleBefore" });
+    expect(s.beforeOpen).toBe(true);
+    s = reduce({ ...s, phase: "loading" }, { type: "lineLoaded", line: userLine });
+    expect(s.beforeOpen).toBe(false);
+  });
+
+  test("saved practice offers no midway practice", () => {
+    const s = reduce(reduce(savedList, { type: "startSaved", runs: [rp], order: [1] }), { type: "lineLoaded", line: userLine });
+    expect(practiceFor(s, { kind: "ryan", idx: 0 })).toBeNull();
+  });
+
+  test("home from anywhere clears the way back", () => {
+    const s = reduce(reduce(shown, { type: "restarted", roleplay: copy }), { type: "home" });
+    expect(s).toEqual(initial);
+  });
+});
