@@ -62,8 +62,18 @@ export type Try = {
   issues: { target: string; heard: string; say_ko: string }[]; // say_ko: the line the end screen shows
   point_ko: string;
 };
-export type TranscriptLine = { line: ScriptLine; tries: Try[] };
+// one recording: a try at a line of a roleplay, played through `recordingSource`
+export type TryRef = { rp_id: string; idx: number; n: number };
+// first: 「처음 녹음」, the earliest recording of this sentence in an earlier run of the same script (spec
+// review-practice 4); null when there is none and on Ryan's lines
+export type TranscriptLine = { line: ScriptLine; tries: Try[]; first: TryRef | null };
 export type Summary = { say: Said; lines: TranscriptLine[] };
+// 「지난 상황」: one script that was spoken in, with the first day it was done (spec review-practice 2)
+export type PastItem = { group: string; title_ko: string; first: string; latest: string };
+// the newest run of a script and its end-screen summary (spec review-practice 3)
+export type PastRun = { roleplay: Roleplay; summary: Summary };
+// a saved sentence and the line it was saved from (spec review-practice 5, 6)
+export type SavedItem = { key: string; rp_id: string; idx: number; speaker: Speaker; text: string; title_ko: string; at: string };
 export type AttemptEvent =
   | { type: "heard"; text: string; followed: boolean }
   | { type: "text"; delta: string }
@@ -80,6 +90,9 @@ export const EVENT_TYPES = ["heard", "text", "audio", "reply", "error", "done"] 
 export const SUMMARY_KEYS = ["say", "lines"] as const;
 export const TRY_KEYS = ["n", "mode", "heard", "followed", "issues", "point_ko"] as const;
 export const ISSUE_KEYS = ["target", "heard", "say_ko"] as const;
+export const TRANSCRIPT_KEYS = ["line", "tries", "first"] as const;
+export const PAST_KEYS = ["group", "title_ko", "first", "latest"] as const;
+export const SAVED_KEYS = ["key", "rp_id", "idx", "speaker", "text", "title_ko", "at"] as const;
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 export const KEYS_MATCH: [
@@ -90,4 +103,7 @@ export const KEYS_MATCH: [
   Same<keyof Summary, (typeof SUMMARY_KEYS)[number]>,
   Same<keyof Try, (typeof TRY_KEYS)[number]>,
   Same<keyof Try["issues"][number], (typeof ISSUE_KEYS)[number]>,
-] = [true, true, true, true, true, true, true];
+  Same<keyof TranscriptLine, (typeof TRANSCRIPT_KEYS)[number]>,
+  Same<keyof PastItem, (typeof PAST_KEYS)[number]>,
+  Same<keyof SavedItem, (typeof SAVED_KEYS)[number]>,
+] = [true, true, true, true, true, true, true, true, true, true];

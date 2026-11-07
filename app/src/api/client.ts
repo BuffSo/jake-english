@@ -1,7 +1,19 @@
 // Talks to the Mac server. Every request carries the token. Fetch and file reading are passed in so the
 // tests need no native modules; src/api/index.ts wires in expo/fetch and expo-file-system.
 import { NdjsonSplitter } from "./ndjson";
-import type { AttemptEvent, AttemptMode, Home, LineWithProgress, Roleplay, Said, Summary, ThreeLine } from "./types";
+import type {
+  AttemptEvent,
+  AttemptMode,
+  Home,
+  LineWithProgress,
+  PastItem,
+  PastRun,
+  Roleplay,
+  Said,
+  SavedItem,
+  Summary,
+  ThreeLine,
+} from "./types";
 
 export type ErrorCode = "offline" | "claude_unavailable" | "no_speech" | "too_long" | "not_found" | "unknown";
 
@@ -82,6 +94,13 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
     getKoAudio: (id: string, idx: number) => get<{ audio: string }>(`/roleplays/${id}/lines/${idx}/ko/audio`),
     summary: (id: string) => get<Summary>(`/roleplays/${id}/summary`),
     copyRoleplay: (id: string) => post<Roleplay>(`/roleplays/${id}/copy`, undefined, LONG),
+    // 다시 연습 (spec review-practice): read from the Mac's records, no Claude call
+    getRoleplay: (id: string) => get<Roleplay>(`/roleplays/${id}`),
+    past: async () => (await get<{ items: PastItem[] }>("/past")).items,
+    pastRun: (group: string) => get<PastRun>(`/groups/${group}/latest`),
+    saved: async () => (await get<{ items: SavedItem[] }>("/saved")).items,
+    setSaved: (rpId: string, idx: number, on: boolean) =>
+      post<{ key: string; on: boolean }>("/saved", { rp_id: rpId, idx, on }),
 
     async attempt(
       id: string,
