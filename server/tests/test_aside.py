@@ -135,9 +135,36 @@ async def test_aside_claude_cut_midway_ends_with_fixed_phrase(engine_with_rp, sp
     fake_whisper.text = "Wait, let me try that again."
     fake_claude.aside_fail_after = 1
     ev = await run(engine, rp_id, user_idx, speech_bytes)
-    assert said(ev).startswith("괜찮아요, 말이 꼬일 수 있어요.")
-    assert said(ev).endswith(engine.said("retry_offscript").text)
+    assert said(ev) == "괜찮아요, 말이 꼬일 수 있어요. " + engine.said("retry_offscript").text
     assert not any(e["type"] == "error" for e in ev) and ev[-1]["type"] == "done"
+
+
+@pytest.mark.parametrize("pieces", [[], ["  "]])
+async def test_aside_empty_answer_says_the_fixed_phrase(engine_with_rp, speech_bytes, fake_whisper, fake_claude,
+                                                        pieces):
+    # the stream ended without text: a streamed refusal, or thinking used up the tokens (todo offscript-aside minors 1)
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Wait, let me try that again."
+    fake_claude.aside_pieces = pieces
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    fixed = engine.said("retry_offscript").text
+    assert said(ev) == fixed and not any(e["type"] == "error" for e in ev) and ev[-1]["type"] == "done"
+    assert engine.store.load(rp_id).attempts[user_idx][-1].say_ko == fixed
+
+
+@pytest.mark.parametrize(("fail_after", "cut"), [(2, "괜찮아요, 말이 꼬일 수."), (1, "괜찮아요, 말이.")])
+async def test_aside_cut_midsentence_ends_it_before_the_fixed_phrase(engine_with_rp, speech_bytes, fake_whisper,
+                                                                     fake_claude, fake_voice, fail_after, cut):
+    # without a sentence end the fixed phrase read on as part of the cut sentence (todo offscript-aside minors 4)
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Wait, let me try that again."
+    fake_claude.aside_pieces = ["괜찮아요, 말이 ", "꼬일 수", " 있어요."]  # the last piece never comes
+    fake_claude.aside_fail_after = fail_after
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    fixed = engine.said("retry_offscript").text
+    assert said(ev) == f"{cut} {fixed}"
+    spoken = [text for text, voice, lang, _ in fake_voice.calls if (voice, lang) == ("ryan", "korean")]
+    assert spoken[-2:] == [cut, fixed]
 
 
 async def test_both_transcripts_empty_is_no_speech(engine_with_rp, speech_bytes, fake_whisper):

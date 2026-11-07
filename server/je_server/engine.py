@@ -367,17 +367,33 @@ class Engine:
             yield {"type": "done", "next": nxt, "issues": len(issues)}
 
     async def _aside(self, text: AsyncIterator[str]) -> AsyncIterator[str]:
-        """Teacher Ryan's answer; when Claude cannot answer (or stops midway), the fixed 「이번에는 대사를 그대로
-        따라 말해 볼까요?」 instead of an error, so the learner can try the line again (spec offscript-aside 3)."""
+        """Teacher Ryan's answer; when Claude cannot answer, stops midway or ends without text (a streamed refusal,
+        thinking that used up the tokens), the fixed 「이번에는 대사를 그대로 따라 말해 볼까요?」 instead of an
+        error or an empty box, so the learner can try the line again (spec offscript-aside 3)."""
         fixed = self.said("retry_offscript").text
-        got = False
+        sent = ""
+        held = ""  # trailing spaces wait for the next piece, so a cut piece can take its period right after the text
         try:
             async for delta in text:
-                got = True
-                yield delta
+                body = delta.rstrip()
+                if body:
+                    yield held + body
+                    sent += held + body
+                    held = delta[len(body):]
+                else:
+                    held += delta
         except ClaudeUnavailable:
             log.info("aside answer unavailable")
-            yield f" {fixed}" if got else fixed
+        else:
+            if sent:
+                return
+            log.info("aside answer empty")
+        if not sent:
+            yield fixed
+            return
+        # a cut sentence ends before the fixed phrase, at the marks SentenceBuffer cuts at, so both read and voice
+        # it as two sentences
+        yield ("" if sent.endswith((".", "?", "!")) else ".") + " " + fixed
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
                     timings: dict[str, float], t0: float) -> AsyncIterator[dict]:
