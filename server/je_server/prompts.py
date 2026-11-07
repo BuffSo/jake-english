@@ -33,6 +33,8 @@ Rules:
   speak first in the situation does (someone asking a stranger for help starts the talk).
 - The learner has exactly 3 lines. The conversation ends naturally: the last line is a short closing from whoever
   would say it there, Ryan or the learner (for example the learner's "Thanks, you too!").
+- When Ryan's last line would only echo the learner's thanks or goodbye ("You too!", "Take care!"), drop it and
+  end on the learner's line. Ryan speaks last only when he still has something to say or hand over.
 - Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
   natural spoken grammar, contractions where native speakers use them.
 - Ryan's lines are short (one or two sentences) and move the situation forward, so the learner always has an
@@ -165,6 +167,8 @@ Ryan plays the other person and speaks natural American English. The learner pla
 Rules:
 - Continue from the conversation so far. The continuation starts with the learner's line and ends naturally: the
   last line is a short closing from whoever would say it there, Ryan or the learner. Lines alternate.
+- When Ryan's last line would only echo the learner's thanks or goodbye ("You too!", "Take care!"), drop it and
+  end on the learner's line. Ryan speaks last only when he still has something to say or hand over.
 - The learner has exactly the number of lines the user asks for.
 - Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
   natural spoken grammar, contractions where native speakers use them.

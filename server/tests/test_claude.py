@@ -299,6 +299,14 @@ def test_script_prompt_allows_real_places_but_not_people():
     assert "exit numbers" in prompts.CONTINUE_SYSTEM
 
 
+def test_script_prompts_end_on_the_learner_when_ryan_would_only_echo():
+    # with "whoever would say it", five real scripts in a row still closed on Ryan's "You too!"
+    from je_server import prompts
+
+    for system in (prompts.SCRIPT_SYSTEM, prompts.CONTINUE_SYSTEM):
+        assert "only echo" in system and "end on the learner's line" in system
+
+
 async def test_recommend_stays_in_the_topic():
     fake = FakeAnthropic([json.dumps({"request_ko": "명동에서 환전소를 묻는 상황으로 연습해 보면 어때요?"})])
     await Claude(fake).recommend(["관광객이 길을 묻는다."], [], get("tourist"))
