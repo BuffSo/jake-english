@@ -20,7 +20,10 @@ SOUND_LETTERS = {"R": "R", "L": "L", "F": "F", "P": "P", "V": "V", "B": "B", "TH
 
 
 FILLERS = frozenset({"um", "uh", "uhm", "umm", "er", "erm", "hmm", "mm"})
-SPAN_SOUND_MAX_EDITS = 2  # inside a span whose word count changed, only this close a word pair gets a sound
+# Only a word pair this close in dictionary sounds gets a listed sound, one to one or inside a span whose word count
+# changed. Farther apart, the transcriber heard another word (seventy as thousand swaps four sounds, one of them S/TH),
+# not one sound said differently (guide PRONUNCIATION_따라말하기_짚기 「남은 것」, 2026-11-08).
+SOUND_MAX_EDITS = 2
 _ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
          "seventeen eighteen nineteen").split()
 _TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
@@ -185,9 +188,9 @@ def _same_sound(target_word: str, heard_word: str) -> bool:
     return d is not None and d[0] == 0
 
 
-def _listed(target_word: str, heard_word: str, max_edits: int | None = None) -> tuple[tuple[str, str], str] | None:
+def _listed(target_word: str, heard_word: str) -> tuple[tuple[str, str], str] | None:
     d = sound_diff(target_word, heard_word)
-    if d is None or (max_edits is not None and d[0] > max_edits):
+    if d is None or d[0] > SOUND_MAX_EDITS:
         return None
     for a, b in d[1]:
         s = sounds.find(a, b)
@@ -230,7 +233,7 @@ def compare(target: str, heard: str) -> Comparison:
                 else:
                     diffs.append(_issue([t], [h], _listed(t, h)))
         else:
-            found = next((f for t in ta for h in hb if (f := _listed(t, h, SPAN_SOUND_MAX_EDITS))), None)
+            found = next((f for t in ta for h in hb if (f := _listed(t, h))), None)
             diffs.append(_issue(ta, hb, found))
     return Comparison(diffs=diffs, matched=count, total=len(a), matched_words=matched)
 
