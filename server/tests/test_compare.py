@@ -175,3 +175,30 @@ def test_added_word_left_out_this_time_is_praised():
     assert praise[0] == "이번에는 and 없이 대사대로 들렸어요"
     still = praise_candidates("Wait here, then come in.", "Wait here, and then come in.", before)
     assert not any(p.startswith("이번에는") for p in still)
+
+
+def test_a_number_said_in_pairs_matches_its_digits():
+    # the voice read the shoe size 270 as "two seventy" and the learner followed it (phone test, 2026-11-07)
+    for line, heard in [("I wear 270 in Korea.", "I wear two seventy in Korea."),
+                        ("I wear two seventy in Korea.", "I wear 270 in Korea."),
+                        ("I wear 270 in Korea.", "I wear two hundred seventy in Korea."),
+                        ("I wear 270 in Korea.", "I wear 270 in Korea."),
+                        ("Room 305, please.", "Room three oh five, please."),
+                        ("I was born in 1990.", "I was born in nineteen ninety."),
+                        ("It was 2017.", "It was twenty seventeen."),
+                        ("It costs 1500 won.", "It costs fifteen hundred won.")]:
+        assert compare(line, heard).diffs == [], (line, heard)
+    assert similarity("I wear 270 in Korea.", "I wear two seventy in Korea.") == 1.0
+    assert words("I wear 270.") == ["i", "wear", "two", "hundred", "seventy"]  # read one way when nothing to fit
+
+
+def test_a_real_point_next_to_a_number_has_no_hundred_in_it():
+    # the phone test: "hundred" was part of the point though no one said or heard it
+    issues = compare("I wear 270 in Korea.", "I well two seventy in Korea.").diffs
+    assert [(i.target, i.heard, set(i.sound or ())) for i in issues] == [("wear", "well", {"R", "L"})]
+
+
+def test_words_that_sound_the_same_are_notation():
+    # the transcriber may write "to" for "two": they sound the same, so there is nothing to say
+    assert compare("I wear two seventy.", "I wear to seventy.").diffs == []
+    assert compare("Is this for me?", "Is this four me?").diffs == []
