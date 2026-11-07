@@ -1,9 +1,11 @@
 import { keepWords } from "./keepWords";
 
-const WJ = "⁠";
+const WJ = "\u2060";
 
 test("Korean breaks only between words", () => {
   expect(keepWords("반가워요")).toBe(`반${WJ}가${WJ}워${WJ}요`);
+  // the joiner is written as an escape; if it ever became an empty string these would still match, the length not
+  expect(keepWords("반가워요")).toHaveLength(7);
   expect(keepWords("오늘도 만나서")).toBe(`오${WJ}늘${WJ}도 만${WJ}나${WJ}서`);
 });
 
