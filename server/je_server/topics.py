@@ -87,9 +87,9 @@ TOPICS: tuple[Topic, ...] = (
                    ("user", "You can use the card machine right over there."),
                    ("ryan", "Oh, nice. Can I pay with a credit card?"),
                    ("user", "No, I'm afraid the machine only takes cash."),
-                   ("ryan", "Hmm, I don't have any cash on me."),
-                   ("user", "Then try a convenience store. They can top it up too."),
-                   ("ryan", "Good idea. Thanks for your help!"))),
+                   ("ryan", "Got it. Is this the only place I can do that?"),
+                   ("user", "No, a convenience store can top it up too."),
+                   ("ryan", "Good to know. Thanks for your help!"))),
             _pick("t-samgyeopsal", "홍대에서 삼겹살집 추천",
                   "홍대입구역 근처에서 외국인 관광객이 한국식 고기구이를 먹을 만한 곳을 묻는다. 삼겹살을 권하고, 보통 "
                   "2인분부터 주문한다고 알려 준다.", "ryan",

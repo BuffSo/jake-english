@@ -127,9 +127,11 @@ AI 초안이다. 사실은 상황 주제 스펙 3에서 확인한 것만 썼다.
 | 나 | You can use the card machine right over there. |
 | R | Oh, nice. Can I pay with a credit card? |
 | 나 | No, I'm afraid the machine only takes cash. |
-| R | Hmm, I don't have any cash on me. |
-| 나 | Then try a convenience store. They can top it up too. |
-| R | Good idea. Thanks for your help! |
+| R | Got it. Is this the only place I can do that? |
+| 나 | No, a convenience store can top it up too. |
+| R | Good to know. Thanks for your help! |
+
+- 처음 초안은 「현금이 없다」는 라이언에게 「그럼 편의점에 가 보라」고 답했다. 편의점은 카드를 받는다는 뜻이 되어, 설명에 없는 결제 사실이라 최종 리뷰에서 고쳤다(2026-11-08). 편의점은 충전할 수 있는 다른 곳으로만 말한다.
 
 **홍대에서 삼겹살집 추천** (`t-samgyeopsal`, 라이언 먼저)
 

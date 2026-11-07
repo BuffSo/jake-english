@@ -87,3 +87,10 @@ def test_script_has_no_hangul_or_braces():
     import re
 
     assert not any(re.search(r"[가-힣{}]", t) for p in ALL for _, t in p.script)
+
+
+def test_tmoney_does_not_send_a_cashless_tourist_to_a_store():
+    # final review 2026-11-08: "no cash on me" then "try a convenience store" says the store takes cards, a payment
+    # fact the description does not have (spec fixed-list-scripts 1); the store is only another place to top up
+    said = " ".join(t for _, t in pick("tourist", "t-tmoney").script).lower()
+    assert "cash" not in said.replace("only takes cash", "")
