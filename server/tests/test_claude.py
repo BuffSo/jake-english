@@ -124,40 +124,6 @@ async def test_feedback_connection_error_is_unavailable():
         [t async for t in Claude(fake).feedback("a", "b", [], [])]
 
 
-async def test_offscript_uses_sonnet_and_sends_what_was_said():
-    from fakes import FRAME
-    from je_server.models import Frame
-
-    fake = FakeAnthropic([json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
-                                      "reply_en": "No problem!"})])
-    out = await Claude(fake).offscript(Frame(**FRAME), [("ryan", "Where is it?")], "It's there.", "I don't know.")
-    assert out.reply_en == "No problem!" and fake.requests[0]["model"] == "claude-sonnet-5-5"
-    body = json.loads(fake.requests[0]["messages"][0]["content"])
-    assert body["학습자가 한 말(받아쓴 글)"] == "I don't know." and body["대본의 대사"] == "It's there."
-
-
-async def test_offscript_empty_reply_is_unavailable():
-    from fakes import FRAME
-    from je_server.models import Frame
-
-    fake = FakeAnthropic([json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
-                                      "reply_en": " "})])
-    with pytest.raises(ClaudeUnavailable):
-        await Claude(fake).offscript(Frame(**FRAME), [], "a", "b")
-
-
-async def test_continue_script_retries_wrong_shape():
-    from fakes import FRAME
-    from je_server.models import Frame
-
-    bad = json.dumps({"lines": [{"speaker": "ryan", "text": "Hi."}]})
-    good = json.dumps({"lines": [{"speaker": "user", "text": "Thanks."}, {"speaker": "ryan", "text": "Bye!"}]})
-    fake = FakeAnthropic([bad, good])
-    draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 1)
-    assert draft == [("user", "Thanks."), ("ryan", "Bye!")] and len(fake.requests) == 2
-    assert "start with the learner" in fake.requests[1]["messages"][0]["content"]
-
-
 async def test_any_api_status_error_becomes_unavailable():
     # final review: a 400 (e.g. no credit left) or 401 surfaced as a bare 500 or a dropped stream
     from fakes import status_error
@@ -176,27 +142,11 @@ async def test_live_turn_calls_give_up_before_the_app_does():
     from je_server.models import Frame
 
     assert LIVE_OPTIONS["timeout"] * (LIVE_OPTIONS["max_retries"] + 1) < 30
-    fake = FakeAnthropic([["ok"], json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
-                                              "reply_en": "Sure."})])
+    fake = FakeAnthropic([["ok"], ["괜찮아요."]])
     c = Claude(fake)
     [t async for t in c.feedback("a", "b", [], [])]
-    await c.offscript(Frame(**FRAME), [], "a", "b")
+    [t async for t in c.aside(Frame(**FRAME), [], "a", "b", None, [], [])]
     assert fake.options == [LIVE_OPTIONS, LIVE_OPTIONS]
-
-
-async def test_continue_script_needs_the_exact_number_of_learner_lines():
-    # PR #12 review: ±1 let a rebuild after line 1 add 3 learner lines, 4 in total (the user chose 3)
-    from fakes import FRAME
-    from je_server.models import Frame
-
-    three = json.dumps({"lines": [{"speaker": s, "text": t} for s, t in
-                                  [("user", "a"), ("ryan", "b"), ("user", "c"), ("ryan", "d"), ("user", "e"),
-                                   ("ryan", "f")]]})
-    two = json.dumps({"lines": [{"speaker": s, "text": t} for s, t in
-                                [("user", "a"), ("ryan", "b"), ("user", "c"), ("ryan", "d")]]})
-    fake = FakeAnthropic([three, two])
-    draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 2)
-    assert sum(1 for s, _ in draft if s == "user") == 2 and len(fake.requests) == 2
 
 
 def test_feedback_prompt_puts_the_improvement_first():
@@ -296,15 +246,14 @@ def test_script_prompt_allows_real_places_but_not_people():
     assert "Ryan speaks first and Ryan speaks last" not in system
     assert "Real shops" in system and "never real people" in system
     assert "exit numbers" in system and "opening hours" in system
-    assert "exit numbers" in prompts.CONTINUE_SYSTEM
 
 
 def test_script_prompts_end_on_the_learner_when_ryan_would_only_echo():
     # with "whoever would say it", five real scripts in a row still closed on Ryan's "You too!"
     from je_server import prompts
 
-    for system in (prompts.SCRIPT_SYSTEM, prompts.CONTINUE_SYSTEM):
-        assert "only echo" in system and "end on the learner's line" in system
+    system = prompts.SCRIPT_SYSTEM
+    assert "only echo" in system and "end on the learner's line" in system
 
 
 async def test_recommend_stays_in_the_topic():
@@ -323,17 +272,6 @@ async def test_recommend_without_a_list_has_no_list_heading():
     assert "목록에 있는 상황" not in fake.requests[0]["messages"][0]["content"]
 
 
-async def test_continue_script_may_end_with_the_learner():
-    from fakes import FRAME
-    from je_server.models import Frame
-
-    ends_with_me = json.dumps({"lines": [{"speaker": s, "text": t} for s, t in
-                                         [("user", "a"), ("ryan", "b"), ("user", "Thanks, you too!")]]})
-    fake = FakeAnthropic([ends_with_me])
-    draft = await Claude(fake).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 2)
-    assert draft[-1] == ("user", "Thanks, you too!") and len(fake.requests) == 1
-
-
 def test_recommend_system_has_no_scene_of_its_own():
     # final review: the fixed example was a tourist-in-Korea scene, which could pull 미국 여행 and 그 밖의 상황 toward
     # it; the scene comes from the topic's example in the message, the system keeps only the sentence form
@@ -343,24 +281,7 @@ def test_recommend_system_has_no_scene_of_its_own():
     assert "상황으로 연습해 보면 어때요?" in prompts.RECOMMEND_SYSTEM
 
 
-async def test_offscript_reply_drops_stray_braces():
-    # the phone test: Ryan's reply was stored and read out as "...the US size for you.}"
-    from fakes import FRAME
-    from je_server.models import Frame
-
-    fake = FakeAnthropic([json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
-                                      "reply_en": "I can look up the US size for you.}"})])
-    out = await Claude(fake).offscript(Frame(**FRAME), [], "a", "b")
-    assert out.reply_en == "I can look up the US size for you."
-
-
 async def test_script_lines_drop_stray_braces():
-    from fakes import FRAME
-    from je_server.models import Frame
-
-    lines = json.dumps({"lines": [{"speaker": "user", "text": "{Thanks."}, {"speaker": "ryan", "text": "Bye!}"}]})
-    draft = await Claude(FakeAnthropic([lines])).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 1)
-    assert draft == [("user", "Thanks."), ("ryan", "Bye!")]
     script = json.loads(script_json(user_turns=3))
     script["lines"][0]["text"] += "}"
     _, draft = await Claude(FakeAnthropic([json.dumps(script)])).make_script("길 묻기", OTHER)
@@ -377,3 +298,65 @@ async def test_feedback_says_whether_the_line_is_the_last():
     assert [json.loads(r["messages"][0]["content"])["마지막 대사"] for r in fake.requests] == [True, False]
     assert "마지막 대사" in prompts.FEEDBACK_SYSTEM and "다음 대사로 넘어가자고 하지 않아요" in prompts.FEEDBACK_SYSTEM
     assert "마지막 대사여도 한 번 더 해 보자고 해요. 이때는 대화를 마쳤다고 말하지 않아요" in prompts.FEEDBACK_SYSTEM
+
+
+async def test_aside_streams_korean_on_the_writer_and_sends_only_text():
+    from fakes import FRAME
+    from je_server import prompts
+    from je_server.claude import LIVE_OPTIONS
+    from je_server.models import Frame, Issue
+
+    fake = FakeAnthropic([["괜찮아요. ", "다시 해 볼까요?"]])
+    issue = Issue(target="large", heard="launch", sound=("R", "N"), explain="")
+    out = [d async for d in Claude(fake).aside(
+        Frame(**FRAME), [("ryan", "What size?")], "A large one, please.", "A launch one, peace.", None,
+        [issue], [("다시 할게요", "괜찮아요. 다시 해 볼까요?")])]
+    assert out == ["괜찮아요. ", "다시 해 볼까요?"]
+    req = fake.requests[0]
+    assert req["model"] == "claude-sonnet-5-5" and req["system"] == prompts.ASIDE_SYSTEM
+    assert req["output_config"]["effort"] == "low" and fake.options[-1] == LIVE_OPTIONS
+    body = json.loads(req["messages"][0]["content"])
+    assert body["대사"] == "A large one, please." and body["들린 말(영어 받아쓰기)"] == "A launch one, peace."
+    assert body["들린 말(한국어 받아쓰기)"] == ""
+    assert body["짚을 것"] == [{"대사 낱말": "large", "들린 낱말": "launch", "소리 내는 법": ""}]
+    assert body["앞서 선생님에게 한 말"] == [{"들린 말": "다시 할게요", "라이언의 답": "괜찮아요. 다시 해 볼까요?"}]
+    assert body["지금까지 대화"] == [{"speaker": "ryan", "text": "What size?"}]
+
+
+async def test_aside_connection_error_is_unavailable():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([connection_error()])
+    with pytest.raises(ClaudeUnavailable):
+        [d async for d in Claude(fake).aside(Frame(**FRAME), [], "a", "b", None, [], [])]
+
+
+def test_aside_prompt_keeps_the_teacher_rules():
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    for must in ("해요체", "읽는 법 보기", "처럼 들렸어요", "다시"):
+        assert must in p
+    # the app calls the roleplay 「대화」 (review-screens, user 2026-11-07); Ryan says it the same way
+    assert "「역할극」이라고 하지 않고 「대화」라고 해요" in p
+
+
+@pytest.mark.parametrize("error", ["read", "timeout"])
+async def test_stream_cut_by_the_network_is_unavailable(error):
+    # final review: the SDK raises transport errors met while reading the stream as they are, so a dropped
+    # connection mid-answer broke the attempt instead of giving the fixed phrase
+    import httpx2
+
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    req = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    cut = httpx2.ReadError("cut", request=req) if error == "read" else httpx2.ReadTimeout("slow", request=req)
+    got = []
+    with pytest.raises(ClaudeUnavailable):
+        async for d in Claude(FakeAnthropic([["괜찮아요. ", cut]])).aside(Frame(**FRAME), [], "a", "b", None, [], []):
+            got.append(d)
+    assert got == ["괜찮아요. "]
+    with pytest.raises(ClaudeUnavailable):
+        [d async for d in Claude(FakeAnthropic([["좋아요. ", cut]])).feedback("a", "b", [], [])]

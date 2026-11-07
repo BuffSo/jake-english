@@ -60,17 +60,6 @@ test("no_speech returns to ready with Ryan's words", () => {
   expect(s.message).toBe("잘 안 들렸어요.");
 });
 
-test("a reply line is shown and next skips past it", () => {
-  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64), ko: null, ko_audio: null };
-  let s = at("evaluating");
-  s = reduce(s, { type: "event", e: { type: "heard", text: "I don't know", followed: false } });
-  s = reduce(s, { type: "event", e: { type: "reply", line: reply } });
-  s = reduce(s, { type: "event", e: { type: "done", next: 3, issues: 0 } });
-  s = reduce(s, { type: "next" });
-  expect(s.idx).toBe(3);
-  expect(s.history.at(-1)).toEqual({ kind: "ryan", text: "No worries!", idx: 2 });
-});
-
 test("again keeps the line and the earlier next index", () => {
   let s = reduce(at("evaluating"), { type: "event", e: { type: "done", next: 2, issues: 1 } });
   s = reduce(s, { type: "again" });
@@ -105,23 +94,6 @@ test("offline error keeps the line and offers retry", () => {
 test("loading error retries the load", () => {
   const s = reduce(reduce(at("loading"), { type: "failed", code: "offline" }), { type: "retry" });
   expect(s.phase).toBe("loading");
-});
-
-test("again after an off-script turn keeps Ryan's reply in the conversation", () => {
-  // final review: 「다시 해 보기」 cleared the reply, so it never reached the bubbles
-  const reply: ScriptLine = { idx: 2, speaker: "ryan", text: "No worries!", kind: "reply", three: null, audio: "f".repeat(64), ko: null, ko_audio: null };
-  let s = at("evaluating");
-  s = reduce(s, { type: "event", e: { type: "heard", text: "I don't know", followed: false } });
-  s = reduce(s, { type: "event", e: { type: "reply", line: reply } });
-  s = reduce(s, { type: "event", e: { type: "done", next: 3, issues: 0 } });
-  s = reduce(s, { type: "again" });
-  s = reduce(reduce(s, { type: "recordStart" }), { type: "recordStop" });
-  s = reduce(s, { type: "event", e: { type: "heard", text: "I'd like a cup of coffee", followed: true } });
-  s = reduce(s, { type: "event", e: { type: "done", next: 1, issues: 0 } });
-  s = reduce(s, { type: "next" });
-  expect(s.idx).toBe(3);
-  expect(s.history.filter((b) => b.text === "No worries!")).toHaveLength(1);
-  expect(s.history.map((b) => b.text)).toEqual(["I don't know", "No worries!", "I'd like a cup of coffee"]);
 });
 
 test("a late failure after leaving the roleplay is ignored", () => {
@@ -658,4 +630,56 @@ describe("situation topics (spec situation-topics 2, 5)", () => {
     expect([s.idx, s.phase]).toEqual([5, "loading"]);
     expect(reduce(s, { type: "lineMissing" }).screen).toBe("end");
   });
+});
+
+// spec offscript-aside 5, 6: a line not followed gets teacher Ryan's answer and the same line again
+test("an aside offers only 다시 해 보기 and leaves no bubbles", () => {
+  let s = at("evaluating"); // a roleplay turn being evaluated, mode "turn", idx 1
+  s = reduce(s, { type: "event", e: { type: "heard", text: "다시 할게요", followed: false } });
+  s = reduce(s, { type: "event", e: { type: "text", delta: "괜찮아요. 다시 해 볼까요?" } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 1, issues: 0 } });
+  expect(s.phase).toBe("evaluated");
+  expect(s.aside).toBe(true);
+  expect(reduce(s, { type: "next" })).toBe(s);
+  const again = reduce(s, { type: "again" });
+  expect(again.history).toEqual(s.history);
+  expect(again.mode).toBe("turn");
+  expect(again.aside).toBe(false);
+  expect(again.feedback).toBe("");
+  expect(again.heard).toBeNull();
+});
+
+test("aside then follow moves on to the next line", () => {
+  let s = at("evaluating");
+  s = reduce(s, { type: "event", e: { type: "heard", text: "Wait.", followed: false } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 1, issues: 0 } });
+  s = reduce(reduce(s, { type: "again" }), { type: "recordStart" });
+  s = reduce(s, { type: "recordStop" });
+  s = reduce(s, { type: "event", e: { type: "heard", text: "It's right over there.", followed: true } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 0 } });
+  expect(reduce(s, { type: "next" }).idx).toBe(2);
+});
+
+test("an aside in a retry keeps where 다음 goes", () => {
+  // followed turn (next 2) → 다시 해 보기 (retry) → aside: 다음 after the next followed retry still goes to 2
+  let s = at("evaluating");
+  s = reduce(s, { type: "event", e: { type: "heard", text: "It's right over there.", followed: true } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 0 } });
+  s = reduce(reduce(reduce(s, { type: "again" }), { type: "recordStart" }), { type: "recordStop" });
+  s = reduce(s, { type: "event", e: { type: "heard", text: "Wait.", followed: false } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 1, issues: 0 } });
+  expect(s.nextIdx).toBe(2);
+  expect(reduce(s, { type: "again" }).mode).toBe("retry");
+});
+
+test("a near miss with points moves on like a followed try", () => {
+  // the server found words heard differently (issues > 0): a try at the line, not an aside (offscript-aside 6)
+  let s = at("evaluating");
+  s = reduce(s, { type: "event", e: { type: "heard", text: "It's light over hair.", followed: false } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 2 } });
+  expect(s.aside).toBe(false);
+  expect(s.nextIdx).toBe(2);
+  const next = reduce(s, { type: "next" });
+  expect(next.idx).toBe(2);
+  expect(next.history.map((b) => b.kind)).toEqual(["user"]);
 });

@@ -40,7 +40,10 @@ export type State = {
   seen: Record<number, ScriptLine>;
   heard: string | null;
   feedback: string;
-  reply: ScriptLine | null;
+  // the line was not followed and teacher Ryan answered: only 「다시 해 보기」, which leaves nothing in the
+  // conversation and keeps the mode, so a first turn stays a turn (spec offscript-aside 5, 6). Set by `heard`;
+  // cleared by `done` when the Mac found words heard differently, which makes it a try at the line.
+  aside: boolean;
   nextIdx: number | null;
   message: string | null;
   errorFrom: "loading" | "evaluating" | null;
@@ -106,7 +109,7 @@ export const initial: State = {
   seen: {},
   heard: null,
   feedback: "",
-  reply: null,
+  aside: false,
   nextIdx: null,
   message: null,
   errorFrom: null,
@@ -136,7 +139,7 @@ export function canReplay(p: Phase): boolean {
   return p === "ready" || p === "evaluated";
 }
 
-const freshTurn = { heard: null, feedback: "", reply: null, message: null, errorFrom: null } as const;
+const freshTurn = { heard: null, feedback: "", aside: false, message: null, errorFrom: null } as const;
 
 // Leaving a practice. From the end screen: back on the end screen, ready for the next one. From the roleplay: the
 // roleplay exactly as it was, so nothing is said again and the evaluation on screen stays (spec 9).
@@ -204,12 +207,11 @@ export function modelKey(s: State): string | null {
   return s.practice ? `${s.line.idx}:${s.mode}:${s.practiceNo}` : `${s.line.idx}:${s.mode}`;
 }
 
-// What was said in this turn, as conversation bubbles (what the learner said, Ryan's feedback, Ryan's reply).
+// What was said in this turn, as conversation bubbles (what the learner said, Ryan's feedback).
 function exchange(s: State): Bubble[] {
   return [
     ...(s.heard ? [{ kind: "user" as const, text: s.heard, script: s.line?.text, idx: s.line?.idx }] : []),
     ...(s.feedback ? [{ kind: "feedback" as const, text: s.feedback }] : []),
-    ...(s.reply ? [{ kind: "ryan" as const, text: s.reply.text, idx: s.reply.idx }] : []),
   ];
 }
 
@@ -272,9 +274,12 @@ export function reduce(s: State, a: Action): State {
     case "event": {
       if (s.phase !== "evaluating") return s;
       const e = a.e;
-      if (e.type === "heard") return { ...s, heard: e.text };
+      if (e.type === "heard") return { ...s, heard: e.text, aside: !e.followed };
       if (e.type === "text") return { ...s, feedback: s.feedback + e.delta };
-      if (e.type === "reply") return { ...s, reply: e.line, seen: { ...s.seen, [e.line.idx]: e.line } };
+      // an aside is not a turn: where 「다음」 goes stays as it was. A line not followed but with points from the Mac
+      // was a try at it, and moves on like a followed one (offscript-aside 6).
+      if (e.type === "done" && s.aside && e.issues === 0) return { ...s, phase: "evaluated" };
+      if (e.type === "done" && s.aside) return reduce({ ...s, aside: false }, a);
       if (e.type === "done")
         return { ...s, phase: "evaluated", nextIdx: s.mode === "turn" || s.nextIdx === null ? e.next : s.nextIdx };
       if (e.type === "error") {
@@ -296,11 +301,12 @@ export function reduce(s: State, a: Action): State {
       if (s.phase !== "error") return s;
       return { ...s, phase: s.errorFrom === "loading" ? "loading" : "ready", message: null, errorFrom: null };
     case "again":
-      // keep the turn that just happened (an off-script reply included) before trying the line again
+      // keep the turn that just happened before trying the line again; an aside leaves nothing and keeps the mode
       if (s.phase !== "evaluated") return s;
+      if (s.aside) return { ...s, ...freshTurn, phase: "ready" };
       return { ...s, ...freshTurn, history: [...s.history, ...exchange(s)], mode: s.practice ? s.mode : "retry", phase: "ready" };
     case "next": {
-      if (s.phase !== "evaluated") return s;
+      if (s.phase !== "evaluated" || s.aside) return s;
       if (s.practice) return advance(s);
       return {
         ...s,

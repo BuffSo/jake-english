@@ -192,10 +192,9 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (!(await fetchThree(idx))) setOpen((o) => ({ ...o, [idx]: false }));
   }
 
-  // The line object for a bubble: the one on screen, an off-script reply, or one seen before
+  // The line object for a bubble: the one on screen, or one seen before (an old record's reply lines included)
   function lineAt(idx: number): ScriptLine | undefined {
     if (state.line?.idx === idx) return state.line;
-    if (state.reply?.idx === idx) return state.reply;
     return state.seen[idx];
   }
 
@@ -337,7 +336,6 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     const onEvent = (e: AttemptEvent) => {
       if (!live()) return;
       if (e.type === "audio") sounds.enqueue(api.audioSource(e.key));
-      if (e.type === "reply" && e.line.audio) sounds.enqueue(api.audioSource(e.line.audio));
       if (e.type === "error" && e.say?.audio) sounds.enqueue(api.audioSource(e.say.audio));
       dispatch({ type: "event", e });
     };
@@ -587,14 +585,6 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </View>
           </Named>
         )}
-        {state.reply && (
-          <RyanBubble
-            idx={state.reply.idx}
-            text={state.reply.text}
-            follow={practiceFor(state, { kind: "ryan", idx: state.reply.idx }) === "shadow"}
-            row={`reply:${state.reply.idx}`}
-          />
-        )}
         {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" onShow={toEnd} />}
         {state.message && <Text style={state.phase === "error" ? common.error : styles.notice}>{state.message}</Text>}
       </ScrollView>
@@ -625,7 +615,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                   disabled={busy}
                 />
               )}
-              {state.phase === "evaluated" && (
+              {/* after teacher Ryan's answer only the same line again, never past it (spec offscript-aside 5) */}
+              {state.phase === "evaluated" && state.aside && (
+                <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} />
+              )}
+              {state.phase === "evaluated" && !state.aside && (
                 <View style={styles.row}>
                   <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} kind="plain" />
                   <Button label={midway ? "대화로 돌아가기" : "다음"} onPress={() => dispatch({ type: "next" })} />

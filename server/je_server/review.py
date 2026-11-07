@@ -26,9 +26,11 @@ def group_of(rp: Roleplay) -> str:
 
 
 def spoken(rp: Roleplay) -> bool:
-    """The learner said at least one of their lines inside the roleplay."""
+    """The learner said at least one of their lines inside the roleplay; asides to teacher Ryan do not count
+    (spec offscript-aside 6)."""
     mine = {l.idx for l in rp.lines if l.speaker == "user"}
-    return any(a.mode in ROLEPLAY_MODES for idx, tries in rp.attempts.items() if idx in mine for a in tries)
+    return any(a.mode in ROLEPLAY_MODES and not a.aside for idx, tries in rp.attempts.items() if idx in mine
+               for a in tries)
 
 
 def _groups(rps: list[Roleplay]) -> dict[str, list[Roleplay]]:
