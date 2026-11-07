@@ -135,12 +135,18 @@ class Engine:
 
     async def copy(self, rp_id: str) -> Roleplay:
         """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
-        sounds are reused, so it starts at once; the old record and its tries stay as they are."""
+        sounds are reused, so it starts at once; the old record and its tries stay as they are. A list pick plays its
+        script as it is now in the repository; one taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
+        if old.pick is not None and old.topic is not None:
+            try:
+                return await self.create_pick(old.topic, old.pick)
+            except KeyError:
+                pass
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
                       origin=old.origin or old.id,  # a copy of a copy still points at the first (ADR-0011)
-                      topic=old.topic)
+                      topic=old.topic, pick=old.pick)
         self.store.save(rp)
         for line in rp.lines:
             if not self.ready(line):

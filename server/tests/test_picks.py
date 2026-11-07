@@ -116,3 +116,27 @@ async def test_ko_comes_with_its_sound(engine):
     key = await engine.ko_audio(first.id, 1)
     second = await engine.create_pick(*SNEAKER)
     assert second.lines[1].ko == engine.store.load(first.id).lines[1].ko and second.lines[1].ko_audio == key
+
+
+async def test_copy_of_a_pick_uses_the_current_script(engine, monkeypatch):
+    # spec 4: 「이 상황 다시 하기」 on a list pick plays the script as it is now, in the same group
+    first = await engine.create_pick(*SNEAKER)
+    await ready(engine, first)
+    new = changed_script(monkeypatch)
+    again = await engine.copy(first.id)
+    assert [(l.speaker, l.text) for l in again.lines] == list(new.script)
+    assert (again.origin, again.pick, again.topic) == (first.id, "u-sneaker-size", "usa")
+
+
+async def test_copy_of_a_pick_gone_from_the_list(engine, monkeypatch):
+    # spec 4: a line taken off the list can still be played again from its record
+    first = await engine.create_pick(*SNEAKER)
+    await ready(engine, first)
+
+    def gone(topic_id, pick_id):
+        raise KeyError(pick_id)
+
+    monkeypatch.setattr(topics, "pick", gone)
+    again = await engine.copy(first.id)
+    assert again.lines == engine.store.load(first.id).lines
+    assert (again.origin, again.pick) == (first.id, "u-sneaker-size")
