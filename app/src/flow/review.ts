@@ -24,3 +24,25 @@ export function comparePair(rpId: string, l: TranscriptLine): { first: TryRef; t
   const last = [...l.tries].reverse().find((t) => t.followed);
   return { first: l.first, then: last ? { rp_id: rpId, idx: l.line.idx, n: last.n } : null };
 }
+
+// Tapping a row (key "<place>:<line>", or just "<line>"): the row left open, and the lines whose notes and Sohee's
+// line close. Both the row that closes and the one that opens: a line keeps its open notes by line number, so a
+// bubble that changed its key (Ryan's reply moving into the conversation) must not open with them (PR #27 review).
+export function tapRow(open: string | null, key: string): { open: string | null; close: number[] } {
+  const lineOf = (k: string) => Number(k.split(":").pop());
+  if (open === key) return { open: null, close: [lineOf(key)] };
+  const close = open === null ? [lineOf(key)] : [lineOf(open), lineOf(key)];
+  return { open: key, close: [...new Set(close)] };
+}
+
+// Where to scroll so an opened row's buttons show, or null when they already do (spec review-practice 8). `row.y`
+// is from the top of the list; a row taller than the screen keeps its top in view.
+export function scrollToShow(
+  row: { y: number; height: number },
+  view: { offset: number; height: number },
+  margin = 12,
+): number | null {
+  const bottom = row.y + row.height + margin;
+  if (bottom <= view.offset + view.height) return null;
+  return Math.min(row.y, bottom - view.height);
+}

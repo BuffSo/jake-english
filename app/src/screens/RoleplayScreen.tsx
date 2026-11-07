@@ -1,6 +1,6 @@
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState, type ComponentRef, type Dispatch } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 
 import { api } from "../api";
 import { ApiError } from "../api/client";
@@ -10,7 +10,7 @@ import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, stopThenSend } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
-import { toggleRow } from "../flow/review";
+import { scrollToShow, tapRow } from "../flow/review";
 import { askFirst, canReplay, leavesScreen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
@@ -59,6 +59,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // past bubbles show only what was said; one opens its buttons at a time (spec review-practice 8). The key is
   // "<place>:<line>", so two bubbles of one line (「다시 해 보기」) open apart.
   const [openRow, setOpenRow] = useState<string | null>(null);
+  const view = useRef({ offset: 0, height: 0 }); // the conversation's scroll, to bring an opened bubble into view
+  const toShow = useRef<string | null>(null);
   const saved = useSaved();
   // 「이 상황 다시 하기」 from saved-sentence practice (spec review-practice 7)
   const [copying, setCopying] = useState(false);
@@ -229,16 +231,24 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (open) interp.open(idx, lineAt(idx), stillOpen(idx, true));
   }
 
-  // one bubble open at a time; closing one closes its notes and Sohee's line too, so the screen is plain again
+  // one bubble open at a time; closing one closes its notes and Sohee's line too, so the screen is plain again, and
+  // the one that opens starts plain (`tapRow`). A folded bubble shows neither (PR #27 review).
   function toggleBubble(key: string) {
-    const next = toggleRow(openRow, key);
-    if (openRow !== null && next !== openRow) {
-      const idx = Number(openRow.split(":")[1]);
-      setOpen((o) => ({ ...o, [idx]: false }));
-      koOpenNow.current = { ...koOpenNow.current, [idx]: false };
-      setKoOpen(koOpenNow.current);
-    }
+    const { open: next, close } = tapRow(openRow, key);
+    const shut = Object.fromEntries(close.map((i) => [i, false]));
+    setOpen((o) => ({ ...o, ...shut }));
+    koOpenNow.current = { ...koOpenNow.current, ...shut };
+    setKoOpen(koOpenNow.current);
     setOpenRow(next);
+    toShow.current = next;
+  }
+
+  // an opened bubble has drawn its buttons: bring them on screen if they are below it (spec review-practice 8)
+  function laidOut(key: string, e: LayoutChangeEvent) {
+    if (toShow.current !== key) return;
+    toShow.current = null;
+    const y = scrollToShow(e.nativeEvent.layout, view.current);
+    if (y !== null) scroll.current?.scrollTo({ y, animated: true });
   }
 
   // 「☆ 모아 두기」 for a line this screen holds (spec review-practice 5)
@@ -366,9 +376,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           {star?.saved && !opened && <Text> </Text>}
           {star?.saved && !opened && <StarMark />}
         </Text>
-        {idx !== undefined && open[idx] && three === "loading" && <Text style={common.sub}>세 줄을 만들고 있어요…</Text>}
-        {idx !== undefined && open[idx] && three && three !== "loading" && <ThreeLineView three={three} />}
-        {idx !== undefined && <Ko idx={idx} />}
+        {idx !== undefined && (!folds || opened) && open[idx] && three === "loading" && (
+          <Text style={common.sub}>세 줄을 만들고 있어요…</Text>
+        )}
+        {idx !== undefined && (!folds || opened) && open[idx] && three && three !== "loading" && <ThreeLineView three={three} />}
+        {idx !== undefined && (!folds || opened) && <Ko idx={idx} />}
         {idx !== undefined && (!folds || opened) && (
           <View style={styles.links}>
             <View style={styles.linkGroup}>
@@ -386,7 +398,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       </>
     );
     return (
-      <Named part="ryan">
+      <Named part="ryan" onLayout={row ? (e) => laidOut(row, e) : undefined}>
         {folds ? (
           <Pressable onPress={() => toggleBubble(row)} style={[styles.bubble, styles.ryan, opened && styles.ryanOpen]}>
             {body}
@@ -405,7 +417,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     const opened = row !== undefined && openRow === row;
     const star = idx !== undefined ? starAt(idx) : null;
     return (
-      <Named part="mine">
+      <Named part="mine" onLayout={row ? (e) => laidOut(row, e) : undefined}>
         <Pressable onPress={() => row && toggleBubble(row)} style={[styles.bubble, styles.user, opened && styles.userOpen]}>
           <Text style={styles.plainText}>
             {b.script}
@@ -413,7 +425,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             {star?.saved && !opened && <StarMark />}
           </Text>
           <Text style={styles.heardLine}>들린 말: {b.text}</Text>
-          {idx !== undefined && <Ko idx={idx} />}
+          {opened && idx !== undefined && <Ko idx={idx} />}
           {opened && idx !== undefined && (
             <View style={[styles.linkGroup, styles.gap]}>
               <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
@@ -478,7 +490,13 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         )}
         {copyError && <Text style={common.error}>{copyError}</Text>}
       </View>
-      <ScrollView ref={scroll} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        ref={scroll}
+        contentContainerStyle={styles.scroll}
+        onLayout={(e) => (view.current.height = e.nativeEvent.layout.height)}
+        onScroll={(e) => (view.current.offset = e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={32}
+      >
         {/* who says each bubble, like a messenger: others left in gray, me right in blue (2026-11-06 user) */}
         {state.jake && !practice && (
           <Named part="jake">

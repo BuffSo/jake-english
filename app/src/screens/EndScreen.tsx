@@ -2,15 +2,15 @@
 // docs/superpowers/specs/2026-11-05-roleplay-practice-design.md 3, 6). The same screen shows a past situation's
 // last conversation when `state.past` is set (spec docs/superpowers/specs/2026-11-07-review-practice-design.md 3).
 // Lines show only what was said; tapping one opens its buttons, one line at a time (review-practice 8).
-import { useEffect, useRef, useState, type Dispatch } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState, type ComponentRef, type Dispatch } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 
 import { api } from "../api";
 import type { ScriptLine, Summary, TranscriptLine, Try, TryRef } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { createGate } from "../flow/gate";
 import { koOpensOnTap, koView } from "../flow/interpret";
-import { comparePair, dayKo, toggleRow } from "../flow/review";
+import { comparePair, dayKo, scrollToShow, tapRow } from "../flow/review";
 import type { Action, State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
@@ -43,6 +43,10 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   const [koOpen, setKoOpen] = useState<Record<number, boolean>>({});
   const koOpenNow = useRef(koOpen); // set at the tap: a sound made before plays at once
   const [openRow, setOpenRow] = useState<string | null>(null);
+  // an opened line is scrolled into view once its buttons are laid out (spec review-practice 8)
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  const view = useRef({ offset: 0, height: 0 });
+  const toShow = useRef<string | null>(null);
   // what to load: the newest run of a past situation, or this roleplay
   const source = past ? `group:${past.group}` : `roleplay:${id}`;
 
@@ -139,12 +143,19 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
 
   // one line open at a time; closing a line closes Sohee's line in it too, so the screen is plain again (8)
   function toggle(idx: number) {
-    const next = toggleRow(openRow, String(idx));
-    if (openRow !== null && next !== openRow) {
-      koOpenNow.current = { ...koOpenNow.current, [Number(openRow)]: false };
-      setKoOpen(koOpenNow.current);
-    }
-    setOpenRow(next);
+    const { open, close } = tapRow(openRow, String(idx));
+    koOpenNow.current = { ...koOpenNow.current, ...Object.fromEntries(close.map((i) => [i, false])) };
+    setKoOpen(koOpenNow.current);
+    setOpenRow(open);
+    toShow.current = open;
+  }
+
+  // the opened line has drawn its buttons: bring them on screen if they are below it
+  function laidOut(key: string, e: LayoutChangeEvent) {
+    if (toShow.current !== key) return;
+    toShow.current = null;
+    const y = scrollToShow(e.nativeEvent.layout, view.current);
+    if (y !== null) scroll.current?.scrollTo({ y, animated: true });
   }
 
   function star(line: ScriptLine): Star {
@@ -164,7 +175,13 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
           ? rp && <Text style={[common.sub, styles.say]}>{dayKo(rp.created)}</Text>
           : summary && <Text style={[common.body, styles.say]}>{summary.say.text}</Text>}
       </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        ref={scroll}
+        contentContainerStyle={styles.scroll}
+        onLayout={(e) => (view.current.height = e.nativeEvent.layout.height)}
+        onScroll={(e) => (view.current.offset = e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={32}
+      >
         {!summary && !error && <Waiting who="ryan" text={past ? "지난번 대화를 찾고 있어요" : "마무리하고 있어요"} />}
         {summary && <Text style={styles.section}>주고받은 말</Text>}
         {summary?.lines.map((l) => {
@@ -175,6 +192,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
               l={l}
               open={open}
               onToggle={() => toggle(l.line.idx)}
+              onLayout={(e) => laidOut(String(l.line.idx), e)}
               ko={ko(l.line)}
               star={star(l.line)}
               onPlay={play}
@@ -187,6 +205,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
               l={l}
               open={open}
               onToggle={() => toggle(l.line.idx)}
+              onLayout={(e) => laidOut(String(l.line.idx), e)}
               ko={ko(l.line)}
               star={star(l.line)}
               onPlay={play}
@@ -220,14 +239,22 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   );
 }
 
-type LineProps = { l: TranscriptLine; open: boolean; onToggle: () => void; ko: KoProps; star: Star; onPlay: (src: Source) => void };
+type LineProps = {
+  l: TranscriptLine;
+  open: boolean;
+  onToggle: () => void;
+  onLayout: (e: LayoutChangeEvent) => void;
+  ko: KoProps;
+  star: Star;
+  onPlay: (src: Source) => void;
+};
 
 // 「따라 말하기 ›」 follows this one line and comes back here, like 「이 줄 다시」 on my lines (spec 3, 2026-11-06)
 function RyanLine(props: LineProps & { onFollow: () => void }) {
-  const { l, open, onToggle, ko, star, onPlay, onFollow } = props;
+  const { l, open, onToggle, onLayout, ko, star, onPlay, onFollow } = props;
   const audio = l.line.audio;
   return (
-    <Pressable onPress={onToggle} style={[styles.line, open && styles.open]}>
+    <Pressable onPress={onToggle} onLayout={onLayout} style={[styles.line, open && styles.open]}>
       <View style={styles.who}>
         <Text style={styles.whoText}>라이언</Text>
         {star.saved && !open && <StarMark />}
@@ -253,10 +280,10 @@ function RyanLine(props: LineProps & { onFollow: () => void }) {
 }
 
 function MyLine(props: LineProps & { id: string; onPair: (p: { first: TryRef; then: TryRef | null }) => void; onAgain: () => void }) {
-  const { id, l, open, onToggle, ko, star, onPlay, onPair, onAgain } = props;
+  const { id, l, open, onToggle, onLayout, ko, star, onPlay, onPair, onAgain } = props;
   const pair = comparePair(id, l);
   return (
-    <Pressable onPress={onToggle} style={[styles.line, open && styles.open]}>
+    <Pressable onPress={onToggle} onLayout={onLayout} style={[styles.line, open && styles.open]}>
       <View style={styles.who}>
         <Text style={styles.whoText}>나</Text>
         {star.saved && !open && <StarMark />}
