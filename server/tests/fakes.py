@@ -50,6 +50,8 @@ class _Stream:
     def text_stream(self):
         async def gen():
             for piece in self.item:
+                if isinstance(piece, Exception):  # the connection fails after the pieces before it
+                    raise piece
                 yield piece
         return gen()
 

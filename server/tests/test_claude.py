@@ -340,3 +340,23 @@ def test_aside_prompt_keeps_the_teacher_rules():
         assert must in p
     # the app calls the roleplay 「대화」 (review-screens, user 2026-11-07); Ryan says it the same way
     assert "「역할극」이라고 하지 않고 「대화」라고 해요" in p
+
+
+@pytest.mark.parametrize("error", ["read", "timeout"])
+async def test_stream_cut_by_the_network_is_unavailable(error):
+    # final review: the SDK raises transport errors met while reading the stream as they are, so a dropped
+    # connection mid-answer broke the attempt instead of giving the fixed phrase
+    import httpx2
+
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    req = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    cut = httpx2.ReadError("cut", request=req) if error == "read" else httpx2.ReadTimeout("slow", request=req)
+    got = []
+    with pytest.raises(ClaudeUnavailable):
+        async for d in Claude(FakeAnthropic([["괜찮아요. ", cut]])).aside(Frame(**FRAME), [], "a", "b", None, [], []):
+            got.append(d)
+    assert got == ["괜찮아요. "]
+    with pytest.raises(ClaudeUnavailable):
+        [d async for d in Claude(FakeAnthropic([["좋아요. ", cut]])).feedback("a", "b", [], [])]

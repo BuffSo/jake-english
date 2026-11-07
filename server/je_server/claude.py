@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import anthropic
+import httpx2  # the HTTP client the anthropic SDK uses
 from pydantic import ValidationError
 
 from . import prompts
@@ -269,7 +270,9 @@ class Claude:
             ) as stream:
                 async for text in stream.text_stream:
                     yield text
-        except anthropic.APIConnectionError as e:
+        except (anthropic.APIConnectionError, httpx2.TransportError) as e:
+            # the SDK raises a transport error met while reading the stream (a dropped connection, a read timeout
+            # between pieces) as it is, not as APIConnectionError (final review, 2026-11-07)
             raise ClaudeUnavailable("connection") from e
         except anthropic.APIStatusError as e:
             log.info("claude api status %d", e.status_code)
