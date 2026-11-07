@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from . import prompts
 from .models import Draft, Frame, Issue, Offscript, Speaker, ThreeLine
 from .threeline import Problem, check, degrade, plain
+from .topics import Topic
 
 # Spec 「기다리는 시간과 모델」: Haiku with thinking off for quick wording, Sonnet with thinking off and low
 # effort for writing. No temperature/top_p/top_k: API version 2026-10-21 rejects them.
@@ -103,12 +104,14 @@ class Claude:
     # --- script -------------------------------------------------------------------------------
 
     @staticmethod
-    def script_problems(draft: Draft) -> list[str]:
+    def script_problems(draft: Draft, first: Speaker | None = None) -> list[str]:
+        """What is wrong with a script. Either speaker may start and end (spec situation-topics 5); `first` is who
+        must start when the topic or the list says so."""
         out = []
         if not draft:
             return ["the script is empty"]
-        if draft[0][0] != "ryan" or draft[-1][0] != "ryan":
-            out.append("Ryan must speak first and last")
+        if first is not None and draft[0][0] != first:
+            out.append("Ryan must speak first" if first == "ryan" else "the learner must speak first")
         if any(a[0] == b[0] for a, b in zip(draft, draft[1:])):
             out.append("lines must alternate between Ryan and the learner")
         turns = sum(1 for s, _ in draft if s == "user")
@@ -119,8 +122,13 @@ class Claude:
             out.append(f"learner lines must be at most {USER_MAX_WORDS - 2} words")
         return out
 
-    async def make_script(self, situation: str) -> tuple[Frame, Draft]:
-        user = f"상황: {situation}"
+    async def make_script(self, situation: str, topic: Topic, first: Speaker | None = None) -> tuple[Frame, Draft]:
+        """The frame and script for a situation in a topic. `first` comes from a list pick; otherwise the topic's
+        own (외국인 관광객: Ryan), and with neither the situation decides (spec situation-topics 5)."""
+        first = first or topic.first
+        starts = {"ryan": "Ryan speaks first.", "user": "The learner speaks first.",
+                  None: "Whoever would naturally speak first in this situation speaks first."}[first]
+        user = f"상황: {situation}\nRoles: {topic.roles_en}\n{starts}"
         problems: list[str] = []
         for _ in range(2):
             content = user if not problems else f"{user}\n\nThe last script had problems. Fix them:\n{_problems_text(problems)}"
@@ -131,7 +139,7 @@ class Claude:
             except (TypeError, KeyError, ValidationError):
                 problems = ["the answer did not follow the JSON format"]
                 continue
-            problems = self.script_problems(draft)
+            problems = self.script_problems(draft, first)
             if not problems:
                 return frame, draft
         raise ClaudeUnavailable("could not get a valid script")
@@ -187,9 +195,13 @@ class Claude:
 
     # --- recommendation -----------------------------------------------------------------------
 
-    async def recommend(self, recent: list[str], turned_down: Sequence[str] = ()) -> str:
+    async def recommend(self, recent: list[str], turned_down: Sequence[str], topic: Topic) -> str:
+        """Jake's suggestion inside the topic, unlike its recent ones, its prepared list and those just turned down
+        (spec situation-topics 4)."""
         listed = "\n".join(f"- {r}" for r in recent) or "- 없음"
-        message = f"최근 상황:\n{listed}"
+        message = f"주제: {topic.scenes_en}\n예: {topic.example_ko}\n\n최근 상황:\n{listed}"
+        if topic.picks:  # Jake fills in what the short list does not cover (user, 2026-11-07)
+            message += "\n\n목록에 있는 상황:\n" + "\n".join(f"- {p.title_ko}" for p in topic.picks)
         if turned_down:  # suggested on the situation screen and turned down with 「다른 걸로요」 (2026-11-06)
             message += "\n\n방금 거절한 상황:\n" + "\n".join(f"- {t}" for t in turned_down)
         data = await self._json(self.quick, prompts.RECOMMEND_SYSTEM, message, prompts.RECOMMEND_SCHEMA, 300)
@@ -228,8 +240,8 @@ class Claude:
                 problems = ["the answer did not follow the JSON format"]
                 continue
             problems = []
-            if not draft or draft[0][0] != "user" or draft[-1][0] != "ryan":
-                problems.append("start with the learner and end with Ryan")
+            if not draft or draft[0][0] != "user":  # either may end it (spec situation-topics 5)
+                problems.append("start with the learner")
             if any(a[0] == b[0] for a, b in zip(draft, draft[1:])):
                 problems.append("lines must alternate")
             turns = sum(1 for sp, _ in draft if sp == "user")

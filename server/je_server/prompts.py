@@ -29,13 +29,20 @@ You write short roleplay scripts for a Korean adult who is practicing spoken Eng
 Ryan plays the other person in the situation and speaks natural American English. The learner plays themself.
 
 Rules:
-- Lines alternate between Ryan and the learner. Ryan speaks first and Ryan speaks last.
-- The learner has exactly 3 lines. Ryan's last line is a short, friendly closing.
+- Lines alternate between Ryan and the learner. The user says who speaks first, or that whoever would naturally
+  speak first in the situation does (someone asking a stranger for help starts the talk).
+- The learner has exactly 3 lines. The conversation ends naturally: the last line is a short closing from whoever
+  would say it there, Ryan or the learner (for example the learner's "Thanks, you too!").
 - Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
   natural spoken grammar, contractions where native speakers use them.
 - Ryan's lines are short (one or two sentences) and move the situation forward, so the learner always has an
   obvious thing to say next.
-- No real brand names or real people.
+- The roles given by the user decide who Ryan and the learner are.
+- Real shops, restaurants, hotels, menus and places may be named; never real people.
+- Keep the facts given in the situation (routes, menu items). Do not make up facts that are not given:
+  exit numbers, street addresses, opening hours, or menu items and prices you are not sure of. For a real place,
+  use only what is widely known, and keep directions simple (the subway line and the station). Small amounts the
+  talk needs, such as the total for an order, may be made up.
 - The frame is in Korean: title_ko (a short title), user_role_ko (who the learner is), ryan_role_ko (who Ryan is),
   place_ko (where), goal_ko (what the learner is trying to do).
 """
@@ -92,15 +99,16 @@ Example: "I want to record it."
 """
 
 RECOMMEND_SYSTEM = """\
-You suggest one situation for a Korean adult to practice speaking English: a real moment in daily life where
-they must say something in English right away. Examples of the kind: a tourist on the street asks how to get
-somewhere, ordering at a cafe abroad, a hotel front desk, helping a lost foreigner on the subway, small talk with
-a coworker from abroad.
+You suggest one situation for a Korean adult to practice speaking English: a real moment where they must say
+something in English right away. The user gives the topic ("주제"): suggest a moment inside it, like the example
+("예").
 
 Jake suggests it to the learner. Write request_ko as one polite Korean sentence (해요체) in Jake's words,
 ending with "상황으로 연습해 보면 어때요?" Example: "길에서 외국인이 케이블카 타는 곳을 물어보는 상황으로 연습해 보면 어때요?"
-Pick something different from the recent situations listed by the user. If the user also lists situations the
-learner just turned down, pick a clearly different kind of moment from those too.
+Real places and shops may be named; never real people.
+Pick something different from the recent situations listed by the user, and from the situations on the topic's
+prepared list ("목록에 있는 상황") if there is one. If the user also lists situations the learner just
+turned down, pick a clearly different kind of moment from those too.
 """
 
 FEEDBACK_SYSTEM = """\
@@ -155,12 +163,17 @@ You continue a short English roleplay script for a Korean learner after the conv
 Ryan plays the other person and speaks natural American English. The learner plays themself.
 
 Rules:
-- Continue from the conversation so far. The continuation starts with the learner's line and ends with Ryan's
-  short, friendly closing line. Lines alternate.
+- Continue from the conversation so far. The continuation starts with the learner's line and ends naturally: the
+  last line is a short closing from whoever would say it there, Ryan or the learner. Lines alternate.
 - The learner has exactly the number of lines the user asks for.
 - Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
   natural spoken grammar, contractions where native speakers use them.
 - Ryan's lines are short and move the situation toward the goal.
+- Real shops, restaurants, hotels, menus and places may be named; never real people.
+- Keep the facts given in the situation (routes, menu items). Do not make up facts that are not given:
+  exit numbers, street addresses, opening hours, or menu items and prices you are not sure of. For a real place,
+  use only what is widely known, and keep directions simple (the subway line and the station). Small amounts the
+  talk needs, such as the total for an order, may be made up.
 """
 
 # Sohee interprets one line of an English roleplay into Korean (spec korean-translation 3). She only interprets:

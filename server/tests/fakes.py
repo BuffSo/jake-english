@@ -93,11 +93,13 @@ DRAFT_RYAN = ["Excuse me, where is the subway station?", "How do I get there?", 
               "Thanks a lot!", "Bye!", "Great.", "Thanks for your help!"]
 
 
-def script_lines(user_turns: int) -> list[dict]:
-    lines = [{"speaker": "ryan", "text": DRAFT_RYAN[0]}]
+def script_lines(user_turns: int, first: str = "ryan", last: str = "ryan") -> list[dict]:
+    """Alternating lines with `user_turns` learner lines; either speaker may start or end (spec situation-topics 5)."""
+    lines = [{"speaker": "ryan", "text": DRAFT_RYAN[0]}] if first == "ryan" else []
     for i in range(user_turns):
         lines.append({"speaker": "user", "text": DRAFT_USER[i % len(DRAFT_USER)]})
-        lines.append({"speaker": "ryan", "text": DRAFT_RYAN[(i + 1) % len(DRAFT_RYAN)]})
+        if i < user_turns - 1 or last == "ryan":
+            lines.append({"speaker": "ryan", "text": DRAFT_RYAN[(i + 1) % len(DRAFT_RYAN)]})
     return lines
 
 
@@ -137,16 +139,18 @@ class FakeClaude:
         self.annotate_gate = None  # an asyncio.Event to hold annotate until set
         self.interpret_calls: list[dict] = []
         self.interpret_gate = None  # an asyncio.Event to hold interpret until set
+        self.script_last = "ryan"  # who ends the scripts make_script gives
 
     def _maybe_fail(self):
         if self.fail_next:
             self.fail_next = False
             raise ClaudeUnavailable("fake")
 
-    async def make_script(self, situation):
-        self.calls.append(("make_script", (situation,)))
+    async def make_script(self, situation, topic, first=None):
+        self.calls.append(("make_script", (situation, topic.id, first)))
         self._maybe_fail()
-        draft = [(l["speaker"], l["text"]) for l in script_lines(3)]
+        draft = [(l["speaker"], l["text"]) for l in script_lines(3, first=first or topic.first or "ryan",
+                                                                 last=self.script_last)]
         return Frame(**FRAME), draft
 
     async def annotate(self, text, context):
@@ -163,8 +167,8 @@ class FakeClaude:
         self._maybe_fail()
         return "소희: " + line[1]
 
-    async def recommend(self, recent, turned_down=()):
-        self.calls.append(("recommend", (recent, list(turned_down))))
+    async def recommend(self, recent, turned_down, topic):
+        self.calls.append(("recommend", (recent, list(turned_down), topic.id)))
         self._maybe_fail()
         return "카페에서 커피를 주문하는 상황으로 연습해 보면 어때요?"
 
