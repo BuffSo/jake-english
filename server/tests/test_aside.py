@@ -177,3 +177,15 @@ async def test_near_miss_points_count_for_the_next_praise(engine_with_rp, speech
     fake_whisper.text = "It's right over there."
     await run(engine, rp_id, user_idx, speech_bytes, "retry")
     assert fake_claude.feedback_calls[-1]["praise"][0] == "이번에는 right의 R 소리가 제대로 났어요"
+
+
+async def test_line_then_hangul_in_the_english_transcript_is_an_aside(engine_with_rp, speech_bytes, fake_whisper,
+                                                                     fake_claude):
+    # check with a Jake-voice recording 2026-11-08: forced to English, whisper kept the Korean in Hangul after the
+    # line. The match counts English words only, so the line alone made it "followed" and 「다음」 showed.
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's right over there... 아, 잠깐만요."
+    fake_whisper.auto_text, fake_whisper.auto_lang = "잇츠 라잇 오버 데어 아 잠깐만요", "korean"
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[0]["followed"] is False and fake_claude.feedback_calls == []
+    assert ev[-1] == {"type": "done", "next": user_idx, "issues": 0}

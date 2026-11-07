@@ -301,7 +301,9 @@ class Engine:
                 return
             heard = await self.whisper.transcribe(wav, "en")
             close = similarity(line.text, heard) if words(heard) else 0.0
-            followed = close >= FOLLOW_MIN
+            # Hangul in the English transcript is Korean that was said: the match counts English words only, so the
+            # line begun and then Korean would pass as followed (Jake-voice check, 2026-11-08)
+            followed = close >= FOLLOW_MIN and not HANGUL.search(heard)
             if not followed:
                 # forced to English, whisper translates Korean or leaves it in Hangul (spec offscript-aside 2). Every
                 # recording that does not follow the line is asked again: a near one may be the line begun and then
