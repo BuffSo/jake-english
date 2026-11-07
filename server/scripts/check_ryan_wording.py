@@ -4,7 +4,7 @@ Feedback after a followed line (`Claude.feedback`, the quick model) and teacher 
 writer model) are asked for each case below, `--runs` times, through the server's own `Claude` class. Each answer
 is printed with the rules it broke:
 - a given sound tip left out, or the materials named ("짚을 것", "설명", that there is no tip)
-- the practice called 「역할극」 instead of 「대화」, double quotes
+- the practice called 「역할극」 instead of 「대화」, double quotes (in the model's own answer: the server drops them)
 - a particle after an English word that does not fit how the word ends in Hangul (room이, where가)
 - a pointed word missing, the whole transcript quoted, or the wrong ending (next line / conversation done)
 The lines are made up (REVIEW.md), so printing them is fine. Prints tokens and cost at the end.
@@ -33,7 +33,8 @@ from je_server.claude import QUICKS, WRITERS, Claude  # noqa: E402
 from je_server.config import load_settings  # noqa: E402
 from je_server.models import Frame, Issue  # noqa: E402
 
-PRICE = {"claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}  # $ per million tokens in/out
+# $ per million tokens in/out, for every model server/.env can pick (claude.WRITERS, claude.QUICKS)
+PRICE = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}
 RL = "L은 혀끝이 윗잇몸에 닿지만, R은 혀가 어디에도 닿지 않게 하고 입술을 살짝 동그랗게 모아요."
 FP = "P는 두 입술을 붙였다가 터뜨리지만, F는 윗니를 아랫입술에 살짝 대고 그 틈으로 바람을 길게 내보내요."
 TIP_MARK = {RL: "닿", FP: "아랫입술"}  # a word the reworded tip keeps
@@ -103,7 +104,9 @@ ASIDE = [
 ]
 
 
-def flags(case: Case, text: str, aside: bool) -> list[str]:
+def flags(case: Case, text: str, aside: bool, raw: str = "") -> list[str]:
+    """The rules `text` (what the learner sees) breaks. Double quotes are looked for in `raw`, the model's own answer:
+    the server drops them from `text`, so a prompt that stops keeping them out would not show there."""
     text = " ".join(text.split())
     out = []
     for i in case.issues:
@@ -114,7 +117,7 @@ def flags(case: Case, text: str, aside: bool) -> list[str]:
         if i.heard and i.heard not in text:
             out.append(f"heard word not said ({i.heard})")
     out += [f"names {n!r}" for n in NAMES if n in text]
-    if any(q in text for q in QUOTES):
+    if any(q in raw for q in QUOTES):
         out.append("double quotes")
     if re.sub(r"\W", "", case.heard.lower()) in re.sub(r"\W", "", text.lower()) and case.issues:
         out.append("quotes the whole transcript")
@@ -133,16 +136,18 @@ def flags(case: Case, text: str, aside: bool) -> list[str]:
 
 
 class Counting:
-    """Wraps the client to add up usage per streamed call."""
+    """Wraps the client to add up usage per streamed call and keep each answer as the model wrote it."""
 
-    def __init__(self, inner, usage: list | None = None):
-        self.inner, self.usage, self.messages = inner, usage if usage is not None else [], self
+    def __init__(self, inner, usage: list | None = None, raw: list | None = None):
+        self.inner, self.messages = inner, self
+        self.usage = usage if usage is not None else []
+        self.raw: list[str] = raw if raw is not None else []
 
     def with_options(self, **kw):
-        return Counting(self.inner.with_options(**kw), self.usage)
+        return Counting(self.inner.with_options(**kw), self.usage, self.raw)
 
     def stream(self, **kw):
-        manager, usage = self.inner.messages.stream(**kw), self.usage
+        manager, usage, raw = self.inner.messages.stream(**kw), self.usage, self.raw
 
         class Recorded:
             async def __aenter__(self):
@@ -153,6 +158,7 @@ class Counting:
                 if exc[0] is None:
                     m = await self.s.get_final_message()
                     usage.append((kw["model"], m.usage.input_tokens, m.usage.output_tokens))
+                    raw.append("".join(b.text for b in m.content if b.type == "text"))
                 return await manager.__aexit__(*exc)
 
         return Recorded()
@@ -191,7 +197,7 @@ async def main() -> None:
                                        case.heard, case.heard_ko, case.issues, [])
                 text, first = await timed(gen)
                 firsts[kind].append(first)
-                f = flags(case, text, kind == "aside")
+                f = flags(case, text, kind == "aside", counting.raw[-1] if counting.raw else "")
                 total += 1
                 broken += bool(f)
                 print(f"- {text}" + (f"\n  !! {', '.join(f)}" if f else ""))
