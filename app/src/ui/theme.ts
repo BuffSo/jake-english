@@ -9,6 +9,10 @@ export const colors = {
   user: "#E7F5FF",
   feedback: "#FFF9DB",
   primary: "#1C7ED6",
+  review: "#0C8599", // 「복습하기」 on the first screen: teal, not gray, which read as a disabled button (spec review-screens 1)
+  onColor: "#FFFFFF", // text and signs on a filled card
+  onColorSub: "rgba(255,255,255,0.85)", // the smaller line on a filled card
+  ryanTag: "#E9ECEF", // 「라이언」 on a gray card, one step darker than the card
   sohee: "#2F9E44", // Sohee's tag on her interpretation (spec korean-translation 2)
   soheeText: "#1F6F34", // her Korean: darker, to read on the gray and blue bubbles
   danger: "#C92A2A",
