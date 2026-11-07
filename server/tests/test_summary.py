@@ -49,41 +49,9 @@ async def test_summary_shows_roleplay_tries_not_practice(engine_with_rp, speech_
     assert [l["line"]["idx"] for l in s["lines"]] == list(range(7)) and tries(s, 0) == []
 
 
-async def test_offscript_try_carries_ryans_point(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
-    engine, rp_id, user_idx = engine_with_rp
-    fake_whisper.text = "I have no idea at all."
-    await run(engine, rp_id, user_idx, speech_bytes)
-    [t] = tries(engine.summary(rp_id), user_idx)
-    assert t["followed"] is False and t["issues"] == [] and t["point_ko"] == fake_claude.offscript_out.point_ko
-
-
 async def test_line_without_attempts_has_no_tries(engine_with_rp):
     engine, rp_id, user_idx = engine_with_rp
     assert tries(engine.summary(rp_id), user_idx) == []
-
-
-async def test_retry_said_differently_has_no_point(engine_with_rp, speech_bytes, fake_whisper):
-    # final review: a retry said differently only gets 「대사를 그대로 따라 말해 볼까요?」; that is not a point
-    engine, rp_id, user_idx = engine_with_rp
-    fake_whisper.text = "I have no idea at all."
-    await run(engine, rp_id, user_idx, speech_bytes, "retry")
-    [t] = tries(engine.summary(rp_id), user_idx)
-    assert t["followed"] is False and t["point_ko"] == ""
-
-
-async def test_pronunciation_point_is_not_repeated(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
-    # PR #15 review: a turn said differently with a listed sound stored the point both as an issue and as
-    # Ryan's words; the end screen showed it twice
-    from je_server.models import Offscript
-
-    engine, rp_id, user_idx = engine_with_rp
-    fake_claude.offscript_out = Offscript(point_kind="pronunciation", point_ko="", meant="right",
-                                          heard_word="light", reply_en="Oh, I see. Thanks!")
-    fake_whisper.text = "I have no idea, it is light there."
-    await run(engine, rp_id, user_idx, speech_bytes)
-    [t] = tries(engine.summary(rp_id), user_idx)
-    assert t["issues"] == [{"target": "right", "heard": "light", "say_ko": "「right」 → 「light」처럼 들렸어요"}]
-    assert t["point_ko"] == ""
 
 
 async def test_summary_says_each_issue_in_korean(engine_with_rp):
@@ -113,3 +81,32 @@ async def test_summary_first_points_at_earlier_run(engine_with_rp, speech_bytes,
     assert line_of(engine.summary(again.id), user_idx)["first"] == {"rp_id": rp_id, "idx": user_idx, "n": 1}
     assert line_of(engine.summary(rp_id), user_idx)["first"] is None
     assert line_of(engine.summary(again.id), 0)["first"] is None
+
+
+async def test_aside_is_not_on_the_end_screen(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Wait, let me try that again."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    assert tries(engine.summary(rp_id), user_idx) == []
+
+
+async def test_aside_after_issue_keeps_closing_retry(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's light over there."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    fake_whisper.text = "Wait, let me try that again."
+    await run(engine, rp_id, user_idx, speech_bytes, "retry")
+    s = engine.summary(rp_id)
+    assert len(tries(s, user_idx)) == 1 and s["say"] == engine.said("closing_retry").model_dump()
+
+
+async def test_old_offscript_try_still_shows_its_point(engine_with_rp):
+    # records from before 2026-11-07: a turn said differently, with Ryan's point and no aside mark
+    from je_server.models import Attempt
+
+    engine, rp_id, user_idx = engine_with_rp
+    await engine.save_attempt(rp_id, user_idx, Attempt(n=1, mode="turn", heard="I have no idea.", followed=False,
+                                                       issues=[], say_ko="이럴 때는 I'm not sure도 좋아요.",
+                                                       audio=[], timings={}), None)
+    [t] = tries(engine.summary(rp_id), user_idx)
+    assert t["followed"] is False and t["point_ko"] == "이럴 때는 I'm not sure도 좋아요."

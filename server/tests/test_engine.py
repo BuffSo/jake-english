@@ -111,14 +111,23 @@ async def test_progress_counts_the_learners_lines(engine):
         {"no": 2, "total": 3}, {"no": 3, "total": 3}, {"no": 3, "total": 3}]
 
 
-async def test_progress_never_passes_total(engine, fake_claude, fake_whisper, speech_bytes):
-    # a rebuild that fails closes with Ryan's goodbye: lines become ryan 0, user 1, reply 2, closing 3
-    fake_claude.fail_continue = True
+async def old_reply_record(engine, said: str = "I have no idea at all.", closing: bool = True):
+    """A roleplay as the server left it before 2026-11-07 after a turn said differently: Ryan's reply after line 1,
+    then (when the rebuild failed) his goodbye, and the try with no aside mark."""
     rp = await engine.create("길 묻기")
-    await engine.line(rp.id, 1)
-    fake_whisper.text = "I have no idea at all."
-    [e async for e in engine.attempt(rp.id, 1, speech_bytes, "turn")]
-    await engine.line(rp.id, 3)
+    rp = engine.store.load(rp.id)
+    rp.lines = rp.lines[:2] + [ScriptLine(idx=2, speaker="ryan", text="Oh, no worries. Thanks anyway!", kind="reply")]
+    if closing:
+        rp.lines.append(ScriptLine(idx=3, speaker="ryan", text="Thanks for your help! Have a good day."))
+    rp.attempts = {1: [Attempt(n=1, mode="turn", heard=said, followed=False, issues=[], say_ko="", audio=[],
+                               timings={})]}
+    engine.store.save(rp)
+    return rp
+
+
+async def test_progress_never_passes_total(engine):
+    # an old rebuild that failed closed with Ryan's goodbye: lines ryan 0, user 1, reply 2, closing 3
+    rp = await old_reply_record(engine)
     assert engine.progress(rp.id, 3) == {"no": 1, "total": 1}
 
 
@@ -136,16 +145,13 @@ async def test_copy_starts_fresh_with_the_same_script(engine_with_rp, speech_byt
     assert ("make_script", (old.situation,)) not in fake_claude.calls[calls:]
 
 
-async def test_copy_keeps_reply_lines_in_order(engine_with_rp, speech_bytes, fake_whisper):
-    engine, rp_id, user_idx = engine_with_rp
-    fake_whisper.text = "I have no idea at all."
-    [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
-    new = await engine.copy(rp_id)  # waits for the rebuild
-    assert [l.idx for l in new.lines] == list(range(len(new.lines)))
-    assert new.lines[user_idx + 1].kind == "reply"
+async def test_copy_keeps_reply_lines_in_order(engine):
+    rp = await old_reply_record(engine)
+    new = await engine.copy(rp.id)
+    assert [l.idx for l in new.lines] == list(range(len(new.lines))) and new.lines[2].kind == "reply"
     # text only: background preparation may still add notes and sounds to either record
     shape = lambda lines: [(l.idx, l.speaker, l.text, l.kind) for l in lines]  # noqa: E731
-    assert shape(new.lines) == shape(engine.store.load(rp_id).lines)
+    assert shape(new.lines) == shape(engine.store.load(rp.id).lines)
 
 
 async def test_a_line_whose_sound_failed_comes_without_audio(engine, fake_voice):
@@ -215,16 +221,11 @@ async def test_ko_context_is_the_conversation_as_it_went(engine, fake_claude):
     assert fake_claude.interpret_calls[-1]["before"] is None
 
 
-async def test_ko_of_a_reply_sees_what_was_said_and_does_not_wait_for_the_rebuild(engine, fake_claude):
-    rp = await engine.create("길 묻기")
-    fake_claude.continue_gate = asyncio.Event()  # the rest of the script is being rebuilt, and stays so
+async def test_ko_of_an_old_reply_sees_what_was_said(engine, fake_claude):
     said = "Do you have oat milk?"
-    await engine.save_attempt(rp.id, 1, Attempt(n=1, mode="turn", heard=said, followed=False, issues=[], say_ko="",
-                                                audio=[], timings={}), None)
-    await engine.add_reply(rp.id, 1, said, ScriptLine(idx=2, speaker="ryan", text="Yes, we do!", kind="reply"))
+    rp = await old_reply_record(engine, said, closing=False)
     ko = await asyncio.wait_for(engine.ko(rp.id, 2), 1)
-    assert ko == "소희: Yes, we do!" and fake_claude.interpret_calls[-1]["before"] == ("user", said)
-    fake_claude.continue_gate.set()
+    assert ko == "소희: Oh, no worries. Thanks anyway!" and fake_claude.interpret_calls[-1]["before"] == ("user", said)
 
 
 async def test_ko_does_not_queue_behind_three_line_notes(engine, fake_claude):
@@ -289,3 +290,11 @@ async def test_recommend_avoids_recent_of_the_same_topic(engine, fake_claude):
     await engine.create("관광객 길 안내", "tourist")
     await engine.recommend([], "usa")
     assert [a for n, a in fake_claude.calls if n == "recommend"][-1] == (["호텔 체크인"], [], "usa")
+
+
+async def test_history_skips_asides(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Wait, let me try that again."
+    [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
+    rp = engine.store.load(rp_id)
+    assert engine.history(rp, user_idx + 1)[-1] == ("user", rp.lines[user_idx].text)

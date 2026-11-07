@@ -110,13 +110,3 @@ class Saved(BaseModel):
 class Said(BaseModel):
     text: str
     audio: str
-
-
-class Offscript(BaseModel):
-    """Claude's answer when the learner said something other than the line."""
-
-    point_kind: Literal["none", "expression", "pronunciation"]
-    point_ko: str
-    meant: str
-    heard_word: str
-    reply_en: str

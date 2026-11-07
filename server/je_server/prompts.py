@@ -19,9 +19,6 @@ WORD_SCHEMA = _obj({"syl": {"type": "array", "items": SYL_SCHEMA}, "emph": BOOL,
 THREE_SCHEMA = _obj({"words": {"type": "array", "items": WORD_SCHEMA}, "reading": STR})
 
 RECOMMEND_SCHEMA = _obj({"request_ko": STR})
-OFFSCRIPT_SCHEMA = _obj({"point_kind": {"type": "string", "enum": ["none", "expression", "pronunciation"]},
-                         "point_ko": STR, "meant": STR, "heard_word": STR, "reply_en": STR})
-CONTINUE_SCHEMA = _obj({"lines": {"type": "array", "items": LINE_SCHEMA}})
 INTERPRET_SCHEMA = _obj({"ko": STR})
 
 SCRIPT_SYSTEM = """\
@@ -188,45 +185,6 @@ ASIDE_SYSTEM = """\
 예(말이 꼬였을 때): 괜찮아요, 말이 꼬일 수 있어요. 다시 녹음해 볼까요?
 예(짚을 것이 둘일 때): large가 launch처럼, please가 peace처럼 들렸어요. 한 번 더 해 볼까요?
 예(상황에 맞는 다른 영어일 때): 좋은 말이에요. 이번에는 대사대로 해 볼까요?
-"""
-
-OFFSCRIPT_SYSTEM = """\
-You are Ryan, playing the other person in an English roleplay with a Korean learner. The script expected the
-learner to say a certain line, but they said something else (the transcript of their recording is given; it may
-contain transcription mistakes).
-
-Return:
-- reply_en: Ryan's natural reply to what the learner actually said: one or two short sentences, staying in the
-  situation and moving it toward the goal, so the learner has an obvious thing to say next.
-- point_kind and point_ko: at most one thing to point out, so the conversation keeps going.
-  - "expression": a grammar mistake, a wrong word, or a clearly more natural way to say it. point_ko is one or two
-    short Korean sentences in 해요체 (존댓말) with the better English sentence in it.
-  - "pronunciation": only when the context makes it clear which word they meant and the transcript shows a
-    different, similar-sounding word instead (for example "I'm learning to the station" when they meant
-    "running"). Fill meant (the intended word) and heard_word (the word in the transcript). point_ko may be empty.
-  - "none": nothing worth pointing out, or you are not sure. When unsure, choose none.
-- meant and heard_word are single lowercase English words, and empty unless point_kind is "pronunciation".
-Never comment on stress, intonation or speed.
-"""
-
-CONTINUE_SYSTEM = """\
-You continue a short English roleplay script for a Korean learner after the conversation went a different way.
-Ryan plays the other person and speaks natural American English. The learner plays themself.
-
-Rules:
-- Continue from the conversation so far. The continuation starts with the learner's line and ends naturally: the
-  last line is a short closing from whoever would say it there, Ryan or the learner. Lines alternate.
-- When Ryan's last line would only echo the learner's thanks or goodbye ("You too!", "Take care!"), drop it and
-  end on the learner's line. Ryan speaks last only when he still has something to say or hand over.
-- The learner has exactly the number of lines the user asks for.
-- Each learner line is something people really say in that moment: short (at most 12 words), everyday words,
-  natural spoken grammar, contractions where native speakers use them.
-- Ryan's lines are short and move the situation toward the goal.
-- Real shops, restaurants, hotels, menus and places may be named; never real people.
-- Keep the facts given in the situation (routes, menu items). Do not make up facts that are not given:
-  exit numbers, street addresses, opening hours, or menu items and prices you are not sure of. For a real place,
-  use only what is widely known, and keep directions simple (the subway line and the station). Small amounts the
-  talk needs, such as the total for an order, may be made up.
 """
 
 # Sohee interprets one line of an English roleplay into Korean (spec korean-translation 3). She only interprets:

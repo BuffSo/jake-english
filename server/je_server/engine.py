@@ -12,8 +12,8 @@ from pathlib import Path
 
 from . import audio
 from .claude import ClaudeUnavailable
-from . import sounds, topics
-from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, sound_pairs, words
+from . import topics
+from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, Speaker, ThreeLine
 from .sentences import SentenceBuffer
 from .tts import VoiceError
@@ -25,7 +25,6 @@ from .tts import audio_key
 log = logging.getLogger("je_server")
 LINE_WAIT = 120
 MAX_SECONDS = 60
-CLOSING_EN = "Thanks for your help! Have a good day."
 ASIDES_KEPT = 3  # earlier asides on the line sent with a new one, for a question that follows Ryan's answer
 HANGUL = re.compile(r"[가-힣]")
 
@@ -44,8 +43,6 @@ class Engine:
         self.tasks: dict[tuple[str, int], asyncio.Task] = {}
         self.locks: dict[str, asyncio.Lock] = {}
         self.sem = asyncio.Semaphore(3)
-        self.continuing: dict[str, asyncio.Task] = {}
-        self.left: dict[str, int] = {}  # learner lines the running rebuild is writing
         self.threes: dict[tuple[str, int], asyncio.Task] = {}  # notes asked for on demand, one call per line
         self.kos: dict[tuple[str, int], asyncio.Task] = {}  # Sohee's Korean asked for, one call per line
         self.saved_lock = asyncio.Lock()  # the saved-sentence file is read and written one change at a time
@@ -105,9 +102,6 @@ class Engine:
     async def copy(self, rp_id: str) -> Roleplay:
         """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
         sounds are reused, so it starts at once; the old record and its tries stay as they are."""
-        task = self.continuing.get(rp_id)
-        if task is not None and not task.done():
-            await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
         old = self.load(rp_id)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
@@ -155,9 +149,6 @@ class Engine:
                 raise r
 
     async def line(self, rp_id: str, idx: int) -> ScriptLine:
-        task = self.continuing.get(rp_id)
-        if task is not None and not task.done():
-            await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
         _, line = self.get_line(rp_id, idx)
         if self.ready(line):
             return line
@@ -177,8 +168,8 @@ class Engine:
         return path
 
     def progress(self, rp_id: str, idx: int) -> dict[str, int]:
-        """「내 대사 no/total」 for the roleplay header. On Ryan's line it is the learner's next line. A rebuild that
-        failed ends with Ryan's goodbye and fewer learner lines, so no is kept within total."""
+        """「내 대사 no/total」 for the roleplay header. On Ryan's line it is the learner's next line. Records from
+        before 2026-11-07 may end with fewer learner lines after a failed rebuild, so no is kept within total."""
         rp = self.load(rp_id)
         total = sum(1 for l in rp.lines if l.speaker == "user")
         before = sum(1 for l in rp.lines if l.speaker == "user" and l.idx < idx)
@@ -433,63 +424,12 @@ class Engine:
         for l in rp.lines[:upto]:
             text = l.text
             if l.speaker == "user":
-                turns = [a for a in rp.attempts.get(l.idx, []) if a.mode == "turn"]
+                # asides are not turns (spec offscript-aside 6); old records' turns said differently still are
+                turns = [a for a in rp.attempts.get(l.idx, []) if a.mode == "turn" and not a.aside]
                 if turns and not turns[-1].followed:
                     text = turns[-1].heard
             out.append((l.speaker, text))
         return out
-
-    @staticmethod
-    def point(out) -> tuple[str, list[Issue]]:
-        """One thing to say before the reply. A pronunciation guess counts only for a listed sound, and then the
-        list's explanation is used, not Claude's (spec 「평가」 맞댈 문장이 없을 때)."""
-        if out.point_kind == "pronunciation":
-            for a, b in sound_pairs(out.meant, out.heard_word):
-                s = sounds.find(a, b)
-                if s:
-                    issue = Issue(target=out.meant, heard=out.heard_word, sound=(a, b), explain=s.explain)
-                    return f"{out.meant}, {out.heard_word}처럼 들렸어요. {s.explain}", [issue]
-            return "", []
-        if out.point_kind == "expression" and out.point_ko.strip():
-            return out.point_ko.strip(), []
-        return "", []
-
-    async def add_reply(self, rp_id: str, idx: int, heard: str, reply: ScriptLine) -> None:
-        """Puts Ryan's reply after the line, drops the old rest of the script and rebuilds it in the background.
-
-        If a rebuild for an earlier reply on this line is still running (the app gave up and the learner was
-        off-script again), it is cancelled and its count of learner lines is reused (PR #12 review)."""
-        async with self.lock(rp_id):
-            rp = self.store.load(rp_id)
-            running = self.continuing.get(rp_id)
-            if running is not None and not running.done():
-                running.cancel()
-                left = self.left.get(rp_id, 0)
-            else:
-                left = sum(1 for l in rp.lines[idx + 1:] if l.speaker == "user")
-            rp.lines = rp.lines[:idx + 1] + [reply]
-            self.store.save(rp)
-        for key in [k for k in self.tasks if k[0] == rp_id and k[1] > idx]:
-            self.tasks.pop(key).cancel()
-        if left:
-            history = self.history(rp, idx) + [("user", heard), ("ryan", reply.text)]
-            task = asyncio.create_task(self._continue(rp_id, rp.frame, history, left))
-            task.add_done_callback(_quiet)
-            self.continuing[rp_id] = task
-            self.left[rp_id] = left
-
-    async def _continue(self, rp_id: str, frame, history: Draft, user_turns: int) -> None:
-        try:
-            draft = await self.claude.continue_script(frame, history, user_turns)
-        except ClaudeUnavailable:
-            draft = [("ryan", CLOSING_EN)]  # cannot rebuild now: close the roleplay instead of hanging
-        async with self.lock(rp_id):
-            rp = self.store.load(rp_id)
-            start = len(rp.lines)
-            rp.lines += [ScriptLine(idx=start + i, speaker=sp, text=t) for i, (sp, t) in enumerate(draft)]
-            self.store.save(rp)
-        for i in range(start, start + len(draft)):
-            self.schedule(rp_id, i)
 
     def summary(self, rp_id: str) -> dict:
         """The end screen: every line with the learner's tries made inside the roleplay (spec roleplay-practice 3).
@@ -500,7 +440,9 @@ class Engine:
         runs = [r for r in self.store.all() if group_of(r) == group]  # for 「처음 녹음」 (spec review-practice 4)
         lines, issues_left = [], False
         for l in rp.lines:
-            tries = [a for a in rp.attempts.get(l.idx, []) if a.mode in ("turn", "retry")] if l.speaker == "user" else []
+            # asides stay off the end screen and out of its closing words (spec offscript-aside 6)
+            tries = ([a for a in rp.attempts.get(l.idx, []) if a.mode in ("turn", "retry") and not a.aside]
+                     if l.speaker == "user" else [])
             issues_left = issues_left or bool(tries and tries[-1].issues)
             lines.append({"line": l.model_dump(mode="json"), "tries": [
                 {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,

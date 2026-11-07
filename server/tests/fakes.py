@@ -8,7 +8,7 @@ import anthropic
 import httpx2
 
 from je_server.claude import ClaudeUnavailable
-from je_server.models import Frame, Offscript, ThreeLine
+from je_server.models import Frame, ThreeLine
 from je_server.threeline import plain
 
 
@@ -131,11 +131,6 @@ class FakeClaude:
         self.fail_next = False
         self.calls: list[tuple[str, tuple]] = []
         self.feedback_calls: list[dict] = []
-        self.offscript_calls: list[dict] = []
-        self.offscript_out = Offscript(point_kind="expression", point_ko="이럴 때는 I'm not sure처럼 말해도 좋아요.",
-                                       meant="", heard_word="", reply_en="Oh, no worries. Thanks anyway!")
-        self.fail_continue = False
-        self.continue_gate = None  # an asyncio.Event to hold continue_script until set
         self.annotate_gate = None  # an asyncio.Event to hold annotate until set
         self.interpret_calls: list[dict] = []
         self.interpret_gate = None  # an asyncio.Event to hold interpret until set
@@ -192,24 +187,6 @@ class FakeClaude:
             if self.aside_fail_after is not None and n >= self.aside_fail_after:
                 raise ClaudeUnavailable("fake")
             yield piece
-
-    async def offscript(self, frame, history, expected, heard):
-        self.offscript_calls.append({"frame": frame.model_dump(), "history": history, "expected": expected,
-                                     "heard": heard})
-        self._maybe_fail()
-        return self.offscript_out
-
-    async def continue_script(self, frame, history, user_turns):
-        self.calls.append(("continue_script", (user_turns, list(history))))
-        if self.continue_gate is not None:
-            await self.continue_gate.wait()
-        if self.fail_continue:
-            raise ClaudeUnavailable("fake")
-        draft = []
-        for i in range(user_turns):
-            draft += [("user", f"Maybe ask at the shop number {i}."), ("ryan", "Good idea." if i < user_turns - 1
-                                                                       else "Thanks for your help!")]
-        return draft
 
 
 class FakeVoice:
