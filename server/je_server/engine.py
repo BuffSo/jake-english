@@ -27,7 +27,8 @@ log = logging.getLogger("je_server")
 LINE_WAIT = 120
 MAX_SECONDS = 60
 NEAR_MIN = 0.3  # below FOLLOW_MIN but at least this close to the line: a try at it, not something else
-ASIDES_KEPT = 3  # earlier asides on the line sent with a new one, for a question that follows Ryan's answer
+# the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer
+ASIDES_KEPT = 3
 HANGUL = re.compile(r"[가-힣]")
 
 
@@ -349,7 +350,11 @@ class Engine:
             # the Mac's points only for a try at the line; far from it, they would point at unrelated words
             if near:
                 issues = find_issues(line.text, heard, limit=2)
-            asides = [a for a in rp.attempts.get(idx, []) if a.aside][-ASIDES_KEPT:]
+            # 「바로 앞에」 (spec 3): only what came after the last try at the line (followed, with points, or an old
+            # record's), so an earlier practice's exchange is not sent along
+            tries = rp.attempts.get(idx, [])
+            since = next((i + 1 for i in range(len(tries) - 1, -1, -1) if not tries[i].aside), 0)
+            asides = tries[since:][-ASIDES_KEPT:]
             text = self._aside(self.claude.aside(rp.frame, self.history(rp, idx), line.text, heard, heard_ko, issues,
                                                  [(a.heard, a.say_ko) for a in asides]))
             # a try at the line with points moves on like a followed one, so a line whisper keeps mishearing never

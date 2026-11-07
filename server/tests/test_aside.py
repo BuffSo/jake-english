@@ -254,3 +254,16 @@ async def test_auto_transcription_failing_keeps_the_macs_points(engine_with_rp, 
     fake_whisper.auto_fail = True
     ev = await run(engine, rp_id, user_idx, speech_bytes)
     assert ev[-1] == {"type": "done", "next": user_idx + 1, "issues": 2}
+
+
+@pytest.mark.parametrize("boundary", ["It's right over there.", "It's light over hair."], ids=["followed", "near"])
+async def test_earlier_asides_stop_at_the_last_try_at_the_line(engine_with_rp, speech_bytes, fake_whisper,
+                                                              fake_claude, boundary):
+    # 「바로 앞에」 (spec 3): what was said before a try at the line, followed or with the Mac's points, is an
+    # earlier exchange and not sent along (todo offscript-aside minors 3)
+    engine, rp_id, user_idx = engine_with_rp
+    for heard in ["Wait, let me try that again.", boundary, "What does this mean?", "What does this mean?"]:
+        fake_whisper.text = heard
+        await run(engine, rp_id, user_idx, speech_bytes, "practice")
+    assert fake_claude.aside_calls[-1]["earlier"] == [("What does this mean?",
+                                                       "괜찮아요, 말이 꼬일 수 있어요. 다시 해 볼까요?")]
