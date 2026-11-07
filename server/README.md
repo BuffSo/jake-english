@@ -21,7 +21,7 @@ server/scripts/autostart.sh install    # 원래 폴더나 worktree 어디서든.
 server/scripts/autostart.sh status
 ```
 
-- 서버를 `kill`로 끄면 곧바로 다시 뜬다. worktree 서버로 시험할 때는 `stop`으로 멈추고 끝나면 `start`, 머지한 뒤에는 `restart`한다. 순서와 확인 방법은 `docs/guide/DEVENV_맥서버_저절로_띄우기_20261107.md`.
+- 서버를 `kill`로 끄면 곧바로 다시 뜬다. 끄고 켤 때는 이 스크립트를 쓴다. 명령과 카드가 서버를 시험하는 순서는 `docs/guide/DEVENV_맥서버_저절로_띄우기_20261107.md`.
 - 손으로 띄우기(worktree에서 시험할 때): `uv run python -m je_server`
 
 ## Claude 모델 고르기
