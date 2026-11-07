@@ -14,6 +14,7 @@ import {
   HOW_LABEL,
   howChoices,
   lineFor,
+  OTHER_TOPIC,
   resumeFrom,
   startStep,
   topicsOf,
@@ -47,7 +48,6 @@ type Props = {
 type Choice = { situation: string } | { pick: string };
 
 const WANTS_RECOMMEND = /모르겠|추천/;
-const OTHER = "other"; // 「그 밖의 상황」, the plain button under the two topics
 
 // The situation screen: the topic first, then how to pick the situation (spec situation-topics 2). The steps and
 // what back does are in flow/situation.ts.
@@ -287,7 +287,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
       {ryanSays && <Text style={[common.body, styles.say]}>{keepWords(ryanSays)}</Text>}
       {step === "topic" &&
         topics.map((t) => (
-          <Button key={t.id} label={t.name_ko} onPress={() => chooseTopic(t)} kind={t.id === OTHER ? "plain" : "primary"} />
+          <Button key={t.id} label={t.name_ko} onPress={() => chooseTopic(t)} kind={t.id === OTHER_TOPIC ? "plain" : "primary"} />
         ))}
       {step === "how" &&
         topic &&

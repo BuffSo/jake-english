@@ -9,6 +9,7 @@ import secrets
 import tempfile
 from pathlib import Path
 
+from . import topics
 from .models import Roleplay, Saved
 
 ID = re.compile(r"^[0-9a-f]{12}$")
@@ -100,9 +101,9 @@ class Store:
                     log.warning("unreadable roleplay %s", d.name)
         return found
 
-    def recent_situations(self, n: int = 10, topic: str = "other") -> list[str]:
-        """The topic's latest situations, for Jake to avoid. A roleplay from before topics counts as "other"."""
-        found = [(rp.created, rp.situation) for rp in self.all() if (rp.topic or "other") == topic]
+    def recent_situations(self, n: int = 10, topic: str = topics.OTHER) -> list[str]:
+        """The topic's latest situations, for Jake to avoid. A roleplay from before topics counts as 「그 밖의 상황」."""
+        found = [(rp.created, rp.situation) for rp in self.all() if (rp.topic or topics.OTHER) == topic]
         return [s for _, s in sorted(found, reverse=True)[:n]]
 
     def next_rec(self, rp_id: str, idx: int) -> tuple[int, Path]:
