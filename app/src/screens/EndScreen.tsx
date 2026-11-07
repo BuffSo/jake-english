@@ -15,6 +15,7 @@ import type { Action, State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { KoButton, KoLine, type KoProps } from "../ui/Interpret";
+import { keepWords } from "../ui/keepWords";
 import { StarButton, StarMark } from "../ui/Star";
 import { colors, top } from "../ui/theme";
 import { useInterpret } from "../ui/useInterpret";
@@ -175,10 +176,10 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
     <View style={styles.wrap}>
       <View style={styles.header}>
         <BackButton onPress={back} />
-        <Text style={common.title}>{past ? past.title : rp?.frame.title_ko}</Text>
+        <Text style={common.title}>{keepWords((past ? past.title : rp?.frame.title_ko) ?? "")}</Text>
         {past
           ? rp && <Text style={[common.sub, styles.say]}>{dayKo(rp.created)}</Text>
-          : summary && <Text style={[common.body, styles.say]}>{summary.say.text}</Text>}
+          : summary && <Text style={[common.body, styles.say]}>{keepWords(summary.say.text)}</Text>}
       </View>
       <ScrollView
         ref={scroll}
@@ -332,7 +333,7 @@ function TryView({ t, open, onPlay }: { t: Try; open: boolean; onPlay: () => voi
       </View>
       {points.map((p, i) => (
         <Text key={i} style={styles.point}>
-          {p}
+          {keepWords(p)}
         </Text>
       ))}
     </View>

@@ -4,31 +4,36 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import type { ThreeLine } from "../api/types";
+import { keepPieces, keepWords } from "./keepWords";
 import { colors } from "./theme";
 import { englishSegments, koreanSegments, readingSegments, type Seg } from "./threeLineSegments";
 
+// A group is one word in pieces (the stressed letter is its own `Text`), kept whole across them (`keepPieces`)
 function Pieces({ groups, size }: { groups: Seg[][]; size: number }) {
   return (
     <>
-      {groups.map((g, i) => (
-        <Text key={i}>
-          {i > 0 ? " " : ""}
-          {g.map((s, j) => (
-            <Text
-              key={j}
-              style={
-                s.style === "strong"
-                  ? { color: colors.stress, fontWeight: "800" }
-                  : s.style === "weak"
-                    ? { fontSize: size * 0.78, color: colors.weak }
-                    : undefined
-              }
-            >
-              {s.text}
-            </Text>
-          ))}
-        </Text>
-      ))}
+      {groups.map((g, i) => {
+        const texts = keepPieces(g.map((s) => s.text));
+        return (
+          <Text key={i}>
+            {i > 0 ? " " : ""}
+            {g.map((s, j) => (
+              <Text
+                key={j}
+                style={
+                  s.style === "strong"
+                    ? { color: colors.stress, fontWeight: "800" }
+                    : s.style === "weak"
+                      ? { fontSize: size * 0.78, color: colors.weak }
+                      : undefined
+                }
+              >
+                {texts[j]}
+              </Text>
+            ))}
+          </Text>
+        );
+      })}
     </>
   );
 }
@@ -47,7 +52,7 @@ export function ThreeLineView({ three, bare = false }: { three: ThreeLine; bare?
           <Pieces groups={korean} size={20} />
         </Text>
       )}
-      {reading.length > 0 && <Text style={styles.reading}>{reading[0].text}</Text>}
+      {reading.length > 0 && <Text style={styles.reading}>{keepWords(reading[0].text)}</Text>}
     </View>
   );
 }

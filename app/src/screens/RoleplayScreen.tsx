@@ -474,13 +474,13 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       <View style={styles.header}>
         <BackButton onPress={askLeave} />
         <View style={styles.titleRow}>
-          <Text style={[common.title, styles.titleText]}>{title}</Text>
+          <Text style={[common.title, styles.titleText]}>{keepWords(title)}</Text>
           {count && <Text style={styles.count}>{count}</Text>}
         </View>
         <Text style={common.sub}>
-          {practice
-            ? rp.frame.title_ko
-            : `나: ${rp.frame.user_role_ko} · 라이언: ${rp.frame.ryan_role_ko} · ${rp.frame.place_ko}`}
+          {keepWords(
+            practice ? rp.frame.title_ko : `나: ${rp.frame.user_role_ko} · 라이언: ${rp.frame.ryan_role_ko} · ${rp.frame.place_ko}`,
+          )}
         </Text>
         {fromSaved && (
           <Pressable onPress={replaySituation} hitSlop={8} style={styles.replay}>
@@ -500,7 +500,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {state.jake && !practice && (
           <Named part="jake">
             <Pressable onPress={replayJake} style={[styles.bubble, styles.ryan]}>
-              <Text style={styles.plainText}>{state.jake.text}</Text>
+              <Text style={styles.plainText}>{keepWords(state.jake.text)}</Text>
               <Text style={styles.hint}>눌러서 다시 듣기</Text>
             </Pressable>
           </Named>
@@ -519,7 +519,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           ) : (
             <Named key={i} part={b.kind === "user" ? "mine" : "feedback"}>
               <View style={[styles.bubble, b.kind === "user" ? styles.user : styles.feedback]}>
-                <Text style={styles.plainText}>{b.text}</Text>
+                <Text style={styles.plainText}>{keepWords(b.text)}</Text>
               </View>
             </Named>
           ),
@@ -582,7 +582,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {state.feedback !== "" && (
           <Named part="feedback">
             <View style={[styles.bubble, styles.feedback]}>
-              <Text style={styles.plainText}>{state.feedback}</Text>
+              <Text style={styles.plainText}>{keepWords(state.feedback)}</Text>
             </View>
           </Named>
         )}
