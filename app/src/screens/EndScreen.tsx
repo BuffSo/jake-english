@@ -324,7 +324,7 @@ function TryView({ t, open, onPlay }: { t: Try; open: boolean; onPlay: () => voi
   return (
     <View style={styles.try}>
       <View style={styles.who}>
-        <Text style={styles.heard}>들린 말: {t.heard}</Text>
+        <Text style={styles.heard}>{keepWords(`들린 말: ${t.heard}`)}</Text>
         {open && (
           <Pressable onPress={onPlay} hitSlop={8}>
             <Text style={styles.play}>▶ 내 녹음</Text>

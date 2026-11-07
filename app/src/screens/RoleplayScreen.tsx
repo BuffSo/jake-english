@@ -423,7 +423,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             {star?.saved && !opened && <Text> </Text>}
             {star?.saved && !opened && <StarMark />}
           </Text>
-          <Text style={styles.heardLine}>들린 말: {b.text}</Text>
+          <Text style={styles.heardLine}>{keepWords(`들린 말: ${b.text}`)}</Text>
           {opened && idx !== undefined && <Ko idx={idx} />}
           {opened && idx !== undefined && (
             <View style={[styles.linkGroup, styles.gap]}>
@@ -578,7 +578,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </View>
           </Named>
         )}
-        {state.heard && <Text style={styles.heard}>들린 말: {state.heard}</Text>}
+        {state.heard && <Text style={styles.heard}>{keepWords(`들린 말: ${state.heard}`)}</Text>}
         {state.feedback !== "" && (
           <Named part="feedback">
             <View style={[styles.bubble, styles.feedback]}>
