@@ -30,9 +30,9 @@ export function ChoiceCard({ icon, iconSize = 26, title, line, color, onPress }:
 const styles = StyleSheet.create({
   card: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 14, flexDirection: "row", alignItems: "center" },
   pressed: { opacity: 0.7 },
-  icon: { width: 36, textAlign: "center", fontWeight: "700", color: "#FFFFFF", marginRight: 10 },
+  icon: { width: 36, textAlign: "center", fontWeight: "700", color: colors.onColor, marginRight: 10 },
   body: { flex: 1 },
-  title: { fontSize: 18, fontWeight: "600", color: "#FFFFFF", lineHeight: 24 },
+  title: { fontSize: 18, fontWeight: "600", color: colors.onColor, lineHeight: 24 },
   line: { fontSize: 14, color: colors.onColorSub, lineHeight: 20, marginTop: 3 },
   chevron: { fontSize: 24, color: colors.onColorSub, marginLeft: 8 },
 });

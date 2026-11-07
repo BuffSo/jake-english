@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 },
   top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   tag: { fontSize: 13, color: colors.sub, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
-  ryan: { backgroundColor: "#E9ECEF" },
+  ryan: { backgroundColor: colors.ryanTag },
   mine: { backgroundColor: colors.user, color: colors.primary },
   star: { fontSize: 20, color: colors.stress },
   text: { fontSize: 18, color: colors.text, lineHeight: 26, marginTop: 4, marginBottom: 2 },
