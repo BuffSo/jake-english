@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import time
 from collections.abc import AsyncIterator, Sequence
 from datetime import datetime
@@ -25,6 +26,8 @@ log = logging.getLogger("je_server")
 LINE_WAIT = 120
 MAX_SECONDS = 60
 CLOSING_EN = "Thanks for your help! Have a good day."
+ASIDES_KEPT = 3  # earlier asides on the line sent with a new one, for a question that follows Ryan's answer
+HANGUL = re.compile(r"[가-힣]")
 
 
 class NotFound(Exception):
@@ -283,14 +286,15 @@ class Engine:
         return {"type": "error", "code": code, "say": self.said(phrase or code).model_dump()}
 
     async def attempt(self, rp_id: str, idx: int, body: bytes, mode: Mode) -> AsyncIterator[dict]:
-        """Only a roleplay turn said differently gets Ryan's reply and a new rest of the script; the other modes
-        ask to follow the line and leave the script and the position alone."""
+        """A followed line gets the Mac's feedback; anything else, in every mode, gets teacher Ryan's Korean answer
+        and the same line again: the script never changes (spec offscript-aside)."""
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
         line = self.target_line(rp_id, idx, mode)
         n, rec = self.store.next_rec(rp_id, idx)
         rec.write_bytes(body)  # kept on the Mac (spec 「녹음과 기록」)
         wav = self.store.tmp_dir / f"{rp_id}-{idx}-{n}.wav"
+        heard_ko: str | None = None
         try:
             try:
                 seconds = await audio.to_wav16k(rec, wav)
@@ -304,73 +308,74 @@ class Engine:
                 yield self.error("no_speech")
                 return
             heard = await self.whisper.transcribe(wav, "en")
+            followed = bool(words(heard)) and similarity(line.text, heard) >= FOLLOW_MIN
+            if not followed:
+                # forced to English, whisper translates Korean or leaves it in Hangul (spec offscript-aside 2)
+                auto, lang = await self.whisper.transcribe_auto(wav)
+                if lang == "korean" and HANGUL.search(auto):
+                    heard_ko = auto
         finally:
             with contextlib.suppress(FileNotFoundError):
                 wav.unlink()
         timings["transcribed"] = time.perf_counter() - t0
-        if not words(heard):
+        shown = heard_ko or heard
+        if not (words(shown) or HANGUL.search(shown)):
             yield self.error("no_speech")
             return
-        followed = similarity(line.text, heard) >= FOLLOW_MIN
-        yield {"type": "heard", "text": heard, "followed": followed}
+        yield {"type": "heard", "text": shown, "followed": followed}
 
         issues: list[Issue] = []
         said: list[str] = []
         keys: list[str] = []
         failed = False
-        reply: ScriptLine | None = None
+        rp = self.load(rp_id)
         if followed:
             issues = find_issues(line.text, heard, limit=2)
             # 「나아진 점」: what the last followed try at this line pointed out, in any mode; a copied roleplay keeps
             # its own record (spec 「잘한 점 후보」)
-            earlier = [a for a in self.load(rp_id).attempts.get(idx, []) if a.followed]
+            earlier = [a for a in rp.attempts.get(idx, []) if a.followed]
             before = earlier[-1].issues if earlier else []
             # the roleplay's own turns only: a practice runs in an order the app keeps
-            last = mode in ("turn", "retry") and idx == len(self.load(rp_id).lines) - 1
+            last = mode in ("turn", "retry") and idx == len(rp.lines) - 1
             text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard, before), issues, last)
             nxt = idx + 1 if mode == "turn" else idx
-        elif mode != "turn":
-            text = _one(self.said("retry_offscript").text)
-            nxt = idx
         else:
-            try:
-                out = await self.claude.offscript(self.load(rp_id).frame, self.history(self.load(rp_id), idx),
-                                                  line.text, heard)
-            except ClaudeUnavailable:
-                out = None
-            if out is None:
-                text, failed = None, True
-                yield self.error("claude_unavailable", "claude_down")
-            else:
-                point, issues = self.point(out)
-                text = _one(point) if point else None
-                reply = ScriptLine(idx=idx + 1, speaker="ryan", text=out.reply_en.strip(), kind="reply")
-            nxt = idx + 2
-        if text is not None:
-            async for ev in self.speak(text, said, keys, timings, t0):
-                if ev["type"] == "error":
-                    failed = True
-                yield ev
-        if reply is not None:
-            # start rebuilding the rest first, so it runs while Ryan's reply is made and played (spec 「역할극의
-            # 한 차례」 5: 라이언이 대답하는 동안 다음 사용자 대사를 먼저 만든다)
-            await self.add_reply(rp_id, idx, heard, reply)
-            try:
-                reply.audio = await self.voice.say(reply.text, "ryan", "english", urgent=True)
-                await self.update_line(rp_id, reply.idx, reply.text, audio=reply.audio)
-            except VoiceError:
-                log.info("reply voice failed")
-            yield {"type": "reply", "line": reply.model_dump(mode="json")}
+            # the Mac's points only for an English try at the line (a Korean transcript is not one)
+            if heard_ko is None and words(heard):
+                issues = find_issues(line.text, heard, limit=2)
+            asides = [a for a in rp.attempts.get(idx, []) if a.aside][-ASIDES_KEPT:]
+            text = self._aside(self.claude.aside(rp.frame, self.history(rp, idx), line.text, heard, heard_ko, issues,
+                                                 [(a.heard, a.say_ko) for a in asides]))
+            nxt = idx
+        async for ev in self.speak(text, said, keys, timings, t0):
+            if ev["type"] == "error":
+                failed = True
+            yield ev
         timings["total"] = time.perf_counter() - t0
-        await self.save_attempt(rp_id, idx, Attempt(n=n, mode=mode, heard=heard, followed=followed, issues=issues,
+        await self.save_attempt(rp_id, idx, Attempt(n=n, mode=mode, heard=shown, followed=followed, issues=issues,
                                                     say_ko="".join(said), audio=keys, timings=timings,
-                                                    at=datetime.now().isoformat(timespec="seconds")),
-                                pos=nxt if (mode == "turn" and not failed) else None)
-        log.info("attempt %s/%d n=%d followed=%s issues=%d transcribed=%.2f first_text=%.2f first_audio=%.2f "
-                 "total=%.2f", rp_id, idx, n, followed, len(issues), timings.get("transcribed", 0),
-                 timings.get("first_text", 0), timings.get("first_audio", 0), timings["total"])
+                                                    at=datetime.now().isoformat(timespec="seconds"),
+                                                    aside=not followed),
+                                pos=nxt if (mode == "turn" and followed and not failed) else None)
+        log.info("attempt %s/%d n=%d followed=%s korean=%s issues=%d transcribed=%.2f first_text=%.2f "
+                 "first_audio=%.2f total=%.2f", rp_id, idx, n, followed, heard_ko is not None, len(issues),
+                 timings.get("transcribed", 0), timings.get("first_text", 0), timings.get("first_audio", 0),
+                 timings["total"])
         if not failed:
             yield {"type": "done", "next": nxt, "issues": len(issues)}
+
+    async def _aside(self, text: AsyncIterator[str]) -> AsyncIterator[str]:
+        """Teacher Ryan's answer; when Claude cannot answer (or stops midway), the fixed 「이번에는 대사를 그대로
+        따라 말해 볼까요?」 instead of an error, so the learner can try the line again (spec offscript-aside 3)."""
+        fixed = self.said("retry_offscript").text
+        got = False
+        try:
+            async for delta in text:
+                got = True
+                yield delta
+        except ClaudeUnavailable:
+            log.info("aside answer unavailable")
+            yield f" {fixed}" if got else fixed
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
                     timings: dict[str, float], t0: float) -> AsyncIterator[dict]:

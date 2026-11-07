@@ -129,13 +129,14 @@ async def test_shadow_on_ryan_line_is_evaluated_like_a_followed_line(engine_with
     assert saved.attempts[0][0].mode == "shadow" and saved.pos == 0
 
 
-async def test_shadow_said_differently_asks_to_follow(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+async def test_shadow_said_differently_gets_teacher_ryan(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    # spec offscript-aside 4: every practice answers like the roleplay, no longer one fixed phrase
     engine, rp_id, _ = engine_with_rp
-    before = engine.store.load(rp_id).lines
+    before = [l.text for l in engine.store.load(rp_id).lines]
     fake_whisper.text = "I have no idea at all."
     ev = await run(engine, rp_id, 0, speech_bytes, "shadow")
-    assert [e["delta"] for e in ev if e["type"] == "text"] == [engine.said("retry_offscript").text]
-    assert fake_claude.offscript_calls == [] and engine.store.load(rp_id).lines == before
+    assert "".join(e["delta"] for e in ev if e["type"] == "text") == "".join(fake_claude.aside_pieces)
+    assert [l.text for l in engine.store.load(rp_id).lines] == before
 
 
 async def test_practice_keeps_pos_and_script(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
@@ -143,10 +144,10 @@ async def test_practice_keeps_pos_and_script(engine_with_rp, speech_bytes, fake_
     before = engine.store.load(rp_id).lines
     fake_whisper.text = "I have no idea at all."
     ev = await run(engine, rp_id, user_idx, speech_bytes, "practice")
-    assert ev[-1] == {"type": "done", "next": user_idx, "issues": 0}
-    assert fake_claude.offscript_calls == []
+    assert ev[-1]["type"] == "done" and ev[-1]["next"] == user_idx and fake_claude.aside_calls
     saved = engine.store.load(rp_id)
-    assert saved.lines == before and saved.pos == 0 and saved.attempts[user_idx][0].mode == "practice"
+    assert [l.text for l in saved.lines] == [l.text for l in before] and saved.pos == 0
+    assert saved.attempts[user_idx][0].mode == "practice" and saved.attempts[user_idx][0].aside is True
 
 
 async def test_mode_must_match_the_speaker(engine_with_rp):
