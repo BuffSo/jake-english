@@ -275,7 +275,8 @@ async def test_create_keeps_the_topic(engine, fake_claude):
 
 
 async def test_create_from_a_pick_starts_with_its_speaker(engine, fake_claude):
-    rp = await engine.create("호텔 프런트에서 체크인한다.", "usa", first="user")
+    # a list pick goes through its fixed script now (spec fixed-list-scripts), still learner first
+    rp = await engine.create_pick("usa", "u-hotel-checkin")
     assert rp.lines[0].speaker == "user"
     assert engine.progress(rp.id, 0) == {"no": 1, "total": 3}
 

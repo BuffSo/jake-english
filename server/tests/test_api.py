@@ -290,12 +290,16 @@ def test_home_lists_topics(client):
 
 
 def test_create_from_a_pick(client, fake_claude):
+    # spec fixed-list-scripts 2: the repository's script, no Claude call for it; a second pick is the next run
     from je_server.topics import pick
 
     rp = client.post("/roleplays", json={"topic": "usa", "pick": "u-hotel-checkin"}).json()
-    assert rp["topic"] == "usa" and rp["lines"][0]["speaker"] == "user"
-    made = [a for n, a in fake_claude.calls if n == "make_script"][-1]
-    assert made == (pick("usa", "u-hotel-checkin").situation, "usa", "user")
+    assert (rp["topic"], rp["pick"], rp["origin"]) == ("usa", "u-hotel-checkin", None)
+    assert rp["frame"]["title_ko"] == "뉴욕 호텔 체크인"
+    assert [(l["speaker"], l["text"]) for l in rp["lines"]] == list(pick("usa", "u-hotel-checkin").script)
+    assert not any(n == "make_script" for n, _ in fake_claude.calls)
+    again = client.post("/roleplays", json={"topic": "usa", "pick": "u-hotel-checkin"}).json()
+    assert again["origin"] == rp["id"]
 
 
 def test_create_without_topic_is_other(client):
