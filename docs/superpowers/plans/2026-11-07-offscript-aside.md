@@ -667,7 +667,7 @@ EOF
 
 - [ ] **Step 2: APK를 빌드해 깐다**
 
-`app/README.md`대로: 원래 폴더의 `app/.env`를 복사하고, `export JAVA_HOME="$(/usr/libexec/java_home -v 17)"`, `-PreactNativeArchitectures=arm64-v8a`. adb는 `~/Library/Android/sdk/platform-tools/adb`로 부르고, 폰은 USB 쪽(이름에 `:`이 없고 `emulator-`가 아닌 것)을 `-s`로 고른다. 깔기 전에 「offscript-aside 카드의 APK이고 다른 카드의 APK를 덮는다」고 사용자에게 알린다.
+`app/README.md`대로: 원래 폴더의 `app/.env`를 복사하고, `export JAVA_HOME="$(/usr/libexec/java_home -v 17)"`, `-PreactNativeArchitectures=arm64-v8a`. adb는 PATH에 없으니 `app/README.md`대로 SDK의 `platform-tools/adb`를 부르고, 폰은 USB 쪽(이름에 `:`이 없고 `emulator-`가 아닌 것)을 `-s`로 고른다. 깔기 전에 「offscript-aside 카드의 APK이고 다른 카드의 APK를 덮는다」고 사용자에게 알린다.
 
 - [ ] **Step 3: 사용자에게 폰에서 볼 것을 알린다**
 
