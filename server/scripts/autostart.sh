@@ -95,6 +95,20 @@ loaded() {
   launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1
 }
 
+# bootout returns at once while the server is still shutting whisper-server and the voice worker down
+# (launchctl print shows "state = SIGTERMed"); wait until launchd lets the job go, so a worktree server
+# started next finds their ports free. launchd sends SIGKILL after 20 seconds (ExitTimeOut).
+unload() {
+  loaded || return 0
+  launchctl bootout "$DOMAIN/$LABEL" || true
+  i=0
+  while loaded; do
+    i=$((i + 1))
+    [ "$i" -le 60 ] || die "$LABEL is still stopping after 30 seconds; see: server/scripts/autostart.sh status"
+    sleep 0.5
+  done
+}
+
 installed() {
   [ -f "$PLIST" ] || die "not installed; run: server/scripts/autostart.sh install"
 }
@@ -106,19 +120,19 @@ case "${1:-}" in
   install)
     agent=$(make_plist)  # stops here, before anything is written, if a tool or server/.env is missing
     mkdir -p "$(dirname "$PLIST")" "$(dirname "$LOG")"
-    if loaded; then launchctl bootout "$DOMAIN/$LABEL"; fi
+    unload
     printf '%s\n' "$agent" >"$PLIST"
     plutil -lint -s "$PLIST"
     launchctl bootstrap "$DOMAIN" "$PLIST"
     echo "installed and started $LABEL"
     ;;
   uninstall)
-    if loaded; then launchctl bootout "$DOMAIN/$LABEL"; fi
+    unload
     rm -f "$PLIST"
     echo "stopped $LABEL and removed its agent file"
     ;;
   stop)
-    if loaded; then launchctl bootout "$DOMAIN/$LABEL"; fi
+    unload
     echo "stopped $LABEL until 'start' or the next login"
     ;;
   start)
@@ -134,7 +148,8 @@ case "${1:-}" in
     if [ ! -f "$PLIST" ]; then
       echo "not installed"
     elif loaded; then
-      launchctl print "$DOMAIN/$LABEL" | grep -E '^[[:space:]]*(state|pid|runs|last exit code) = '
+      tab=$(printf '\t')
+      launchctl print "$DOMAIN/$LABEL" | grep -E "^$tab(state|pid|runs|last exit code) = "
     else
       echo "installed but stopped (until 'start' or the next login)"
     fi

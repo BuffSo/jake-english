@@ -108,6 +108,37 @@ def test_refuses_when_the_original_folder_has_no_server_env(repo, tools, tmp_pat
     assert result.stdout == ""
 
 
+FAKE_LAUNCHCTL = """#!/bin/sh
+# launchd stand-in: after bootout the job stays listed (state SIGTERMed) for two more prints,
+# as the real one does while the server shuts whisper and the voice down
+state="$HOME/fake-launchd"
+case "$1" in
+  print)
+    [ -f "$state/loaded" ] || exit 113
+    if [ -f "$state/stopping" ]; then
+      left=$(cat "$state/stopping")
+      if [ "$left" -le 0 ]; then rm -f "$state/loaded" "$state/stopping"; exit 113; fi
+      echo $((left - 1)) > "$state/stopping"
+    fi
+    ;;
+  bootout) echo 2 > "$state/stopping" ;;
+esac
+"""
+
+
+def test_stop_returns_only_once_the_old_server_is_gone(repo, tools, tmp_path):
+    # a card starts its worktree server right after `stop`; the old whisper-server must not hold its port
+    main, _ = repo
+    home = tmp_path / "home"
+    (home / "fake-launchd").mkdir(parents=True)
+    (home / "fake-launchd" / "loaded").touch()
+    tools["launchctl"] = tool(tmp_path / "fakebin", "launchctl")
+    tools["launchctl"].write_text(FAKE_LAUNCHCTL)
+    result = run(main, home, tools, "stop")
+    assert result.returncode == 0, result.stderr
+    assert not (home / "fake-launchd" / "loaded").exists()
+
+
 def test_escapes_paths_for_the_plist(tmp_path, tools):
     # a folder name with & would otherwise break the XML
     base = tmp_path / "a&b"
