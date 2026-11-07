@@ -48,7 +48,8 @@ export default function App() {
       <SituationScreen
         sounds={sounds}
         home={home}
-        onCreated={(roleplay, jake) => dispatch({ type: "created", roleplay, jake })}
+        start={state.situationFrom}
+        onCreated={(roleplay, jake, from) => dispatch({ type: "created", roleplay, jake, from })}
         onBack={() => dispatch({ type: "home" })}
       />
     );
