@@ -45,7 +45,8 @@ class Engine:
         self.tasks: dict[tuple[str, int], asyncio.Task] = {}
         self.locks: dict[str, asyncio.Lock] = {}
         self.sem = asyncio.Semaphore(3)
-        self.threes: dict[tuple[str, int], asyncio.Task] = {}  # notes asked for on demand, one call per line
+        # notes being made, one call per line: Ryan's when asked, the learner's in the background from the start
+        self.threes: dict[tuple[str, int], asyncio.Task] = {}
         self.kos: dict[tuple[str, int], asyncio.Task] = {}  # Sohee's Korean asked for, one call per line
         self.saved_lock = asyncio.Lock()  # the saved-sentence file is read and written one change at a time
 
