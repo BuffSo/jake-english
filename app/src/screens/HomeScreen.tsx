@@ -10,9 +10,15 @@ import { RyanPortrait } from "../ui/RyanFace";
 import { colors, top } from "../ui/theme";
 import { messageOf, styles as common } from "./common";
 
-type Props = { sounds: SoundQueue; home: Home | null; setHome: (h: Home) => void; onRoleplay: () => void };
+type Props = {
+  sounds: SoundQueue;
+  home: Home | null;
+  setHome: (h: Home) => void;
+  onRoleplay: () => void;
+  onReview: () => void;
+};
 
-export function HomeScreen({ sounds, home, setHome, onRoleplay }: Props) {
+export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Props) {
   const [error, setError] = useState<string | null>(null);
   // App keeps `home` for as long as the app runs, so having it when this screen opens means Ryan has greeted
   // already and the learner came back, whichever way. Kept as it was at opening: `home` arriving from `load`
@@ -61,6 +67,8 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay }: Props) {
             </Text>
           ))}
           <Button label="상황 역할극" onPress={onRoleplay} />
+          {/* new or again: the first screen splits only these two (spec review-practice 1) */}
+          <Button label="다시 연습" onPress={onReview} />
         </>
       )}
       {error && (

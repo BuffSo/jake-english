@@ -10,12 +10,16 @@ import { CONFIGURED } from "./src/config";
 import { initial, reduce } from "./src/flow/state";
 import { EndScreen } from "./src/screens/EndScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
+import { PastScreen } from "./src/screens/PastScreen";
+import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { RoleplayScreen } from "./src/screens/RoleplayScreen";
+import { SavedScreen } from "./src/screens/SavedScreen";
 import { SituationScreen } from "./src/screens/SituationScreen";
 import { laterPictures } from "./src/ui/faces";
 import { Preload } from "./src/ui/Preload";
 import { ThinkingFaces } from "./src/ui/ThinkingFace";
 import { colors } from "./src/ui/theme";
+import { SavedProvider } from "./src/ui/useSaved";
 
 export default function App() {
   const [state, dispatch] = useReducer(reduce, initial);
@@ -31,7 +35,13 @@ export default function App() {
     screen = <Text style={styles.msg}>서버 설정이 없어요. app/.env를 채우고 다시 빌드해 주세요.</Text>;
   } else if (state.screen === "home" || (state.screen === "situation" && !home)) {
     screen = (
-      <HomeScreen sounds={sounds} home={home} setHome={setHome} onRoleplay={() => dispatch({ type: "chooseRoleplay" })} />
+      <HomeScreen
+        sounds={sounds}
+        home={home}
+        setHome={setHome}
+        onRoleplay={() => dispatch({ type: "chooseRoleplay" })}
+        onReview={() => dispatch({ type: "openReview" })}
+      />
     );
   } else if (state.screen === "situation" && home) {
     screen = (
@@ -42,8 +52,16 @@ export default function App() {
         onBack={() => dispatch({ type: "home" })}
       />
     );
+  } else if (state.screen === "review") {
+    screen = <ReviewScreen dispatch={dispatch} />;
+  } else if (state.screen === "past") {
+    screen = <PastScreen dispatch={dispatch} />;
+  } else if (state.screen === "saved") {
+    screen = <SavedScreen dispatch={dispatch} />;
   } else if (state.screen === "roleplay") {
-    screen = <RoleplayScreen state={state} dispatch={dispatch} sounds={sounds} />;
+    // keyed by roleplay: saved practice moves between roleplays, and the screen's notes, Sohee's lines and the
+    // models it has played are kept by line number (spec review-practice 7)
+    screen = <RoleplayScreen key={state.roleplay?.id} state={state} dispatch={dispatch} sounds={sounds} />;
   } else {
     screen = <EndScreen state={state} dispatch={dispatch} sounds={sounds} />;
   }
@@ -56,7 +74,9 @@ export default function App() {
       <SafeAreaView style={styles.root}>
         <StatusBar style="dark" />
         {/* the roleplay and end screens get no `home`, but their waits show Ryan's thinking face */}
-        <ThinkingFaces.Provider value={home?.images.thinking ?? null}>{screen}</ThinkingFaces.Provider>
+        <SavedProvider>
+          <ThinkingFaces.Provider value={home?.images.thinking ?? null}>{screen}</ThinkingFaces.Provider>
+        </SavedProvider>
         {home && <Preload paths={laterPictures(home.images)} />}
       </SafeAreaView>
     </SafeAreaProvider>
