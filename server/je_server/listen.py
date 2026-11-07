@@ -5,6 +5,10 @@ launchd starts the server at login, and Tailscale may not have put the Mac's add
 this wait whisper and the voice worker would load, the bind would fail, and launchd would start it
 all again every 10 seconds. The same wait covers a worktree server still holding the port
 (DEVENV guide 「카드가 서버를 시험할 때」). Any other bind error is left to uvicorn to report.
+
+A well-formed JE_HOST that is wrong (a mistyped digit) fails the same way as Tailscale not up yet,
+so the wait gives up after LIMIT with an error: launchd's last exit code and the log then show it,
+and launchd starts the cheap wait again (PR #26 review).
 """
 from __future__ import annotations
 
@@ -16,6 +20,7 @@ from collections.abc import Callable
 
 log = logging.getLogger("je_server")
 STEP = 2.0
+LIMIT = 300.0
 WAIT_ON = {errno.EADDRNOTAVAIL: "address not on this Mac yet", errno.EADDRINUSE: "port in use"}
 
 
@@ -29,13 +34,18 @@ def _bind_error(host: str, port: int) -> int | None:
     return None
 
 
-def wait_for_address(host: str, port: int, sleep: Callable[[float], None] = time.sleep) -> None:
+def wait_for_address(host: str, port: int, sleep: Callable[[float], None] = time.sleep,
+                     limit: float = LIMIT) -> None:
     code = _bind_error(host, port)
     if code is None:
         return
     log.info("waiting to bind JE_HOST:JE_PORT (%s)", WAIT_ON[code])
     started = time.monotonic()
-    while code is not None:
+    for _ in range(round(limit / STEP)):
         sleep(STEP)
         code = _bind_error(host, port)
-    log.info("JE_HOST:JE_PORT free after %.0fs", time.monotonic() - started)
+        if code is None:
+            log.info("JE_HOST:JE_PORT free after %.0fs", time.monotonic() - started)
+            return
+    raise SystemExit(f"could not bind JE_HOST:JE_PORT for {limit:.0f}s ({WAIT_ON[code]}); "
+                     "check JE_HOST in server/.env and that Tailscale is on")

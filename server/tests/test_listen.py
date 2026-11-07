@@ -57,5 +57,16 @@ def test_waits_while_the_port_is_taken_and_goes_on_once_it_is_free():
 
 
 def test_does_not_wait_on_a_host_that_cannot_be_an_ipv4_address():
-    # a mistyped JE_HOST must fail loudly in uvicorn, not wait forever
+    # a JE_HOST that is not an IPv4 address at all must fail loudly in uvicorn, not wait
     wait_for_address("::1", free_port(), sleep=no_sleep)
+
+
+def test_gives_up_with_an_error_after_the_limit():
+    # a well-formed but wrong JE_HOST (a mistyped digit) binds like Tailscale not up yet. Exiting
+    # with an error after the limit shows it in the log and in launchd's last exit code, instead of
+    # a server that looks running while nothing listens (PR #26 review)
+    sleeps: list[float] = []
+    with pytest.raises(SystemExit) as stopped:
+        wait_for_address(NOT_ON_THIS_MAC, free_port(), sleep=sleeps.append, limit=6.0)
+    assert len(sleeps) == 3
+    assert "JE_HOST" in str(stopped.value.code)
