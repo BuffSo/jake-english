@@ -17,10 +17,14 @@ export const HOW_LABEL: Record<HowChoice, string> = {
   describe: "직접 말하거나 쓰기",
 };
 
+// 「그 밖의 상황」: the topic without a role of its own, and the one a record from before topics belongs to. The Mac
+// server has the same id (`topics.OTHER`).
+export const OTHER_TOPIC = "other";
+
 // A Mac server from before topics sends none: the screen still opens, with 「그 밖의 상황」 only, which works with
 // that server as before (it ignores the topic it is sent). The new app crashed on it (final review, 2026-11-07).
 const BEFORE_TOPICS: Topic[] = [
-  { id: "other", name_ko: "그 밖의 상황", placeholder_ko: "예: 길에서 외국인이 지하철역을 물어보는 상황", picks: [] },
+  { id: OTHER_TOPIC, name_ko: "그 밖의 상황", placeholder_ko: "예: 길에서 외국인이 지하철역을 물어보는 상황", picks: [] },
 ];
 
 export function topicsOf(home: Pick<Home, "topics">): Topic[] {
@@ -48,6 +52,15 @@ export function backFrom(step: SituationStep, origin: Origin): SituationStep | n
     case "confirm":
       return origin;
   }
+}
+
+// Where the screen opens when the learner comes back from a roleplay: the step its situation was picked from, in the
+// same topic (spec situation-topics 2, 6). A topic the server no longer has starts at the topics, and a list that
+// has since emptied opens how to pick instead of a list without cards (todo 05).
+export function resumeFrom(start: SituationStart | null, topics: Topic[]): SituationStart | null {
+  const topic = start ? topics.find((t) => t.id === start.topic) : undefined;
+  if (!start || !topic) return null;
+  return start.step === "list" && topic.picks.length === 0 ? { ...start, step: "how" } : start;
 }
 
 export function startStep(start: SituationStart | null): SituationStep {

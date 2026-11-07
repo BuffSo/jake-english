@@ -112,6 +112,9 @@ export const ISSUE_KEYS = ["target", "heard", "say_ko"] as const;
 export const TRANSCRIPT_KEYS = ["line", "tries", "first"] as const;
 export const PAST_KEYS = ["group", "title_ko", "first", "latest"] as const;
 export const SAVED_KEYS = ["key", "rp_id", "idx", "speaker", "text", "title_ko", "at"] as const;
+// /home `topics` (spec situation-topics; contract/home-topics.json)
+export const TOPIC_KEYS = ["id", "name_ko", "placeholder_ko", "picks"] as const;
+export const PICK_KEYS = ["id", "title_ko"] as const;
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 export const KEYS_MATCH: [
@@ -125,4 +128,6 @@ export const KEYS_MATCH: [
   Same<keyof TranscriptLine, (typeof TRANSCRIPT_KEYS)[number]>,
   Same<keyof PastItem, (typeof PAST_KEYS)[number]>,
   Same<keyof SavedItem, (typeof SAVED_KEYS)[number]>,
-] = [true, true, true, true, true, true, true, true, true, true];
+  Same<keyof Topic, (typeof TOPIC_KEYS)[number]>,
+  Same<keyof Topic["picks"][number], (typeof PICK_KEYS)[number]>,
+] = [true, true, true, true, true, true, true, true, true, true, true, true];

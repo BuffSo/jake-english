@@ -105,8 +105,8 @@ def script_lines(user_turns: int, first: str = "ryan", last: str = "ryan") -> li
     return lines
 
 
-def script_json(user_turns: int) -> str:
-    return json.dumps({"frame": FRAME, "lines": script_lines(user_turns)})
+def script_json(user_turns: int, first: str = "ryan", last: str = "ryan") -> str:
+    return json.dumps({"frame": FRAME, "lines": script_lines(user_turns, first, last)})
 
 
 def three_json(text: str = "I like coffee.", stress_first: bool = True) -> str:

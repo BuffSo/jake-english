@@ -9,6 +9,7 @@ import secrets
 import tempfile
 from pathlib import Path
 
+from . import topics
 from .models import Roleplay, Saved
 
 ID = re.compile(r"^[0-9a-f]{12}$")
@@ -49,13 +50,44 @@ class Store:
     # --- saved sentences (ADR-0011): one file for all of them ----------------------------------------------------
 
     def load_saved(self) -> list[Saved]:
-        path = self.root / "saved.json"
-        if not path.exists():
-            return []
-        return [Saved.model_validate(s) for s in json.loads(path.read_text(encoding="utf-8"))]
+        """The saved sentences. An unreadable file or entry is skipped, like an unreadable roleplay in `all`: one bad
+        record must not take the whole list down (todo 01). The text is not logged."""
+        items, ok = self._read_saved()
+        if not ok:
+            log.warning("unreadable saved sentences skipped")
+        return items
 
     def save_saved(self, items: list[Saved]) -> None:
-        self._write(self.root / "saved.json", json.dumps([s.model_dump() for s in items], ensure_ascii=False, indent=1))
+        """Writes the list. A file that could not be read whole is first kept as saved.broken.json (then
+        saved.broken.2.json and so on, never over an earlier copy), so what was in it can still be put back by hand
+        (final review: a second breakage used to be lost). The copies stay in the app data folder until removed."""
+        path = self.root / "saved.json"
+        if path.exists() and not self._read_saved()[1]:
+            n = 1
+            while (broken := self.root / ("saved.broken.json" if n == 1 else f"saved.broken.{n}.json")).exists():
+                n += 1
+            path.replace(broken)
+            log.warning("kept unreadable saved sentences as %s", broken.name)
+        self._write(path, json.dumps([s.model_dump() for s in items], ensure_ascii=False, indent=1))
+
+    def _read_saved(self) -> tuple[list[Saved], bool]:
+        """The entries that could be read, and whether the whole file could."""
+        path = self.root / "saved.json"
+        if not path.exists():
+            return [], True
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            return [], False
+        if not isinstance(raw, list):
+            return [], False
+        items, ok = [], True
+        for entry in raw:
+            try:
+                items.append(Saved.model_validate(entry))
+            except ValueError:
+                ok = False
+        return items, ok
 
     def load(self, rp_id: str) -> Roleplay:
         path = self._dir(rp_id) / "roleplay.json"
@@ -74,9 +106,9 @@ class Store:
                     log.warning("unreadable roleplay %s", d.name)
         return found
 
-    def recent_situations(self, n: int = 10, topic: str = "other") -> list[str]:
-        """The topic's latest situations, for Jake to avoid. A roleplay from before topics counts as "other"."""
-        found = [(rp.created, rp.situation) for rp in self.all() if (rp.topic or "other") == topic]
+    def recent_situations(self, n: int = 10, topic: str = topics.OTHER) -> list[str]:
+        """The topic's latest situations, for Jake to avoid. A roleplay from before topics counts as 「그 밖의 상황」."""
+        found = [(rp.created, rp.situation) for rp in self.all() if (rp.topic or topics.OTHER) == topic]
         return [s for _, s in sorted(found, reverse=True)[:n]]
 
     def next_rec(self, rp_id: str, idx: int) -> tuple[int, Path]:

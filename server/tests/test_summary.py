@@ -110,3 +110,16 @@ async def test_old_offscript_try_still_shows_its_point(engine_with_rp):
                                                        audio=[], timings={}), None)
     [t] = tries(engine.summary(rp_id), user_idx)
     assert t["followed"] is False and t["point_ko"] == "이럴 때는 I'm not sure도 좋아요."
+
+
+async def test_latest_reads_the_records_once(engine_with_rp, speech_bytes, fake_whisper, monkeypatch):
+    # todo 01-3 (ADR-0011 「영향」): the last conversation reads every record; picking the run and its 「처음 녹음」
+    # read them twice before
+    engine, rp_id, user_idx = engine_with_rp
+    await run(engine, rp_id, user_idx, speech_bytes)
+    reads = []
+    real = engine.store.all
+    monkeypatch.setattr(engine.store, "all", lambda: reads.append(1) or real())
+    got = engine.latest(rp_id)
+    assert len(reads) == 1
+    assert got["roleplay"]["id"] == rp_id and got["summary"] == engine.summary(rp_id)
