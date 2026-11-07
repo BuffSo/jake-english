@@ -112,7 +112,7 @@ AI 초안이다. 사실은 상황 주제 스펙 3에서 확인한 것만 썼다.
 | R | Excuse me, do you speak English? I'm trying to get to Gyeongbokgung Palace. |
 | 나 | Sure. Take Line 4 from here, just one stop to Chungmuro. |
 | R | Chungmuro, got it. And then what? |
-| 나 | Transfer to Line 3 and get off at Gyeongbokgung Station. |
+| 나 | Change to Line 3 there, and get off at Gyeongbokgung. |
 | R | Great. Which exit should I use? |
 | 나 | Take Exit 5. It goes straight into the palace. |
 | R | Perfect. Thank you so much! |
@@ -170,7 +170,7 @@ AI 초안이다. 사실은 상황 주제 스펙 3에서 확인한 것만 썼다.
 |---|---|
 | 나 | Hi, I'd like to check in. The reservation is under Kim. |
 | R | Welcome! May I see your passport and a credit card, please? |
-| 나 | Sure, here you go. What time is checkout? |
+| 나 | Of course, here they are. When is checkout? |
 | R | Checkout is at 11 a.m. Here are your room keys. |
 | 나 | Thanks. And how do I get on the Wi-Fi? |
 | R | Just pick the hotel network. The password is on your key card sleeve. Enjoy your stay! |
@@ -179,12 +179,13 @@ AI 초안이다. 사실은 상황 주제 스펙 3에서 확인한 것만 썼다.
 
 - 틀: 나는 하와이에 여행 온 한국 사람, 라이언은 신발 가게 점원, 장소는 하와이 호놀룰루 알라모아나 센터의 신발 가게, 목표는 운동화를 다른 사이즈로 신어 보기.
 - 270은 받아쓰기가 숫자로 쓰든 낱말로 쓰든 같은 말로 본다(`compare._readings`).
+- 처음 초안의 내 대사 네 줄(경복궁 넷째 줄, 호텔 셋째 줄, 운동화 첫째와 셋째 줄)이 지난 역할극 기록에 소넷이 쓴 문장과 글자까지 같았다. 기록을 보지 않고 지은 흔한 말이지만, 「지난 역할극 기록의 대사를 옮기지 않는다」(제약)를 지키려고 PR 리뷰 뒤 바꿔 썼다(2026-11-08). 사실은 그대로다.
 
 | | 대사 |
 |---|---|
-| 나 | Excuse me, can I try these on in a different size? |
+| 나 | Hi, could I try these on in another size? |
 | R | Sure! What size do you need? |
-| 나 | I'm a 270 in Korea. I think that's a men's 9. |
+| 나 | In Korea I wear a 270. That's a men's 9, right? |
 | R | That's right, a men's 9. Let me grab a pair from the back. |
 | 나 | Great, thank you. I'll wait here. |
 
