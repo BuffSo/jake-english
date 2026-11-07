@@ -25,6 +25,7 @@ from .tts import audio_key
 log = logging.getLogger("je_server")
 LINE_WAIT = 120
 MAX_SECONDS = 60
+NEAR_MIN = 0.3  # below FOLLOW_MIN but at least this close to the line: a try at it, not something else
 ASIDES_KEPT = 3  # earlier asides on the line sent with a new one, for a question that follows Ryan's answer
 HANGUL = re.compile(r"[가-힣]")
 
@@ -299,8 +300,12 @@ class Engine:
                 yield self.error("no_speech")
                 return
             heard = await self.whisper.transcribe(wav, "en")
-            followed = bool(words(heard)) and similarity(line.text, heard) >= FOLLOW_MIN
-            if not followed:
+            close = similarity(line.text, heard) if words(heard) else 0.0
+            followed = close >= FOLLOW_MIN
+            # a try at the line that came out wrong: English, with the Mac's points. Auto-detection called 5 of 36
+            # followed English tries Korean on this Mac (2026-11-07), so it is not asked about these.
+            near = not followed and close >= NEAR_MIN
+            if not followed and not near:
                 # forced to English, whisper translates Korean or leaves it in Hangul (spec offscript-aside 2)
                 auto, lang = await self.whisper.transcribe_auto(wav)
                 if lang == "korean" and HANGUL.search(auto):
@@ -331,8 +336,8 @@ class Engine:
             text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard, before), issues, last)
             nxt = idx + 1 if mode == "turn" else idx
         else:
-            # the Mac's points only for an English try at the line (a Korean transcript is not one)
-            if heard_ko is None and words(heard):
+            # the Mac's points only for a try at the line; far from it, they would point at unrelated words
+            if near:
                 issues = find_issues(line.text, heard, limit=2)
             asides = [a for a in rp.attempts.get(idx, []) if a.aside][-ASIDES_KEPT:]
             text = self._aside(self.claude.aside(rp.frame, self.history(rp, idx), line.text, heard, heard_ko, issues,

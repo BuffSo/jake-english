@@ -63,8 +63,28 @@ async def test_korean_only_hangul_is_not_no_speech(engine_with_rp, speech_bytes,
 
 async def test_korean_heard_sends_no_issues(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
     engine, rp_id, user_idx = engine_with_rp
-    fake_whisper.text = "meaning of over there"  # 0.5 against the line: not followed
-    fake_whisper.auto_text, fake_whisper.auto_lang = "over there가 무슨 뜻이에요?", "korean"
+    fake_whisper.text = "What does it mean?"  # far from the line: not a try at it
+    fake_whisper.auto_text, fake_whisper.auto_lang = "그게 무슨 뜻이에요?", "korean"
+    await run(engine, rp_id, user_idx, speech_bytes)
+    assert fake_claude.aside_calls[-1]["issues"] == []
+
+
+async def test_accented_try_heard_as_korean_keeps_the_english_and_its_points(engine_with_rp, speech_bytes,
+                                                                            fake_whisper, fake_claude):
+    # final review + a count on this Mac: auto-detection called 5 of 36 followed English tries Korean, so a try
+    # close to the line is taken as English and is not transcribed again
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's light over hair."  # 0.5 against the line
+    fake_whisper.auto_text, fake_whisper.auto_lang = "잇츠 라이트 오버 헤어", "korean"
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[0]["text"] == "It's light over hair." and fake_whisper.langs == ["en"]
+    sent = fake_claude.aside_calls[-1]
+    assert sent["heard_ko"] is None and [i["target"] for i in sent["issues"]] == ["right", "there"]
+
+
+async def test_far_english_sends_no_points(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Can I get a latte instead?"
     await run(engine, rp_id, user_idx, speech_bytes)
     assert fake_claude.aside_calls[-1]["issues"] == []
 
