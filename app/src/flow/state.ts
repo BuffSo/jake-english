@@ -41,7 +41,8 @@ export type State = {
   heard: string | null;
   feedback: string;
   // the line was not followed and teacher Ryan answered: only 「다시 해 보기」, which leaves nothing in the
-  // conversation and keeps the mode, so a first turn stays a turn (spec offscript-aside 5, 6)
+  // conversation and keeps the mode, so a first turn stays a turn (spec offscript-aside 5, 6). Set by `heard`;
+  // cleared by `done` when the Mac found words heard differently, which makes it a try at the line.
   aside: boolean;
   nextIdx: number | null;
   message: string | null;
@@ -275,8 +276,10 @@ export function reduce(s: State, a: Action): State {
       const e = a.e;
       if (e.type === "heard") return { ...s, heard: e.text, aside: !e.followed };
       if (e.type === "text") return { ...s, feedback: s.feedback + e.delta };
-      // an aside is not a turn: where 「다음」 goes stays as it was
-      if (e.type === "done" && s.aside) return { ...s, phase: "evaluated" };
+      // an aside is not a turn: where 「다음」 goes stays as it was. A line not followed but with points from the Mac
+      // was a try at it, and moves on like a followed one (offscript-aside 6).
+      if (e.type === "done" && s.aside && e.issues === 0) return { ...s, phase: "evaluated" };
+      if (e.type === "done" && s.aside) return reduce({ ...s, aside: false }, a);
       if (e.type === "done")
         return { ...s, phase: "evaluated", nextIdx: s.mode === "turn" || s.nextIdx === null ? e.next : s.nextIdx };
       if (e.type === "error") {

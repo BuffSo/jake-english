@@ -661,3 +661,15 @@ test("an aside in a retry keeps where 다음 goes", () => {
   expect(s.nextIdx).toBe(2);
   expect(reduce(s, { type: "again" }).mode).toBe("retry");
 });
+
+test("a near miss with points moves on like a followed try", () => {
+  // the server found words heard differently (issues > 0): a try at the line, not an aside (offscript-aside 6)
+  let s = at("evaluating");
+  s = reduce(s, { type: "event", e: { type: "heard", text: "It's light over hair.", followed: false } });
+  s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 2 } });
+  expect(s.aside).toBe(false);
+  expect(s.nextIdx).toBe(2);
+  const next = reduce(s, { type: "next" });
+  expect(next.idx).toBe(2);
+  expect(next.history.map((b) => b.kind)).toEqual(["user"]);
+});
