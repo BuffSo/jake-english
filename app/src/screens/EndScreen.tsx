@@ -23,6 +23,8 @@ import { messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
 type Source = ReturnType<typeof api.audioSource>;
+const PAIR_GAP_MS = 600; // between the first and this run's recording
+
 type Star = { saved: boolean; busy: boolean; onPress: () => void };
 
 export function EndScreen({ state, dispatch, sounds }: Props) {
@@ -95,11 +97,14 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
     sounds.enqueue(src);
   }
 
-  // 「▶ 처음 녹음」: the first recording, then this run's (review-practice 4)
+  // 「▶ 처음 녹음」: the first recording, a short pause, then this run's (review-practice 4). Many recordings end right
+  // on the last word, so back to back the two ran together (todo 01).
   function playPair(pair: { first: TryRef; then: TryRef | null }) {
     sounds.clear();
     sounds.enqueue(api.recordingSource(pair.first.rp_id, pair.first.idx, pair.first.n));
-    if (pair.then) sounds.enqueue(api.recordingSource(pair.then.rp_id, pair.then.idx, pair.then.n));
+    if (!pair.then) return;
+    sounds.enqueuePause(PAIR_GAP_MS);
+    sounds.enqueue(api.recordingSource(pair.then.rp_id, pair.then.idx, pair.then.n));
   }
 
   function practise(kind: "mine" | "shadow", order: number[]) {
