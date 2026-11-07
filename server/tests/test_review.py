@@ -96,3 +96,18 @@ def test_first_try_falls_back_to_created():
     first = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", True, None)]})
     again = make(B, "2026-11-06T10:00:00", origin=A, tries={1: [(1, "turn", True, "2026-11-06T10:01:00")]})
     assert first_try([first, again], again, 1) == {"rp_id": A, "idx": 1, "n": 1}
+
+
+def test_first_try_never_from_this_run():
+    """「처음 하는 회차에는 나오지 않는다」 (spec 4): an off-script turn, then a practice in the same run (final review)."""
+    run = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", False, "2026-11-05T10:01:00"),
+                                                (2, "practice", True, "2026-11-05T10:05:00")]})
+    assert first_try([run], run, 1) is None
+
+
+def test_first_try_not_from_the_same_sentence_in_this_run():
+    twice = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", True, "2026-11-05T10:01:00")]})
+    twice.lines.append(ScriptLine(idx=3, speaker="user", text="A small latte, please!"))
+    twice.attempts[3] = [Attempt(n=1, mode="turn", heard="x", followed=True, issues=[], say_ko="", audio=[],
+                                 timings={}, at="2026-11-05T10:03:00")]
+    assert first_try([twice], twice, 3) is None

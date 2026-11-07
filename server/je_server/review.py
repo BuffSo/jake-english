@@ -59,8 +59,8 @@ def latest_run(rps: list[Roleplay], group: str) -> Roleplay | None:
 
 def first_try(group_runs: list[Roleplay], rp: Roleplay, idx: int) -> dict | None:
     """The earliest followed try at this sentence among the learner's lines of the group, by when it was recorded
-    (the run's creation for tries from before `Attempt.at`). None when that is one of this run's own roleplay tries
-    at this line, or for Ryan's lines."""
+    (the run's creation for tries from before `Attempt.at`). None when that is in this run, whatever line or mode:
+    「처음 하는 회차에는 나오지 않는다」 (final review), and for Ryan's lines."""
     if not 0 <= idx < len(rp.lines) or rp.lines[idx].speaker != "user":
         return None
     key = sentence_key(rp.lines[idx].text)
@@ -77,6 +77,6 @@ def first_try(group_runs: list[Roleplay], rp: Roleplay, idx: int) -> dict | None
     if best is None:
         return None
     _, run_id, line_idx, a = best
-    if run_id == rp.id and line_idx == idx and a.mode in ROLEPLAY_MODES:
+    if run_id == rp.id:
         return None
     return {"rp_id": run_id, "idx": line_idx, "n": a.n}
