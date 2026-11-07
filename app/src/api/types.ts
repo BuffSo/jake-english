@@ -41,6 +41,8 @@ export type Roleplay = {
   attempts: Record<string, Attempt[]>;
   pos: number;
   origin: string | null; // the first roleplay of its group when copied (ADR-0011)
+  // the situation topic's id; null on roleplays made before topics (spec situation-topics 7)
+  topic: string | null;
 };
 export type Said = { text: string; audio: string };
 // thinking-face picture paths per person, cross-faded while the app waits (/home `images.thinking`)
@@ -83,7 +85,7 @@ export type AttemptEvent =
   | { type: "done"; next: number; issues: number };
 
 // Key lists checked against contract/ by the tests; the type checks below keep them in step with the types.
-export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin"] as const;
+export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin", "topic"] as const;
 export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "reply", "error", "done"] as const;
