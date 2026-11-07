@@ -204,8 +204,8 @@ class Engine:
 
     async def ko(self, rp_id: str, idx: int) -> str:
         """Sohee's Korean for a line, made when first asked and kept on the line. Asks for the same line at once
-        share one Claude call. It waits neither for `self.sem`, which three-line notes can fill at the start of a
-        roleplay, nor for a rebuild of the rest of the script (spec 5, builder check)."""
+        share one Claude call. It does not wait for `self.sem`, which three-line notes can fill at the start of a
+        roleplay (spec 5, builder check)."""
         _, line = self.get_line(rp_id, idx)
         if line.ko is not None:
             return line.ko
@@ -220,7 +220,8 @@ class Engine:
 
     async def _make_ko(self, rp_id: str, idx: int) -> str:
         rp, line = self.get_line(rp_id, idx)
-        # the lines around it as the conversation went: Ryan's reply answers what the learner actually said (spec 3)
+        # the lines around it as the conversation went: in a record from before 2026-11-07, Ryan's in-role reply
+        # answers what the learner actually said (spec 3)
         went = self.history(rp, len(rp.lines))
         before = went[idx - 1] if idx > 0 else None
         after = went[idx + 1] if idx + 1 < len(went) else None
@@ -457,7 +458,8 @@ class Engine:
 
     @staticmethod
     def history(rp: Roleplay, upto: int) -> Draft:
-        """The conversation as it went: for a line said differently, what the learner actually said."""
+        """The conversation as it went: for a line said differently in a record from before 2026-11-07, what the
+        learner actually said."""
         out: Draft = []
         for l in rp.lines[:upto]:
             text = l.text
@@ -474,9 +476,10 @@ class Engine:
 
     def summary(self, rp_id: str, rps: list[Roleplay] | None = None) -> dict:
         """The end screen: every line with the learner's tries made inside the roleplay (spec roleplay-practice 3).
-        Practice after the roleplay is left out: 「주고받은 말」 is what was said, and Ryan's reply to a line said
-        differently answers that try. The closing words go by the same tries. `rps`: every record, when the caller
-        has just read them (`latest`), so they are not read again (todo 01, ADR-0011 「영향」)."""
+        Practice after the roleplay is left out: 「주고받은 말」 is what was said, and in a record from before
+        2026-11-07 Ryan's in-role reply to a line said differently answers that try. The closing words go by the
+        same tries. `rps`: every record, when the caller has just read them (`latest`), so they are not read again
+        (todo 01, ADR-0011 「영향」)."""
         rp = self.load(rp_id)
         group = group_of(rp)
         all_rps = self.store.all() if rps is None else rps
@@ -490,8 +493,8 @@ class Engine:
             lines.append({"line": l.model_dump(mode="json"), "tries": [
                 {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
                  "issues": [{"target": i.target, "heard": i.heard, "say_ko": issue_ko(i)} for i in a.issues],
-                 # Ryan's one point for a roleplay turn said differently; a retry said differently only asked
-                 # to follow the line, which is not a point (final review)
+                 # Ryan's one point for a roleplay turn said differently, in records from before 2026-11-07 (asides
+                 # are left out above); a retry said differently only asked to follow the line, not a point
                  # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
                  "point_ko": a.say_ko if a.mode == "turn" and not a.followed and not a.issues else ""}
                 for a in tries], "first": first_try(runs, rp, l.idx)})
@@ -512,7 +515,8 @@ class Engine:
 
     def saved(self) -> list[dict]:
         """Saved sentences, newest first (spec review-practice 6). The line is found again by its sentence when the
-        script was rebuilt after it was saved; one that is gone is left out of the list but kept in the file."""
+        script was rebuilt after it was saved (records from before 2026-11-07); one that is gone is left out of the
+        list but kept in the file."""
         out = []
         items = self.store.load_saved()  # in the order saved, so two saves in one second keep their order
         for _, s in sorted(enumerate(items), key=lambda p: (p[1].at, p[0]), reverse=True):
@@ -562,10 +566,6 @@ class Engine:
             if pos is not None:
                 rp.pos = max(rp.pos, pos)
             self.store.save(rp)
-
-
-async def _one(text: str) -> AsyncIterator[str]:
-    yield text
 
 
 def _quiet(task: asyncio.Task) -> None:
