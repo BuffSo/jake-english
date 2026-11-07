@@ -3,6 +3,7 @@
 // sign has no box behind it (user); an emoji keeps its own colours, a plain sign such as ↻ is drawn white.
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { keepWords } from "./keepWords";
 import { colors } from "./theme";
 
 type Props = { icon: string; title: string; line: string; color: string; onPress: () => void };
@@ -17,8 +18,8 @@ export function ChoiceCard({ icon, title, line, color, onPress }: Props) {
     >
       <Text style={styles.icon}>{icon}</Text>
       <View style={styles.body}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.line}>{line}</Text>
+        <Text style={styles.title}>{keepWords(title)}</Text>
+        <Text style={styles.line}>{keepWords(line)}</Text>
       </View>
       <Text style={styles.chevron}>›</Text>
     </Pressable>

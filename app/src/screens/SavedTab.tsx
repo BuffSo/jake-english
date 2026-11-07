@@ -11,6 +11,7 @@ import { dayKo } from "../flow/review";
 import type { Action } from "../flow/state";
 import { Button } from "../ui/Button";
 import { InRowButton } from "../ui/InRowButton";
+import { keepWords } from "../ui/keepWords";
 import { ListCard } from "../ui/ListCard";
 import { colors } from "../ui/theme";
 import { useSaved } from "../ui/useSaved";
@@ -76,7 +77,7 @@ export function SavedTab({ dispatch }: { dispatch: Dispatch<Action> }) {
     <View style={styles.wrap}>
       <ScrollView contentContainerStyle={styles.scroll}>
         {items?.length === 0 && (
-          <Text style={[common.sub, styles.empty]}>아직 모아 둔 문장이 없어요. 대화나 연습에서 ☆를 누르면 여기에 모여요.</Text>
+          <Text style={[common.sub, styles.empty]}>{keepWords("아직 모아 둔 문장이 없어요. 대화나 연습에서 ☆를 누르면 여기에 모여요.")}</Text>
         )}
         {items?.map((i) => (
           <ListCard key={i.key} onPress={() => start([i])} chevron={false}>
@@ -87,7 +88,7 @@ export function SavedTab({ dispatch }: { dispatch: Dispatch<Action> }) {
             </View>
             <Text style={styles.text}>{i.text}</Text>
             <Text style={styles.from}>
-              {i.title_ko} · {dayKo(i.at)}에 모음
+              {keepWords(`${i.title_ko} · ${dayKo(i.at)}에 모음`)}
             </Text>
           </ListCard>
         ))}

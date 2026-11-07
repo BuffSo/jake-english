@@ -27,6 +27,7 @@ import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { circleFace, type Face } from "../ui/faces";
 import { Named } from "../ui/Named";
+import { keepWords } from "../ui/keepWords";
 import { ListCard } from "../ui/ListCard";
 import { FaceCircle } from "../ui/RyanFace";
 import { ThinkingFace } from "../ui/ThinkingFace";
@@ -261,11 +262,11 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
       <View style={styles.wrap}>
         <BackButton onPress={back} floating />
         <Text style={[common.sub, styles.topic]}>{topic.name_ko}</Text>
-        {ryanSays && <Text style={[common.body, styles.say]}>{ryanSays}</Text>}
+        {ryanSays && <Text style={[common.body, styles.say]}>{keepWords(ryanSays)}</Text>}
         <ScrollView contentContainerStyle={styles.list}>
           {topic.picks.map((p) => (
             <ListCard key={p.id} onPress={() => create({ pick: p.id })}>
-              <Text style={common.body}>{p.title_ko}</Text>
+              <Text style={common.body}>{keepWords(p.title_ko)}</Text>
             </ListCard>
           ))}
         </ScrollView>
@@ -282,7 +283,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
         {step === "working" ? <ThinkingFace who={waiterOf(status)} size={160} fallback={circle} /> : circle}
       </View>
       {topic && step !== "topic" && <Text style={[common.sub, styles.topic]}>{topic.name_ko}</Text>}
-      {ryanSays && <Text style={[common.body, styles.say]}>{ryanSays}</Text>}
+      {ryanSays && <Text style={[common.body, styles.say]}>{keepWords(ryanSays)}</Text>}
       {step === "topic" &&
         topics.map((t) => (
           <Button key={t.id} label={t.name_ko} onPress={() => chooseTopic(t)} kind={t.id === OTHER ? "plain" : "primary"} />

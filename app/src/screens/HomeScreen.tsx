@@ -7,6 +7,7 @@ import type { SoundQueue } from "../audio/player";
 import { homeLines } from "../flow/homeLines";
 import { Button } from "../ui/Button";
 import { ChoiceCard } from "../ui/ChoiceCard";
+import { keepWords } from "../ui/keepWords";
 import { RyanPortrait } from "../ui/RyanFace";
 import { colors, top } from "../ui/theme";
 import { messageOf, styles as common } from "./common";
@@ -64,7 +65,7 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
         <>
           {homeLines(home.lines, returning).map((l) => (
             <Text key={l.audio} style={[common.body, styles.say]}>
-              {l.text}
+              {keepWords(l.text)}
             </Text>
           ))}
           {/* new or again: the first screen splits only these two (spec review-practice 1); each says what it does

@@ -9,6 +9,7 @@ import type { PastItem } from "../api/types";
 import { dayKo } from "../flow/review";
 import type { Action } from "../flow/state";
 import { Button } from "../ui/Button";
+import { keepWords } from "../ui/keepWords";
 import { ListCard } from "../ui/ListCard";
 import { colors } from "../ui/theme";
 import { messageOf, styles as common } from "./common";
@@ -36,7 +37,7 @@ export function PastTab({ dispatch }: { dispatch: Dispatch<Action> }) {
       {items?.map((i) => (
         <ListCard key={i.group} onPress={() => dispatch({ type: "openPastRun", group: i.group, title: i.title_ko })}>
           <View style={styles.row}>
-            <Text style={styles.title}>{i.title_ko}</Text>
+            <Text style={styles.title}>{keepWords(i.title_ko)}</Text>
             <Text style={styles.day}>{dayKo(i.latest)}</Text>
           </View>
         </ListCard>
