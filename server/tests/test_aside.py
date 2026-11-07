@@ -189,3 +189,21 @@ async def test_line_then_hangul_in_the_english_transcript_is_an_aside(engine_wit
     ev = await run(engine, rp_id, user_idx, speech_bytes)
     assert ev[0]["followed"] is False and fake_claude.feedback_calls == []
     assert ev[-1] == {"type": "done", "next": user_idx, "issues": 0}
+
+
+async def test_first_turn_after_a_korean_aside_moves_on(engine_with_rp, speech_bytes, fake_whisper):
+    # forced to English, whisper wrote nothing; auto-detection heard Korean. The aside keeps the first turn a turn,
+    # so following the line next moves the roleplay on (todo offscript-aside minors 6)
+    engine, rp_id, user_idx = engine_with_rp
+    pos = engine.store.load(rp_id).pos
+    fake_whisper.text = ""
+    fake_whisper.auto_text, fake_whisper.auto_lang = "잠깐만요, 다시 할게요", "korean"
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[0] == {"type": "heard", "text": "잠깐만요, 다시 할게요", "followed": False}
+    assert ev[-1] == {"type": "done", "next": user_idx, "issues": 0}
+    rp = engine.store.load(rp_id)
+    assert rp.pos == pos and rp.attempts[user_idx][-1].aside is True
+
+    fake_whisper.text, fake_whisper.auto_text = rp.lines[user_idx].text, None
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[-1]["next"] == user_idx + 1 and engine.store.load(rp_id).pos == user_idx + 1
