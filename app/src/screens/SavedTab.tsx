@@ -51,6 +51,10 @@ export function SavedTab({ dispatch }: { dispatch: Dispatch<Action> }) {
 
   function askRemove(i: SavedItem) {
     if (asking.current || saved.pending(i.text)) return; // asked already, or on its way out
+    // A practice on its way: the dialog stayed over the practice screen once it came, and 「빼기」 took out the sentence
+    // being practised (PR #30 review). The gate, not `starting`, which is the last render's value: a tap on ★ right
+    // after the row would still see it false.
+    if (gate.busy) return;
     asking.current = true;
     const done = () => {
       asking.current = false;
