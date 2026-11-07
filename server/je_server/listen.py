@@ -1,4 +1,4 @@
-"""Wait until the server can bind its address, before anything is loaded (ADR-0011).
+"""Wait until the server can bind its address, before anything is loaded (ADR-0012).
 
 launchd starts the server at login, and Tailscale may not have put the Mac's address on yet
 (ADR-0007: the server binds only that address). uvicorn binds after the app's startup, so without

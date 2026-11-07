@@ -1,5 +1,5 @@
 #!/bin/sh
-# Starts the Mac server at login and again whenever it dies, as a launchd user agent (ADR-0011).
+# Starts the Mac server at login and again whenever it dies, as a launchd user agent (ADR-0012).
 #
 #   server/scripts/autostart.sh install    write the agent and start it (replaces an older one)
 #   server/scripts/autostart.sh stop       stop it until `start` or the next login (to test a worktree server)

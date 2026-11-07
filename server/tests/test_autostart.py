@@ -1,4 +1,4 @@
-"""scripts/autostart.sh: the launchd agent it writes for the Mac server (ADR-0011).
+"""scripts/autostart.sh: the launchd agent it writes for the Mac server (ADR-0012).
 
 The script runs in a throwaway git repo with a worktree, a fake HOME and fake tools on PATH;
 nothing here touches launchctl or the real LaunchAgents folder.

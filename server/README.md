@@ -14,7 +14,7 @@ cp .env.example .env   # 값을 채운다. 경로는 비공개 메모를 본다
 
 ## 띄우기
 
-이 맥에서는 launchd가 띄운다(ADR-0011). 로그인할 때 띄우고, 죽으면 다시 띄운다. 처음 한 번 설치한다.
+이 맥에서는 launchd가 띄운다(ADR-0012). 로그인할 때 띄우고, 죽으면 다시 띄운다. 처음 한 번 설치한다.
 
 ```sh
 server/scripts/autostart.sh install    # 원래 폴더나 worktree 어디서든. 언제나 원래 폴더의 server/를 띄운다

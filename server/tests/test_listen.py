@@ -1,4 +1,4 @@
-"""wait_for_address: the server waits for its address before loading whisper and the voice (ADR-0011)."""
+"""wait_for_address: the server waits for its address before loading whisper and the voice (ADR-0012)."""
 import socket
 
 import pytest
