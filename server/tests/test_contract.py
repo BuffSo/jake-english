@@ -36,3 +36,9 @@ def test_summary_example_has_the_engine_shape():
 def test_past_example_has_the_engine_shape():
     raw = json.loads((CONTRACT / "past.json").read_text(encoding="utf-8"))
     assert set(raw) == {"items"} and all(set(i) == {"group", "title_ko", "first", "latest"} for i in raw["items"])
+
+
+def test_saved_example_has_the_engine_shape():
+    raw = json.loads((CONTRACT / "saved.json").read_text(encoding="utf-8"))
+    assert set(raw) == {"items"}
+    assert all(set(i) == {"key", "rp_id", "idx", "speaker", "text", "title_ko", "at"} for i in raw["items"])

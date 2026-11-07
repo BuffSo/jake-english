@@ -1,0 +1,13 @@
+{
+ "items": [
+  {
+   "key": "can i have a small latte please",
+   "rp_id": "a1b2c3d4e5f6",
+   "idx": 1,
+   "speaker": "user",
+   "text": "Can I have a small latte, please?",
+   "title_ko": "카페에서 주문하기",
+   "at": "2026-11-07T10:00:00"
+  }
+ ]
+}

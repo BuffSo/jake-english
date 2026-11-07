@@ -13,11 +13,11 @@ from . import audio
 from .claude import ClaudeUnavailable
 from . import sounds
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, sound_pairs, words
-from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, ScriptLine, ThreeLine
+from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
 from .sentences import SentenceBuffer
 from .tts import VoiceError
 from .phrases import PHRASES
-from .review import first_try, group_of, latest_run, past_items
+from .review import first_try, group_of, latest_run, past_items, sentence_key
 from .store import Store
 from .tts import audio_key
 
@@ -45,6 +45,7 @@ class Engine:
         self.left: dict[str, int] = {}  # learner lines the running rebuild is writing
         self.threes: dict[tuple[str, int], asyncio.Task] = {}  # notes asked for on demand, one call per line
         self.kos: dict[tuple[str, int], asyncio.Task] = {}  # Sohee's Korean asked for, one call per line
+        self.saved_lock = asyncio.Lock()  # the saved-sentence file is read and written one change at a time
 
     # --- fixed phrases ------------------------------------------------------------------------
 
@@ -511,6 +512,37 @@ class Engine:
         if rp is None:
             raise NotFound(group)
         return {"roleplay": rp.model_dump(mode="json"), "summary": self.summary(rp.id)}
+
+    def saved(self) -> list[dict]:
+        """Saved sentences, newest first (spec review-practice 6). The line is found again by its sentence when the
+        script was rebuilt after it was saved; one that is gone is left out of the list but kept in the file."""
+        out = []
+        items = self.store.load_saved()  # in the order saved, so two saves in one second keep their order
+        for _, s in sorted(enumerate(items), key=lambda p: (p[1].at, p[0]), reverse=True):
+            try:
+                rp = self.store.load(s.rp_id)
+            except KeyError:
+                continue
+            here = rp.lines[s.idx] if s.idx < len(rp.lines) else None
+            line = here if here and sentence_key(here.text) == s.key else next(
+                (l for l in rp.lines if sentence_key(l.text) == s.key), None)
+            if line is not None:
+                out.append({"key": s.key, "rp_id": rp.id, "idx": line.idx, "speaker": line.speaker, "text": line.text,
+                            "title_ko": rp.frame.title_ko, "at": s.at})
+        return out
+
+    async def set_saved(self, rp_id: str, idx: int, on: bool) -> dict:
+        """Saves or unsaves the line's sentence; one entry per sentence wherever it was saved (spec 5)."""
+        _, line = self.get_line(rp_id, idx)
+        key = sentence_key(line.text)
+        async with self.saved_lock:
+            items = self.store.load_saved()
+            if on and all(s.key != key for s in items):
+                items.append(Saved(key=key, rp_id=rp_id, idx=idx, at=datetime.now().isoformat(timespec="seconds")))
+            elif not on:
+                items = [s for s in items if s.key != key]
+            self.store.save_saved(items)
+        return {"key": key, "on": on}
 
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
         async with self.lock(rp_id):

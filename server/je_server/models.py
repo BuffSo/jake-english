@@ -91,6 +91,16 @@ class Roleplay(BaseModel):
     origin: str | None = None
 
 
+class Saved(BaseModel):
+    """A sentence the learner saved to practise (spec review-practice 5). The line's words, speaker and situation
+    are read from the roleplay, not kept twice (ADR-0011)."""
+
+    key: str  # sentence_key of the line's text: one entry per sentence
+    rp_id: str
+    idx: int
+    at: str  # when it was saved, ISO to the second
+
+
 class Said(BaseModel):
     text: str
     audio: str

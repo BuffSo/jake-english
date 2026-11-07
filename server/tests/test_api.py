@@ -251,3 +251,30 @@ def test_new_routes_need_token(settings, engine, fake_voice, fake_whisper):
     c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
     for path in ["/past", "/groups/000000000000/latest", "/roleplays/000000000000"]:
         assert c.get(path).status_code == 401
+
+
+def test_saved_routes(client):
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    r = client.post("/saved", json={"rp_id": rp["id"], "idx": 1, "on": True})
+    assert r.status_code == 200 and r.json()["on"] is True
+    [item] = client.get("/saved").json()["items"]
+    assert set(item) == {"key", "rp_id", "idx", "speaker", "text", "title_ko", "at"}
+    client.post("/saved", json={"rp_id": rp["id"], "idx": 1, "on": False})
+    assert client.get("/saved").json() == {"items": []}
+    assert client.post("/saved", json={"rp_id": "000000000000", "idx": 1, "on": True}).status_code == 404
+
+
+def test_saved_bad_body_rejected(client):
+    for body in [{"rp_id": "../x", "idx": 1, "on": True}, {"rp_id": "000000000000", "idx": -1, "on": True},
+                 {"rp_id": "000000000000", "idx": 1}]:
+        assert client.post("/saved", json=body).status_code == 422
+
+
+def test_saved_routes_need_token(settings, engine, fake_voice, fake_whisper):
+    from fastapi.testclient import TestClient
+
+    from je_server.app import Services, create_app
+
+    c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
+    assert c.get("/saved").status_code == 401
+    assert c.post("/saved", json={"rp_id": "000000000000", "idx": 1, "on": True}).status_code == 401
