@@ -70,15 +70,15 @@ async def test_korean_heard_sends_no_issues(engine_with_rp, speech_bytes, fake_w
 
 
 async def test_line_then_korean_is_an_aside(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
-    # phone test 2026-11-08: the learner began the line, then said in Korean that they need more practice. Forced to
+    # phone test 2026-11-08: the learner began the line, then talked to themself in Korean. Forced to
     # English, whisper translated the Korean, the text came out 0.38 like the line, and Ryan pointed at the
     # translation as words "heard differently". A recording that does not follow the line is always transcribed
     # again; Korean makes it an aside.
     engine, rp_id, user_idx = engine_with_rp
-    fake_whisper.text = "It's right... I should practice more."  # 0.4 against the line
-    fake_whisper.auto_text, fake_whisper.auto_lang = "잇츠 라잇... 연습을 좀 더 해야겠다", "korean"
+    fake_whisper.text = "It's right... wait, the store is closed."  # 0.36 against the line
+    fake_whisper.auto_text, fake_whisper.auto_lang = "잇츠 라잇... 아 그 가게 닫았나", "korean"
     ev = await run(engine, rp_id, user_idx, speech_bytes)
-    assert fake_whisper.langs == ["en", "auto"] and ev[0]["text"] == "잇츠 라잇... 연습을 좀 더 해야겠다"
+    assert fake_whisper.langs == ["en", "auto"] and ev[0]["text"] == "잇츠 라잇... 아 그 가게 닫았나"
     assert fake_claude.aside_calls[-1]["issues"] == [] and ev[-1] == {"type": "done", "next": user_idx, "issues": 0}
     assert engine.store.load(rp_id).attempts[user_idx][-1].aside is True
 
