@@ -155,6 +155,39 @@ def test_feedback_prompt_puts_the_improvement_first():
     assert "「이번에는」으로 시작하는 후보가 있으면 그것을 말해요" in prompts.FEEDBACK_SYSTEM
 
 
+def test_feedback_prompt_keeps_the_given_tip_and_hides_the_materials():
+    # phone test 2026-11-07: Haiku dropped the Mac's R/L tip as not fitting and told the learner what it had
+    # (「제가 가진 설명으로는…」, 「짚을 것이 없어요」); a live run said 「소리 내는 법 설명은 없으니」
+    from je_server import prompts
+
+    p = prompts.FEEDBACK_SYSTEM
+    assert "맞는지 따지지 않고 그대로 말해요" in p
+    assert "받은 자료의 이름을 말하지 않고, 자료가 없다는 말도 하지 않아요" in p
+    assert "「역할극」이라고 하지 않고 「대화」라고 해요" in p  # the app says 「대화」 (review-screens, 2026-11-07)
+    assert "받지 않은 조언" in p  # a live run added 「천천히」 and 「끊지 않고」
+
+
+def test_live_prompts_fit_the_particle_to_the_english_word():
+    # phone test 2026-11-08: teacher Ryan put 이 after a number read as words that ends without a final consonant
+    from je_server import prompts
+
+    for p in (prompts.FEEDBACK_SYSTEM, prompts.ASIDE_SYSTEM):
+        assert "받침" in p and "seventy가" in p and "room이" in p
+
+
+async def test_live_answers_drop_double_quotes():
+    # phone test 2026-11-08: Haiku quoted the transcript in double quotes; the prompts ask for none, this makes sure
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([['"room"이 ', '“loom”처럼 들렸어요. ', '"'], ['「key card」는 ', '"카드 열쇠"예요.']])
+    c = Claude(fake)
+    said = "".join([t async for t in c.feedback("a", "b", [], [])])
+    assert said == "room이 loom처럼 들렸어요. "
+    answered = "".join([t async for t in c.aside(Frame(**FRAME), [], "a", "b", None, [], [])])
+    assert answered == "「key card」는 카드 열쇠예요."
+
+
 # --- Sohee's interpretation (spec korean-translation 3) --------------------------------------------------------
 
 async def test_interpret_uses_the_quick_model_with_roles_and_neighbors():
