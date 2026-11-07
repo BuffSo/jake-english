@@ -14,9 +14,15 @@ cp .env.example .env   # 값을 채운다. 경로는 비공개 메모를 본다
 
 ## 띄우기
 
+이 맥에서는 launchd가 띄운다(ADR-0011). 로그인할 때 띄우고, 죽으면 다시 띄운다. 처음 한 번 설치한다.
+
 ```sh
-uv run python -m je_server
+server/scripts/autostart.sh install    # 원래 폴더나 worktree 어디서든. 언제나 원래 폴더의 server/를 띄운다
+server/scripts/autostart.sh status
 ```
+
+- 서버를 `kill`로 끄면 곧바로 다시 뜬다. worktree 서버로 시험할 때는 `stop`으로 멈추고 끝나면 `start`, 머지한 뒤에는 `restart`한다. 순서와 확인 방법은 `docs/guide/DEVENV_맥서버_저절로_띄우기_20261107.md`.
+- 손으로 띄우기(worktree에서 시험할 때): `uv run python -m je_server`
 
 ## Claude 모델 고르기
 
@@ -46,4 +52,4 @@ uv run pytest
   - 확인: `lsof -nP -iTCP:8787 -sTCP:LISTEN`에 Tailscale 주소만 보여야 한다.
 - 앱의 `app/.env`에도 같은 주소와 토큰을 넣고 빌드한다(`app/README.md`).
 - Tailscale Funnel, 포트 전달, 공개 터널은 쓰지 않는다. 확인: `tailscale funnel status`가 비어 있어야 한다.
-- 집 밖에서 쓰는 동안 맥은 켜져 있고 잠들지 않아야 한다. 맥을 다시 켜면 서버를 다시 띄운다(저절로 띄우기는 todo).
+- 집 밖에서 쓰는 동안 맥은 켜져 있고 잠들지 않아야 한다. 맥을 다시 켜면 로그인할 때 Tailscale과 서버가 함께 뜬다. 서버는 Tailscale 주소가 생길 때까지 기다린다. 로그인하기 전에는 둘 다 돌지 않는다.
