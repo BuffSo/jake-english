@@ -500,6 +500,9 @@ class Engine:
             rp = self.store.load(s.rp_id)
         except KeyError:
             return None
+        except ValueError:  # an unreadable record is skipped like in `Store.all`, not the whole list (todo 01)
+            log.warning("unreadable roleplay %s", s.rp_id)
+            return None
         here = rp.lines[s.idx] if s.idx < len(rp.lines) else None
         line = here if here and sentence_key(here.text) == s.key else next(
             (l for l in rp.lines if sentence_key(l.text) == s.key), None)

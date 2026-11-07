@@ -49,13 +49,39 @@ class Store:
     # --- saved sentences (ADR-0011): one file for all of them ----------------------------------------------------
 
     def load_saved(self) -> list[Saved]:
-        path = self.root / "saved.json"
-        if not path.exists():
-            return []
-        return [Saved.model_validate(s) for s in json.loads(path.read_text(encoding="utf-8"))]
+        """The saved sentences. An unreadable file or entry is skipped, like an unreadable roleplay in `all`: one bad
+        record must not take the whole list down (todo 01). The text is not logged."""
+        items, ok = self._read_saved()
+        if not ok:
+            log.warning("unreadable saved sentences skipped")
+        return items
 
     def save_saved(self, items: list[Saved]) -> None:
-        self._write(self.root / "saved.json", json.dumps([s.model_dump() for s in items], ensure_ascii=False, indent=1))
+        """Writes the list. A file that could not be read whole is kept once as saved.broken.json before it is
+        replaced, so what was in it can still be put back by hand."""
+        path, broken = self.root / "saved.json", self.root / "saved.broken.json"
+        if path.exists() and not self._read_saved()[1] and not broken.exists():
+            path.replace(broken)
+        self._write(path, json.dumps([s.model_dump() for s in items], ensure_ascii=False, indent=1))
+
+    def _read_saved(self) -> tuple[list[Saved], bool]:
+        """The entries that could be read, and whether the whole file could."""
+        path = self.root / "saved.json"
+        if not path.exists():
+            return [], True
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            return [], False
+        if not isinstance(raw, list):
+            return [], False
+        items, ok = [], True
+        for entry in raw:
+            try:
+                items.append(Saved.model_validate(entry))
+            except ValueError:
+                ok = False
+        return items, ok
 
     def load(self, rp_id: str) -> Roleplay:
         path = self._dir(rp_id) / "roleplay.json"

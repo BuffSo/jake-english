@@ -81,3 +81,34 @@ async def test_resave_after_line_lost(engine):
     [item] = engine.saved()
     assert (item["rp_id"], item["idx"]) == (other.id, 3)
     assert len(engine.store.load_saved()) == 1
+
+
+# todo 01-2: one unreadable record must not take the whole list down (`Store.all` already skips such a file)
+async def test_saved_list_skips_an_unreadable_roleplay(engine):
+    rp = await engine.create("길 묻기")
+    other = await engine.create("카페 주문")
+    await engine.set_saved(rp.id, 1, True)
+    await engine.set_saved(other.id, 2, True)
+    (engine.store._dir(other.id) / "roleplay.json").write_text("{ not json", encoding="utf-8")
+    assert [i["rp_id"] for i in engine.saved()] == [rp.id]
+
+
+async def test_saved_list_skips_an_unreadable_saved_file(engine):
+    (engine.store.root / "saved.json").write_text("{ not json", encoding="utf-8")
+    assert engine.saved() == []
+
+
+async def test_saved_list_skips_an_unreadable_entry(engine):
+    rp = await engine.create("길 묻기")
+    await engine.set_saved(rp.id, 1, True)
+    path = engine.store.root / "saved.json"
+    path.write_text(path.read_text(encoding="utf-8").replace("[", '[{"key": 3},', 1), encoding="utf-8")
+    assert [i["idx"] for i in engine.saved()] == [1]
+
+
+async def test_saving_over_an_unreadable_saved_file_keeps_a_copy(engine):
+    rp = await engine.create("길 묻기")
+    (engine.store.root / "saved.json").write_text("{ not json", encoding="utf-8")
+    await engine.set_saved(rp.id, 1, True)
+    assert [i["idx"] for i in engine.saved()] == [1]
+    assert (engine.store.root / "saved.broken.json").read_text(encoding="utf-8") == "{ not json"
