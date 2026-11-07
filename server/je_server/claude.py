@@ -58,6 +58,12 @@ def _problems_text(problems: list[str]) -> str:
     return "\n".join(f"- {p}" for p in problems)
 
 
+def _spoken(text: str) -> str:
+    """A line as it is shown and read out. Braces are JSON slipping into the text (phone test, 2026-11-07: Ryan's
+    reply ended in "for you.}"); no line says them."""
+    return text.replace("{", "").replace("}", "").strip()
+
+
 class Claude:
     def __init__(self, client: Any, writer: dict[str, Any] = SONNET, quick: dict[str, Any] = HAIKU):
         self.client = client
@@ -135,7 +141,7 @@ class Claude:
             data = await self._json(self.writer, prompts.SCRIPT_SYSTEM, content, prompts.SCRIPT_SCHEMA, 4000)
             try:
                 frame = Frame.model_validate(data["frame"])
-                draft: Draft = [(l["speaker"], l["text"].strip()) for l in data["lines"]]
+                draft: Draft = [(l["speaker"], _spoken(l["text"])) for l in data["lines"]]
             except (TypeError, KeyError, ValidationError):
                 problems = ["the answer did not follow the JSON format"]
                 continue
@@ -224,7 +230,8 @@ class Claude:
             out = Offscript.model_validate(data)
         except ValidationError as e:
             raise ClaudeUnavailable("bad off-script answer") from e
-        if not out.reply_en.strip():
+        out.reply_en = _spoken(out.reply_en)
+        if not out.reply_en:
             raise ClaudeUnavailable("empty reply")
         return out
 
@@ -235,7 +242,7 @@ class Claude:
             content = body if not problems else f"{body}\n\nThe last answer had problems. Fix them:\n{_problems_text(problems)}"
             data = await self._json(self.writer, prompts.CONTINUE_SYSTEM, content, prompts.CONTINUE_SCHEMA, 3000)
             try:
-                draft: Draft = [(l["speaker"], l["text"].strip()) for l in data["lines"]]
+                draft: Draft = [(l["speaker"], _spoken(l["text"])) for l in data["lines"]]
             except (TypeError, KeyError):
                 problems = ["the answer did not follow the JSON format"]
                 continue

@@ -341,3 +341,27 @@ def test_recommend_system_has_no_scene_of_its_own():
 
     assert "케이블카" not in prompts.RECOMMEND_SYSTEM and "외국인" not in prompts.RECOMMEND_SYSTEM
     assert "상황으로 연습해 보면 어때요?" in prompts.RECOMMEND_SYSTEM
+
+
+async def test_offscript_reply_drops_stray_braces():
+    # the phone test: Ryan's reply was stored and read out as "...the US size for you.}"
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    fake = FakeAnthropic([json.dumps({"point_kind": "none", "point_ko": "", "meant": "", "heard_word": "",
+                                      "reply_en": "I can look up the US size for you.}"})])
+    out = await Claude(fake).offscript(Frame(**FRAME), [], "a", "b")
+    assert out.reply_en == "I can look up the US size for you."
+
+
+async def test_script_lines_drop_stray_braces():
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    lines = json.dumps({"lines": [{"speaker": "user", "text": "{Thanks."}, {"speaker": "ryan", "text": "Bye!}"}]})
+    draft = await Claude(FakeAnthropic([lines])).continue_script(Frame(**FRAME), [("ryan", "Hi.")], 1)
+    assert draft == [("user", "Thanks."), ("ryan", "Bye!")]
+    script = json.loads(script_json(user_turns=3))
+    script["lines"][0]["text"] += "}"
+    _, draft = await Claude(FakeAnthropic([json.dumps(script)])).make_script("길 묻기", OTHER)
+    assert not any("}" in t for _, t in draft)
