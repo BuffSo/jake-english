@@ -144,3 +144,35 @@ async def test_both_transcripts_empty_is_no_speech(engine_with_rp, speech_bytes,
     fake_whisper.text = ""
     ev = await run(engine, rp_id, user_idx, speech_bytes)
     assert ev[-1]["code"] == "no_speech"
+
+
+# spec offscript-aside 6 (user, after the final review): a try at the line that got the Mac's points is not an aside.
+# It moves on like a followed try with points, so a line whisper keeps mishearing never traps the learner.
+async def test_near_miss_is_a_try_at_the_line(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's light over hair."
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[-1] == {"type": "done", "next": user_idx + 1, "issues": 2}
+    rp = engine.store.load(rp_id)
+    assert rp.pos == user_idx + 1 and rp.attempts[user_idx][-1].aside is False
+    s = engine.summary(rp_id)
+    [t] = next(l["tries"] for l in s["lines"] if l["line"]["idx"] == user_idx)
+    assert [i["target"] for i in t["issues"]] == ["right", "there"] and t["point_ko"] == ""
+    assert s["say"] == engine.said("closing_retry").model_dump()
+
+
+async def test_history_keeps_the_line_after_a_near_miss(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's light over hair."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    rp = engine.store.load(rp_id)
+    assert engine.history(rp, user_idx + 1)[-1] == ("user", rp.lines[user_idx].text)
+
+
+async def test_near_miss_points_count_for_the_next_praise(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's light over hair."
+    await run(engine, rp_id, user_idx, speech_bytes)
+    fake_whisper.text = "It's right over there."
+    await run(engine, rp_id, user_idx, speech_bytes, "retry")
+    assert fake_claude.feedback_calls[-1]["praise"][0] == "이번에는 right의 R 소리가 제대로 났어요"

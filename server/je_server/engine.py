@@ -327,9 +327,9 @@ class Engine:
         rp = self.load(rp_id)
         if followed:
             issues = find_issues(line.text, heard, limit=2)
-            # 「나아진 점」: what the last followed try at this line pointed out, in any mode; a copied roleplay keeps
-            # its own record (spec 「잘한 점 후보」)
-            earlier = [a for a in rp.attempts.get(idx, []) if a.followed]
+            # 「나아진 점」: what the last try at this line pointed out (followed, or a near miss with points), in any
+            # mode; a copied roleplay keeps its own record (spec 「잘한 점 후보」, offscript-aside 6)
+            earlier = [a for a in rp.attempts.get(idx, []) if a.followed or (a.issues and not a.aside)]
             before = earlier[-1].issues if earlier else []
             # the roleplay's own turns only: a practice runs in an order the app keeps
             last = mode in ("turn", "retry") and idx == len(rp.lines) - 1
@@ -342,7 +342,9 @@ class Engine:
             asides = [a for a in rp.attempts.get(idx, []) if a.aside][-ASIDES_KEPT:]
             text = self._aside(self.claude.aside(rp.frame, self.history(rp, idx), line.text, heard, heard_ko, issues,
                                                  [(a.heard, a.say_ko) for a in asides]))
-            nxt = idx
+            # a try at the line with points moves on like a followed one, so a line whisper keeps mishearing never
+            # traps the learner (user, 2026-11-07); anything else is an aside and stays on the line
+            nxt = idx + 1 if (mode == "turn" and issues) else idx
         async for ev in self.speak(text, said, keys, timings, t0):
             if ev["type"] == "error":
                 failed = True
@@ -351,8 +353,8 @@ class Engine:
         await self.save_attempt(rp_id, idx, Attempt(n=n, mode=mode, heard=shown, followed=followed, issues=issues,
                                                     say_ko="".join(said), audio=keys, timings=timings,
                                                     at=datetime.now().isoformat(timespec="seconds"),
-                                                    aside=not followed),
-                                pos=nxt if (mode == "turn" and followed and not failed) else None)
+                                                    aside=not followed and not issues),
+                                pos=nxt if (mode == "turn" and (followed or issues) and not failed) else None)
         log.info("attempt %s/%d n=%d followed=%s korean=%s issues=%d transcribed=%.2f first_text=%.2f "
                  "first_audio=%.2f total=%.2f", rp_id, idx, n, followed, heard_ko is not None, len(issues),
                  timings.get("transcribed", 0), timings.get("first_text", 0), timings.get("first_audio", 0),
@@ -431,7 +433,10 @@ class Engine:
             if l.speaker == "user":
                 # asides are not turns (spec offscript-aside 6); old records' turns said differently still are
                 turns = [a for a in rp.attempts.get(l.idx, []) if a.mode == "turn" and not a.aside]
-                if turns and not turns[-1].followed:
+                # what was said only where Ryan answered it in role: records from before 2026-11-07 (a reply line
+                # follows); a near miss since then is a try at the script line
+                answered = l.idx + 1 < len(rp.lines) and rp.lines[l.idx + 1].kind == "reply"
+                if turns and not turns[-1].followed and answered:
                     text = turns[-1].heard
             out.append((l.speaker, text))
         return out
