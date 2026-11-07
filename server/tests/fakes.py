@@ -172,9 +172,9 @@ class FakeClaude:
         self._maybe_fail()
         return "카페에서 커피를 주문하는 상황으로 연습해 보면 어때요?"
 
-    async def feedback(self, line, heard, praise, issues):
+    async def feedback(self, line, heard, praise, issues, last=False):
         self.feedback_calls.append({"line": line, "heard": heard, "praise": praise,
-                                    "issues": [i.model_dump() for i in issues]})
+                                    "issues": [i.model_dump() for i in issues], "last": last})
         self._maybe_fail()
         for piece in self.feedback_pieces:
             yield piece

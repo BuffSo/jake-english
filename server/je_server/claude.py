@@ -260,13 +260,16 @@ class Claude:
 
     # --- feedback on a followed line ----------------------------------------------------------
 
-    async def feedback(self, line: str, heard: str, praise: list[str], issues: list[Issue]) -> AsyncIterator[str]:
-        """Streams Ryan's Korean feedback. Only the line, the transcript and the Mac's findings go out."""
+    async def feedback(self, line: str, heard: str, praise: list[str], issues: list[Issue],
+                       last: bool = False) -> AsyncIterator[str]:
+        """Streams Ryan's Korean feedback. Only the line, the transcript and the Mac's findings go out. `last`: the
+        line ends the roleplay, so there is no next line to move on to (a script may end with the learner)."""
         found = {
             "대사": line,
             "들린 말": heard,
             "잘한 점 후보": praise,
             "짚을 것": [{"대사 낱말": i.target, "들린 낱말": i.heard, "소리 내는 법": i.explain} for i in issues],
+            "마지막 대사": last,
         }
         kw = {k: v for k, v in self.quick.items() if k != "effort"}
         try:

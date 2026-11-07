@@ -157,3 +157,18 @@ async def test_mode_must_match_the_speaker(engine_with_rp):
         engine.target_line(rp_id, 0, "turn")
     with pytest.raises(NotFound):
         engine.target_line(rp_id, user_idx, "shadow")
+
+
+async def test_feedback_knows_when_the_line_ends_the_roleplay(engine, speech_bytes, fake_whisper, fake_claude):
+    # phone test 2026-11-07: the script ended with the learner's line and Ryan still said 「다음 대사로 넘어가요」
+    fake_claude.script_last = "user"
+    rp = await engine.create("길 묻기")
+    first = next(l for l in rp.lines if l.speaker == "user")
+    last = rp.lines[-1]
+    assert last.speaker == "user" and last.idx != first.idx
+    for line, mode in ((first, "turn"), (last, "turn"), (last, "retry"), (last, "practice")):
+        await engine.line(rp.id, line.idx)
+        fake_whisper.text = line.text
+        await run(engine, rp.id, line.idx, speech_bytes, mode)
+    # practice runs in an order only the app knows, so the server never calls a practice line the last
+    assert [c["last"] for c in fake_claude.feedback_calls] == [False, True, True, False]

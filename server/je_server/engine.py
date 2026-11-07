@@ -325,7 +325,9 @@ class Engine:
             # its own record (spec 「잘한 점 후보」)
             earlier = [a for a in self.load(rp_id).attempts.get(idx, []) if a.followed]
             before = earlier[-1].issues if earlier else []
-            text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard, before), issues)
+            # the roleplay's own turns only: a practice runs in an order the app keeps
+            last = mode in ("turn", "retry") and idx == len(self.load(rp_id).lines) - 1
+            text = self.claude.feedback(line.text, heard, praise_candidates(line.text, heard, before), issues, last)
             nxt = idx + 1 if mode == "turn" else idx
         elif mode != "turn":
             text = _one(self.said("retry_offscript").text)

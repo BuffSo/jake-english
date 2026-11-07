@@ -365,3 +365,15 @@ async def test_script_lines_drop_stray_braces():
     script["lines"][0]["text"] += "}"
     _, draft = await Claude(FakeAnthropic([json.dumps(script)])).make_script("길 묻기", OTHER)
     assert not any("}" in t for _, t in draft)
+
+
+async def test_feedback_says_whether_the_line_is_the_last():
+    from je_server import prompts
+
+    fake = FakeAnthropic([["잘했어요."], ["잘했어요."]])
+    c = Claude(fake)
+    [t async for t in c.feedback("Thanks!", "Thanks!", [], [], last=True)]
+    [t async for t in c.feedback("Hi.", "Hi.", [], [])]
+    assert [json.loads(r["messages"][0]["content"])["마지막 대사"] for r in fake.requests] == [True, False]
+    assert "마지막 대사" in prompts.FEEDBACK_SYSTEM and "다음 대사로 넘어가자고 하지 않아요" in prompts.FEEDBACK_SYSTEM
+    assert "마지막 대사여도 한 번 더 해 보자고 해요. 이때는 대화를 마쳤다고 말하지 않아요" in prompts.FEEDBACK_SYSTEM
