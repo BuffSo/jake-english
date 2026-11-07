@@ -91,6 +91,14 @@ superpowers의 작업 기록(`.superpowers/sdd/`)은 마지막 리뷰가 끝나�
 - **worktree 세션:** 그 일의 스펙, 계획, 구현, PR, 리뷰, devlog를 맡는다. 머지한 뒤 정리한다.
 - Claude Code가 아닌 에이전트는 `--agent codex`처럼 바꾼다. 오르카를 쓸 수 없으면 에이전트의 도구로 worktree를 만든다(Claude Code는 `CLAUDE.md`).
 
+### 맥 서버는 launchd가 띄운다 (2026-11-07 결정)
+
+원래 폴더의 맥 서버는 launchd가 로그인할 때 띄우고, 죽으면 다시 띄운다(ADR-0011). 그래서 `kill`로 끄면 곧바로 다시 뜨고, `nohup`으로 따로 띄우면 포트를 두고 다툰다. 서버는 아래 명령으로만 끄고 켠다.
+
+- **worktree 서버로 시험할 때:** 사용자에게 알린 뒤 `server/scripts/autostart.sh stop`으로 멈춘다. 시험이 끝나면 worktree 서버를 끄고 `start`로 되돌린다.
+- **머지한 뒤:** 원래 폴더의 main을 fast-forward하고 `server/scripts/autostart.sh restart`로 새 코드를 띄운다.
+- 순서와 확인 방법은 `docs/guide/DEVENV_맥서버_저절로_띄우기_20261107.md`에 있다.
+
 ### worktree와 비공개 파일 (2026-11-04 확인, 2026-11-05 고침)
 
 worktree는 git에 든 파일만 펼친다. 그래서 `docs/private/`와 `.env`가 빠진다.
