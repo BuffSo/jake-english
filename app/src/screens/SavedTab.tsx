@@ -65,7 +65,7 @@ export function SavedTab({ dispatch }: { dispatch: Dispatch<Action> }) {
           style: "destructive",
           onPress: () => {
             done();
-            void saved.toggle(i.rp_id, i.idx, i.text);
+            void saved.remove(i.rp_id, i.idx, i.text);
           },
         },
       ],
