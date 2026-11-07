@@ -153,8 +153,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   function askLeave() {
     if (!askFirst(state)) return void leave();
     Alert.alert(
-      "역할극을 그만둘까요?",
-      "하던 역할극은 아직 이어 할 수 없어요.",
+      "대화를 그만둘까요?",
+      "하던 대화는 아직 이어 할 수 없어요.",
       [
         { text: "계속하기", style: "cancel" },
         { text: "그만두기", style: "destructive", onPress: () => void leave() },
@@ -628,7 +628,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
               {state.phase === "evaluated" && (
                 <View style={styles.row}>
                   <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} kind="plain" />
-                  <Button label={midway ? "역할극으로" : "다음"} onPress={() => dispatch({ type: "next" })} />
+                  <Button label={midway ? "대화로 돌아가기" : "다음"} onPress={() => dispatch({ type: "next" })} />
                 </View>
               )}
             </>
