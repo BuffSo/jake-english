@@ -1,7 +1,7 @@
 import type { AttemptEvent, ScriptLine, TalkEnd } from "../api/types";
 import endJson from "../../../contract/talk-end.json";
 import { MIC_FAILED } from "./state";
-import { canTry, fixCount, fixInitial, fixMessageIsError, fixReduce, isLastFix, nextLabel, type FixAction, type FixState } from "./talkFix";
+import { canTry, fixCount, fixInitial, fixMessageIsError, fixReduce, isLastFix, nextLabel, soheeLine, type FixAction, type FixState } from "./talkFix";
 
 const end = endJson as unknown as TalkEnd;
 const item = end.items[0];
@@ -139,4 +139,12 @@ test("canTry: the mic starts only on a loaded fix that is ready or evaluated", (
   expect(canTry(done)).toBe(true);
   // an error before the line loaded has no line to try
   expect(canTry(run(fixInitial("rp1", end), { type: "lineFailed", message: "x" }))).toBe(false);
+});
+
+test("soheeLine counts the Sohee chances used, and is null for none or an older server", () => {
+  expect(soheeLine({ ...end, sohee: 2 })).toBe("소희 찬스 2번 썼어요");
+  expect(soheeLine({ ...end, sohee: 1 })).toBe("소희 찬스 1번 썼어요");
+  expect(soheeLine({ ...end, sohee: 0 })).toBeNull();
+  const { sohee: _, ...older } = { ...end, sohee: 3 };
+  expect(soheeLine(older)).toBeNull();
 });
