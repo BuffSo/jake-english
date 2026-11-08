@@ -449,6 +449,8 @@ def test_aside_prompt_answers_about_an_earlier_point():
     assert '"이 대사의 앞 시도"' in p and "물을 때만" in p and "이어서 빨리 말하면" in p
     # live, after the first fix: 「낱말 끝의 t 소리가 약하게 나면 lake처럼 들리기도 해요」, a sound guessed at
     assert "어느 소리가 어떻게 났는지는 짐작해 말하지 않아요" in p
+    # todo 40 2's answer and a recording test after the fix told the learner to speak slowly or 또박또박
+    assert "천천히, 또박또박처럼 받지\n  않은 조언도 하지 않아요" in p
     assert "앞서 선생님에게 한 말" not in p
 
 
@@ -461,6 +463,15 @@ def test_aside_prompt_covers_a_try_without_points():
     assert "받은 짚을 것이 없으면" in p and "대사와 조금 다르게 들렸어요" in p
     rules = p[p.index("규칙:"):]
     assert rules.splitlines()[1].startswith("- 답에는 학습자에게 하는 말만 써요")
+
+
+def test_aside_prompt_answers_a_remark_to_oneself():
+    # live after todo 40's first fixes: a sleepy remark got 「대사와는 상관없는 말로 들렸어요」 in 3 of 3; an example of
+    # answering the remark itself, like the app wish one
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert "짧게 맞장구치고" in p and "예(상황과 상관없는 혼잣말일 때)" in p
 
 
 def test_aside_prompt_points_to_skip():
@@ -705,6 +716,13 @@ async def test_aside_drops_sentences_that_name_its_materials(caplog):
                                 "더 해 볼까요?"])
     assert "".join(out) == "한 번 더 해 볼까요?"
     assert caplog.text.count("aside sentence dropped") == 2 and "짚을" not in caplog.text
+
+
+async def test_aside_drops_how_the_recording_was_sorted():
+    # live after todo 40's first fixes: the prompt's sorting and its word for the learner, said to the learner
+    out = await _aside_out(["학습자가 한국어로 혼잣말을 한 경우. ", "대사와는 상관없는 말로 들렸어요. ",
+                            "졸리신가 봐요. ", "다시 해 볼까요?"])
+    assert "".join(out) == "졸리신가 봐요. 다시 해 볼까요?"
 
 
 async def test_aside_with_every_sentence_dropped_yields_nothing():

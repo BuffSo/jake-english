@@ -56,9 +56,11 @@ DOUBLE_QUOTES = str.maketrans("", "", "\"“”")
 # Words of teacher Ryan's prompt that are never for the learner: the names of what he is given and how the prompt sorts
 # or holds back. A sentence with one is dropped before the learner sees or hears it (todo 40 2: on a try with no points
 # he said 「「짚을 것」이 비어 있으니 … 갈라 말하지 않고 …」). 「짚은」 stays: 「아까 짚은 곳은 …」 answers a question
-# about the try before (todo 40 1). scripts/check_ryan_wording.py counts these in the model's own answer.
+# about the try before (todo 40 1). The prompt calls the learner 「학습자」 and sorts what was said into 혼잣말 and
+# 상관없는 말; live, he once began 「학습자가 한국어로 혼잣말을 한 경우.」 and often 「대사와는 상관없는 말로 들렸어요」
+# (PR #42 fixed the prompt for it). scripts/check_ryan_wording.py counts these in the model's own answer.
 ASIDE_LEAKS = ("짚을", "대사 낱말", "들린 낱말", "영어 받아쓰기", "한국어 받아쓰기", "앞 시도", "선생님에게 한 말", "자료",
-               "지시", "갈래", "갈라 말", "말하지 않을게", "말하지 않겠")
+               "지시", "갈래", "갈라 말", "말하지 않을게", "말하지 않겠", "학습자", "상관없는 말", "혼잣말")
 SENTENCE_END = re.compile(r"(?<=[.?!])\s+")  # where sentences.SentenceBuffer cuts for the voice
 
 
