@@ -48,6 +48,7 @@ export default function App() {
         home={home}
         start={state.situationFrom}
         onCreated={(roleplay, jake, from) => dispatch({ type: "created", roleplay, jake, from })}
+        onResume={(resume) => dispatch({ type: "resumed", resume })}
         onBack={() => dispatch({ type: "home" })}
       />
     );

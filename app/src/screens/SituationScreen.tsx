@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../api";
-import type { Home, Roleplay, Said, Topic } from "../api/types";
+import type { Home, Resume, Roleplay, Said, Topic } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, createLatch } from "../flow/gate";
+import { pending, RESUME_WAIT_MS } from "../flow/pending";
+import { resumeLabel } from "../flow/resume";
 import {
   backFrom,
   canStart,
@@ -31,6 +33,7 @@ import { circleFace, type Face } from "../ui/faces";
 import { Named } from "../ui/Named";
 import { keepWords } from "../ui/keepWords";
 import { ListCard } from "../ui/ListCard";
+import { ResumeRow } from "../ui/ResumeRow";
 import { FaceCircle } from "../ui/RyanFace";
 import { ThinkingFace } from "../ui/ThinkingFace";
 import { colors, top } from "../ui/theme";
@@ -43,6 +46,8 @@ type Props = {
   // where back from the roleplay comes to: the topic and the step its situation was picked from (null: the topics)
   start: SituationStart | null;
   onCreated: (rp: Roleplay, jake: Said | null, from: SituationStart) => void;
+  // the row on the topic step: resume the newest conversation (spec resume-roleplay 4)
+  onResume: (r: Resume) => void;
   onBack: () => void;
 };
 type Choice = { situation: string } | { pick: string };
@@ -51,7 +56,7 @@ const WANTS_RECOMMEND = /모르겠|추천/;
 
 // The situation screen: the topic first, then how to pick the situation (spec situation-topics 2). The steps and
 // what back does are in flow/situation.ts.
-export function SituationScreen({ sounds, home, start, onCreated, onBack }: Props) {
+export function SituationScreen({ sounds, home, start, onCreated, onResume, onBack }: Props) {
   const topics = topicsOf(home);
   const known = resumeFrom(start, topics);
   const [topicId, setTopicId] = useState<string | null>(known?.topic ?? null);
@@ -70,6 +75,22 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
   const [jakeFailed, setJakeFailed] = useState(false); // Jake's picture did not load: Ryan's face instead
   const shown = useRef<Face>("listening"); // the circle's face before a wait, kept until the thinking face comes
   const topic: Topic | null = topics.find((t) => t.id === topicId) ?? null;
+  // the newest conversation to resume, asked once when the screen opens (spec resume-roleplay 4)
+  const [resume, setResume] = useState<Resume | null>(null);
+
+  // after what the roleplay screen left running: an evaluation moves the place only when it has finished (`pending`).
+  // A failure leaves the screen as it was, without the row.
+  useEffect(() => {
+    let alive = true;
+    pending
+      .settled(RESUME_WAIT_MS)
+      .then(() => api.resume())
+      .then((r) => alive && setResume(r))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -289,6 +310,20 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
         topics.map((t) => (
           <Button key={t.id} label={t.name_ko} onPress={() => chooseTopic(t)} kind={t.id === OTHER_TOPIC ? "secondary" : "primary"} />
         ))}
+      {/* at the very bottom, apart from the topics: not a topic, and showing up late it pushes nothing (the user
+          chose it from the drafts) */}
+      {step === "topic" && resume && (
+        <>
+          <View style={styles.push} />
+          <ResumeRow
+            line={resumeLabel(resume)}
+            onPress={() => {
+              sounds.clear();
+              onResume(resume);
+            }}
+          />
+        </>
+      )}
       {step === "how" &&
         topic &&
         howChoices(topic).map((c, i) => (
@@ -361,4 +396,5 @@ const styles = StyleSheet.create({
   },
   // the gray rounded cards, the same as the lists of 「복습하기」 (spec review-screens 5)
   list: { paddingBottom: 12 },
+  push: { flex: 1 },
 });
