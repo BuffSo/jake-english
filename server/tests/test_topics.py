@@ -44,6 +44,12 @@ def test_pick_must_belong_to_the_topic():
         get("nope")
 
 
+def test_examples_end_at_the_situation_without_an_ending():
+    # the server picks Jake's ending (2026-11-08); an example with one would pull every suggestion toward it
+    for t in TOPICS:
+        assert t.example_ko.endswith("상황") and "어때요" not in t.example_ko
+
+
 def test_public_leaves_out_prompt_text():
     out = public()
     assert [t["id"] for t in out] == ["tourist", "usa", "other"]

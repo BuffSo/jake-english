@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import audio
 from .asr import WhisperError
-from .claude import ClaudeUnavailable
+from .claude import ClaudeUnavailable, pick_ending
 from . import topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
@@ -344,9 +344,9 @@ class Engine:
 
     async def recommend(self, turned_down: Sequence[str] = (), topic: str = topics.OTHER) -> Said:
         """Jake suggests a situation in the topic, not one of its recent ones or those just turned down on the
-        screen (spec situation-topics 4)."""
+        screen, in one of his three endings (spec situation-topics 4)."""
         text = await self.claude.recommend(self.store.recent_situations(topic=topic), list(turned_down),
-                                           topics.get(topic))
+                                           topics.get(topic), pick_ending(turned_down))
         # heard back: its last sound was once swallowed (2026-11-05, 「…연습하고 싶~」)
         return Said(text=text, audio=await self.voice.say(text, "jake", "korean", urgent=True, check=True))
 

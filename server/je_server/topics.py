@@ -54,7 +54,7 @@ class Topic:
     name_ko: str
     roles_en: str  # who Ryan and the learner are, for the script
     scenes_en: str  # what kind of moments, for Jake's suggestion
-    example_ko: str  # one suggestion in Jake's words
+    example_ko: str  # one situation Jake might suggest, without his ending (the server picks it, claude.pick_ending)
     placeholder_ko: str  # the example in the input box when the learner describes it
     first: Speaker | None  # who always speaks first in this topic; None: whoever would in the situation
     picks: tuple[Pick, ...] = ()
@@ -70,7 +70,7 @@ TOPICS: tuple[Topic, ...] = (
         scenes_en=("A foreign tourist in Korea, a stranger, asks the learner for help in English: asking the way, "
                    "how to use the subway, where to eat, and so on. Use real places in Korea. Never people the "
                    "learner knows, such as coworkers or friends."),
-        example_ko="인사동에서 외국인 관광객이 한복 빌리는 곳을 묻는 상황으로 연습해 보면 어때요?",
+        example_ko="인사동에서 외국인 관광객이 한복 빌리는 곳을 묻는 상황",
         placeholder_ko="예: 외국인이 명동에서 환전소를 묻는 상황",
         first="ryan",
         picks=(
@@ -141,7 +141,7 @@ TOPICS: tuple[Topic, ...] = (
         scenes_en=("The learner is traveling in the United States: ordering at a cafe or a fast-food place, checking "
                    "in at a hotel, asking the way, shopping at a mall, and so on. Use real places, shops and menus, "
                    "for example in New York or Hawaii."),
-        example_ko="뉴욕 지하철역에서 역무원에게 표 사는 법을 묻는 상황으로 연습해 보면 어때요?",
+        example_ko="뉴욕 지하철역에서 역무원에게 표 사는 법을 묻는 상황",
         placeholder_ko="예: 공항에서 짐이 안 나와 직원에게 묻는 상황",
         first=None,
         picks=(
@@ -206,7 +206,7 @@ TOPICS: tuple[Topic, ...] = (
         roles_en="Ryan plays the other person in the situation. The learner plays themself.",
         scenes_en=("Any real moment in daily life where the learner must speak English, other than helping a foreign "
                    "tourist in Korea or traveling in the United States."),
-        example_ko="외국 회사에 전화해서 주문한 물건이 언제 오는지 묻는 상황으로 연습해 보면 어때요?",
+        example_ko="외국 회사에 전화해서 주문한 물건이 언제 오는지 묻는 상황",
         placeholder_ko="예: 외국 회사에 전화해 주문을 확인하는 상황",
         first=None,
     ),

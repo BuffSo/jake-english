@@ -146,6 +146,7 @@ class FakeClaude:
         self.aside_pieces = ["괜찮아요, 말이 꼬일 수 있어요. ", "다시 해 볼까요?"]
         # pieces given before aside() fails; 0 fails at once. Not fail_next: background notes may take that first.
         self.aside_fail_after: int | None = None
+        self.endings: list[str] = []  # the ending recommend() was given, in order
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -173,10 +174,11 @@ class FakeClaude:
         self._maybe_fail()
         return "소희: " + line[1]
 
-    async def recommend(self, recent, turned_down, topic):
+    async def recommend(self, recent, turned_down, topic, ending):
         self.calls.append(("recommend", (recent, list(turned_down), topic.id)))
+        self.endings.append(ending)
         self._maybe_fail()
-        return "카페에서 커피를 주문하는 상황으로 연습해 보면 어때요?"
+        return f"카페에서 커피를 주문하는 {ending}"
 
     async def feedback(self, line, heard, praise, issues, last=False):
         self.feedback_calls.append({"line": line, "heard": heard, "praise": praise,
