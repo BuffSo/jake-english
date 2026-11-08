@@ -12,6 +12,7 @@ the same letters either way. Checking the hyphens against the syllables threw aw
 """
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import dataclass
 from typing import Literal
@@ -53,10 +54,28 @@ def korean_line(three: ThreeLine) -> str:
     return out.strip()
 
 
+def _word_gaps(want: list[str], got: list[str]) -> str:
+    """What the given words lack or add against the line's, for the retry to fix (a model that runs two words into
+    one sound may drop the small word between them, 2026-11-08 server test)."""
+    out = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(a=got, b=want, autojunk=False).get_opcodes():
+        had, need = " ".join(got[i1:i2]), " ".join(want[j1:j2])
+        if op == "insert":
+            out.append(f"missing {need!r} " + (f"after {got[i1 - 1]!r}" if i1 else "at the start"))
+        elif op == "delete":
+            out.append(f"extra {had!r}")
+        elif op == "replace":
+            out.append(f"{had!r} should be {need!r}")
+    return "; ".join(out)
+
+
 def check(text: str, three: ThreeLine) -> list[Problem]:
     problems: list[Problem] = []
-    if _norm_words(text) != _norm_words(" ".join(word_text(w) for w in three.words)):
-        problems.append(Problem("words", None, "the English syllables do not spell the line"))
+    want, got = _norm_words(text), _norm_words(" ".join(word_text(w) for w in three.words))
+    if want != got:
+        problems.append(Problem("words", None, f"the English syllables do not spell the line ({_word_gaps(want, got)}). "
+                                "Give every word of the line its own entry in order, even a word swallowed in speech "
+                                "(mark it w)"))
     for i, w in enumerate(three.words):
         for s in w.syl:
             if s.m == "s" and not (HANGUL.match(s.hi) and s.hi in s.ko):

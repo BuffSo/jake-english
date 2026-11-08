@@ -64,6 +64,19 @@ def test_words_must_match_text():
     assert kinds(check("I like tea.", line(I, LIKE, coffee()))) == ["words"]
 
 
+def test_words_problem_names_what_is_missing():
+    # a model that runs two words into one sound dropped the small word between them; the retry must say which
+    p = check("I like coffee.", line(I, coffee()))
+    assert kinds(p) == ["words"] and "missing 'like' after 'i'" in p[0].detail
+
+
+def test_words_problem_names_extra_and_changed_words():
+    extra = check("I like coffee.", line(I, LIKE, LIKE, coffee()))[0].detail
+    assert "extra 'like'" in extra
+    changed = check("I like tea.", line(I, LIKE, coffee()))[0].detail
+    assert "'coffee' should be 'tea'" in changed
+
+
 def test_reading_ref_must_match_korean_syllables():
     p = check("I like coffee.", line(I, LIKE, coffee(), reading="[[카-페]] 말고"))
     assert kinds(p) == ["ref"]

@@ -133,3 +133,21 @@
 - [ ] **Step 1: 가이드.** 규칙 5: 같은 낱말은 같은 글자로 쓴다. 하이픈과 띄어쓰기, 센 글자 하나만 가리키기는 자유다(화면의 한글 줄에는 하이픈이 없다). 「겪은 문제와 해결」: 검사가 형식까지 막아 맞는 설명을 버린 것, 지시문의 「모음을 실은 글자」를 받침 없는 글자로 읽은 것, 고치기 전에 첫 시도 답을 그대로 남겨 이유를 가른 방법(지어낸 예만).
 - [ ] **Step 2: 커밋** `docs(guide): record why three-line notes failed the checks`.
 - [ ] **Step 3: 서버 시험.** worktree 서버를 `JE_HOST=127.0.0.1 JE_PORT=8791 JE_WHISPER_PORT=8792`, 녹음을 뺀 데이터 복사본(`JE_DATA_DIR`)으로 띄운다. 목록 상황을 하나 골라 내 대사의 읽는 법을 받고(설명이 있는지), 학습자 목소리로 만든 녹음을 한 줄에 보낸다(`docs/guide/DEVENV_폰없이_녹음_시험하기_20261108.md`). 끝나면 서버를 끄고 복사본과 녹음을 지운다.
+
+### Task 7: `words` 문제에 빠진 낱말을 적기 (서버 시험에서 더함)
+
+서버 시험에서 목록 대본(저장소에 공개된 줄)의 한 줄이 세 번 모두 `words`로 걸려 영어만 남았다. 진단 때도 같은 줄이 첫 시도에서 걸렸다. 모델이 이어 읽는 두 낱말을 한 소리로 줄이며 그 사이의 기능어를 낱말 목록에서 뺐다. 다시 묻는 말은 「the English syllables do not spell the line」뿐이라 무엇이 빠졌는지 알려 주지 않는다. 설명 없는 읽는 법을 다시 만드는 규칙(Task 4)과 겹치면 이런 줄은 고를 때마다 세 번씩 부른다.
+
+**Files:**
+- Modify: `server/je_server/threeline.py` (`check`의 `words` 문제 설명)
+- Test: `server/tests/test_threeline.py`
+
+**Interfaces:**
+- Produces: `words` 문제의 `detail`이 빠진 낱말, 남는 낱말, 바뀐 낱말을 줄의 낱말로 적고, 이어 읽혀 삼켜지는 낱말도 제 자리에 약한 음절로 두라고 한다. `Claude.annotate`는 지금처럼 `detail`을 다시 묻는 말에 넣는다.
+
+- [ ] **Step 1: 시험 쓰기** — `test_words_problem_names_what_is_missing`: 「I like coffee.」에서 `like`를 뺀 답의 `words` 문제 설명에 `missing 'like' after 'i'`. `test_words_problem_names_extra_and_changed_words`: 낱말이 더해진 것(`extra`)과 바뀐 것(`should be`).
+- [ ] **Step 2: 실패를 본다.**
+- [ ] **Step 3: 구현.** 두 낱말 목록(`_norm_words`)을 `difflib.SequenceMatcher`로 견준다.
+- [ ] **Step 4: 통과, 전체 통과.**
+- [ ] **Step 5: 커밋** `fix(server): name the missing words when a three-line note drops one`.
+- [ ] **Step 6: 실제 확인.** main 세션에 알리고, 그 줄만 든 파일로 `check_three_lines.py --only`를 다섯 번 돌린다(스크립트는 줄마다 한 번 부른다).
