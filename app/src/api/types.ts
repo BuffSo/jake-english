@@ -102,8 +102,9 @@ export type PastRun = { roleplay: Roleplay; summary: Summary };
 export type HeardTry = { idx: number; heard: string; n: number };
 // /resume: the newest conversation with a line of mine left unrecorded, the line to start from (`at`), the header's
 // 「내 대사」 there, what was heard on every recorded line of mine, and whether it went to the end, so only its
-// unrecorded lines are left (spec resume-roleplay 1, 2; resume-unrecorded 2-5)
-export type Resume = { roleplay: Roleplay; at: number; progress: Progress; said: HeardTry[]; ended: boolean };
+// unrecorded lines are left (spec resume-roleplay 1, 2; resume-unrecorded 2-5). `ended` is absent on an older server,
+// read as left mid-way.
+export type Resume = { roleplay: Roleplay; at: number; progress: Progress; said: HeardTry[]; ended?: boolean };
 // a saved sentence and the line it was saved from (spec review-practice 5, 6)
 export type SavedItem = { key: string; rp_id: string; idx: number; speaker: Speaker; text: string; title_ko: string; at: string };
 export type AttemptEvent =

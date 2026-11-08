@@ -73,6 +73,12 @@ test("the label of a conversation gone to the end: how many lines of mine are un
   expect(shown(resumeLabel(resume(0, [], true)))).toBe("호텔 체크인하기 · 녹음 안 한 줄 2개");
 });
 
+// a new app on a Mac server from before `ended` (guide APP_Expo 「새 앱이 옛 맥 서버에 붙으면」): the row as before
+test("an older Mac server without `ended` reads as a conversation left mid-way", () => {
+  const { ended: _ended, ...old } = resume(2, [], false);
+  expect(shown(resumeLabel(old))).toBe("호텔 체크인하기 · 내 대사 2/2");
+});
+
 test("the label breaks only after the situation's title", () => {
   for (const r of [resume(2, [], false), resume(0, [], true)]) {
     const [, count] = resumeLabel(r).split(" · ");
