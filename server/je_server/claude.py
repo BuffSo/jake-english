@@ -118,9 +118,10 @@ def strip_endings(text: str) -> str | None:
 
 # The labels of the lines in Jake's recommendation message (`Claude.recommend`). A model sometimes says one back
 # (todo 21: 「…상황을 골라 봤어요. 끝말: 상황을 골라 봤어요.」, read out in Jake's voice). Only a label word
-# standing alone before a colon goes: 「예약:」 or 「주제곡」 stay.
+# standing alone before a colon goes, also right after an end mark (「…봤어요.끝말:」, Haiku drops spaces): 「예약:」
+# or 「주제곡」 stay.
 MESSAGE_LABELS = ("주제", "예", "끝말")
-_LABEL = re.compile(rf"(?<!\S)(?:{'|'.join(MESSAGE_LABELS)})\s*:\s*")
+_LABEL = re.compile(rf"(?<![가-힣A-Za-z0-9])(?:{'|'.join(MESSAGE_LABELS)})\s*:\s*")
 
 
 def drop_labels(text: str) -> str:

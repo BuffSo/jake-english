@@ -577,6 +577,9 @@ async def test_recommend_keeps_a_long_tail_after_situation(caplog):
     ("끝말: 공항에서 짐을 찾는 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
     ("예: 공항에서 짐을 찾는 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
     ("주제 : 공항에서 짐을 찾는 상황을 추천해요.", "상황을 추천해요.", "공항에서 짐을 찾는 상황을 추천해요."),
+    # glued to the end mark before it: Haiku has dropped spaces (final review, 2026-11-08)
+    ("카페에서 주문하는 상황을 골라 봤어요.끝말: 상황을 골라 봤어요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+    ("카페에서 주문하는 상황을 추천해요.\n끝말:상황을 추천해요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
 ])
 async def test_recommend_drops_message_labels(caplog, answer, ending, said):
     fake = FakeAnthropic([json.dumps({"request_ko": answer})])
@@ -586,7 +589,8 @@ async def test_recommend_drops_message_labels(caplog, answer, ending, said):
     assert "label" in caplog.text and "상황" not in caplog.text
 
 
-@pytest.mark.parametrize("answer", ["호텔 예약을 바꾸는 상황을 추천해요.", "공연장에서 주제곡을 묻는 상황을 추천해요."])
+@pytest.mark.parametrize("answer", ["호텔 예약을 바꾸는 상황을 추천해요.", "공연장에서 주제곡을 묻는 상황을 추천해요.",
+                                    "호텔 예약: 체크인 시간을 묻는 상황을 추천해요."])
 async def test_recommend_keeps_words_that_only_look_like_labels(caplog, answer):
     fake = FakeAnthropic([json.dumps({"request_ko": answer})])
     with caplog.at_level(logging.INFO, logger="je_server"):
