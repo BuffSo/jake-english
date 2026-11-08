@@ -1,0 +1,52 @@
+# 폰을 adb로 직접 시험하기
+
+> 작성: 2026-11-08 (three-line-listen 카드)
+> 폰의 일련번호와 이 맥의 경로는 공개 파일에 쓰지 않는다.
+
+PR을 머지하기 전에 폰 화면까지 에이전트가 직접 본다. 사용자는 머지만 정한다(`AGENTS.md` 「시험은 에이전트가 다 마친다」). 이 문서는 USB로 꽂힌 폰을 맥에서 adb로 다루는 명령과 겪은 것을 담는다. 녹음을 서버에 보내는 시험은 `DEVENV_폰없이_녹음_시험하기_20261108.md`에 있다.
+
+## 정한 기준
+
+- **사용자에게 시험 목록을 넘기지 않는다.** 화면을 띄우고, 누르고, 글과 스크린샷으로 확인하는 것은 에이전트가 한다. 사람이 직접 말해야 하는 것과 보고 골라야 하는 것(화면 초안)만 사용자에게 묶어 부탁한다.
+- **폰의 앱은 하나다.** APK를 깔면 다른 카드가 깐 것을 덮는다. 깔 때 어느 브랜치의 앱인지 사용자에게 알린다.
+- **폰 앱은 원래 폴더의 맥 서버에 붙는다.** 서버도 바뀐 PR이면 `DEVENV_맥서버_저절로_띄우기_20261107.md` 「카드가 서버를 시험할 때」대로 서버를 그 브랜치로 바꿔 띄워야 그 PR을 시험한 것이다. 앱만 바뀐 PR은 서버를 건드리지 않는다.
+- **사용자 기록에 시험을 섞지 않는다.** 역할극은 「이 상황 다시 하기」로 만든 복사본으로 시험하고, 끝나면 지운다. 사용자가 직접 만든 기록은 남긴다.
+- **스크린샷은 저장소 밖 임시 폴더에 두고 공개 파일에 넣지 않는다.** 지난 역할극의 실제 문장과 사용자가 말한 글이 보인다.
+- **폰이 없으면 이 앱 전용 에뮬레이터로 본다.** 창을 띄워 사용자가 볼 수 있게 한다. 한 번에 한 세션만 띄우고 다 쓰면 끈다. 맥에 다른 프로젝트의 에뮬레이터가 떠 있을 수 있으니 이름을 보고 고른다.
+
+## 명령
+
+adb는 안드로이드 SDK의 `platform-tools/adb`다(SDK 기본 위치는 `~/Library/Android/sdk`). PATH에 없을 수 있다.
+
+1. **기기를 고른다.** `adb devices -l`에서 USB 폰은 일련번호에 `:`이 없고 `emulator-`로 시작하지 않는 것이다. 이후 명령은 모두 `adb -s <일련번호>`로 그 기기를 정해 부른다. 에뮬레이터가 함께 떠 있으면 `-s` 없이 부를 때 오류가 난다.
+2. **화면이 꺼지지 않게 한다.** `adb shell svc power stayon usb`. 꽂혀 있는 동안 화면이 켜져 있다. 잠금 화면이면 누르기가 앱에 닿지 않는다. 지금 상태는 `adb shell dumpsys window | grep -E "mCurrentFocus|isKeyguardShowing"`로 본다.
+3. **앱을 깐다.** `adb install -r app/android/app/build/outputs/apk/release/app-release.apk`. 빌드는 `app/README.md`.
+4. **앱을 띄운다.** `adb shell monkey -p dev.jakeso.english -c android.intent.category.LAUNCHER 1`
+5. **화면 글과 자리를 읽는다.**
+
+   ```sh
+   adb shell uiautomator dump /sdcard/je-ui.xml
+   adb exec-out cat /sdcard/je-ui.xml > ui.xml
+   adb shell rm /sdcard/je-ui.xml
+   ```
+
+   `ui.xml`의 노드마다 `text`와 `bounds="[왼,위][오른,아래]"`가 있다. 글과 자리만 뽑아 보려면:
+
+   ```python
+   import re
+   x = open("ui.xml", encoding="utf-8").read()
+   for t, b in re.findall(r'text="([^"]*)"[^>]*?bounds="([^"]*)"', x):
+       if t:
+           print(t.replace("⁠", ""), b)
+   ```
+
+6. **누른다.** `adb shell input tap <x> <y>`. 누를 곳은 5의 `bounds` 가운데로 정한다. 뒤로는 `adb shell input keyevent KEYCODE_BACK`.
+7. **스크린샷을 찍는다.** `adb exec-out screencap -p > shot.png`. 에이전트는 이 그림을 읽어 모양과 색을 본다.
+8. **소리가 끝까지 났는지 센다.** 귀로 듣지 않아도 `adb logcat`의 `AudioTrack stop(...) called with N frames delivered`를 소리 파일의 샘플 수와 맞대면 끝까지 틀었는지 안다.
+
+## 겪은 것
+
+- **한국어 글로 찾으면 빗나간다.** 이 앱은 안드로이드가 한국어를 낱말 가운데서 줄 바꾸지 않게 한글 사이에 단어 이음 문자(U+2060)를 넣는다(`app/src/ui/keepWords.ts`). 화면에는 보이지 않지만 `uiautomator dump`의 `text`에는 들어 있다. 글로 찾을 때는 이 문자를 빼고 맞추거나 `bounds`로 찾는다.
+- **그림 글자는 숫자 문자 참조로 나온다.** `uiautomator dump`는 🎤, 💬 같은 그림 글자를 `&#127908;`, `&#128172;`처럼 적는다. 그림 글자가 붙은 버튼은 그림 글자를 빼고 뒤의 글로 찾거나, 참조를 풀어 맞춘다(Python `html.unescape`).
+- **잠깐 보이는 상태는 기다렸다가 바로 누른다.** 몇 초만 보이는 화면은 `uiautomator dump`를 짧게 되풀이하다가 원하는 버튼이 나오자마자 누르고 캡처한다. dump 한 번에 1초 안팎이 들어, 이렇게 잰 시간은 실제보다 길다. 걸린 시간은 서버 로그로 따로 잰다.
+- **에뮬레이터에서 괜찮아도 폰에서 다를 수 있다.** 아래 버튼 줄의 높이(세 버튼과 제스처)와 상태 줄 높이가 달랐다. 폰이 꽂혀 있으면 폰을 먼저 본다.
