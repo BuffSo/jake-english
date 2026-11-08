@@ -65,6 +65,8 @@ class Case:
     praise: list[str] = field(default_factory=list)
     last: bool = False
     heard_ko: str | None = None
+    must: tuple[str, ...] = ()  # words the answer has to say (spec record-cancel-skip 6: the skip button)
+    never: tuple[str, ...] = ()  # words it must not say
 
 
 def issue(target: str, heard: str, explain: str = "") -> Issue:
@@ -105,9 +107,13 @@ ASIDE = [
     Case("near miss span 2", "Can I check in now?", "Can I chicken now?", [issue("check in", "chicken")]),
     Case("korean question", "Here is your key card.", "What does key card mean?", [], heard_ko="키 카드가 무슨 뜻이에요?"),
     # made up, not what the learner said: a wish about the app and a remark to oneself, both in Korean
+    # the line can be skipped now: 「대사를 말해야 넘어가요」 would be wrong (spec record-cancel-skip 6)
     Case("off app wish", "Here is your key card.", "I wish the app showed the meaning first.", [],
-         heard_ko="앱이 뜻을 먼저 보여 주면 좋겠어요."),
+         heard_ko="앱이 뜻을 먼저 보여 주면 좋겠어요.", never=("말해야",)),
     Case("off chat", "Here is your key card.", "Oh, I'm so sleepy today.", [], heard_ko="아 오늘 너무 졸리다."),
+    # made up: the learner wants to move past the line; Ryan points to 「건너뛰기」 (spec record-cancel-skip 6)
+    Case("off skip wish", "Here is your key card.", "I just want to skip this line.", [],
+         heard_ko="이 줄은 그냥 넘어가고 싶어요.", must=("건너뛰기",)),
 ]
 
 
@@ -124,6 +130,8 @@ def flags(case: Case, text: str, aside: bool, raw: str = "") -> list[str]:
         if i.heard and i.heard not in text:
             out.append(f"heard word not said ({i.heard})")
     out += [f"names {n!r}" for n in NAMES if n in text]
+    out += [f"does not say {w!r}" for w in case.must if w not in text]
+    out += [f"says {w!r}" for w in case.never if w in text]
     if any(q in raw for q in QUOTES):
         out.append("double quotes")
     if re.sub(r"\W", "", case.heard.lower()) in re.sub(r"\W", "", text.lower()) and case.issues:
