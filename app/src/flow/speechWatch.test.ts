@@ -138,6 +138,23 @@ test("a room sound jumping more than overRoomDb over its floor keeps it going, a
   expect([...said.values()]).not.toContain("ended");
 });
 
+// PR #60 review: the floor counts the learner's own voice. Talking on with few gaps, the room readings are a small share
+// and the floor must not climb to the voice, or the bar does and the line is cut while it is being said.
+const ON = [-30, -26, -33, -28, -24, -31, -27, -34, -29, -60]; // talking on, one reading in ten a gap to the room
+const talkingOn = (ms: number) => (ms <= 3000 ? -14 : ms <= 18000 ? ON[(ms / 100) % ON.length] : QUIET);
+
+test("talking on with few gaps in a quiet room is not cut while it is said", () => {
+  const said = run(26000, talkingOn, SPEECH_RULE);
+  expect([...said.entries()].filter(([ms]) => ms <= 18000).map(([, h]) => h)).not.toContain("ended");
+  expect(said.get(26000)).toBe("ended"); // 8 s after the talk ended at 18000
+});
+
+test("a soft voice talking on after a quiet start is not cut while it is said", () => {
+  const soft = [-41, -44, -47, -42, -49, -45, -43, -48, -46, -42, -44, -60];
+  const said = run(36000, (ms) => (ms < 2000 ? QUIET : ms <= 2800 && ms >= 2500 ? -30 : ms <= 27000 ? soft[(ms / 100) % soft.length] : QUIET), SPEECH_RULE);
+  expect([...said.entries()].filter(([ms]) => ms <= 27000).map(([, h]) => h)).not.toContain("ended");
+});
+
 test("speech from the first counted reading still ends after the pause", () => {
   // the room's floor is not known yet while the learner speaks at once; the pause is judged by the floor known now
   const said = run(11000, (ms) => (ms <= 1500 ? -20 : QUIET));
