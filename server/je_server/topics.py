@@ -12,6 +12,10 @@ Do not change a fact without checking it again: a wrong route or menu is learned
 Each list line also has its script and frame, written here and reviewed in the PR: a pick starts from it without
 asking Claude (spec fixed-list-scripts, ADR-0013). A script keeps only the facts of its description. When a fact
 changes, change the description, the script and `tests/test_topics.py` together.
+
+Each script line carries Sohee's Korean for it, made once with the quick model and read over by hand (todo 13): a
+pick's 「통역」 does not ask Claude. It says what the English says and no more; read it with the lines around it, as
+two lines together can say something neither does (PR #34). When a line changes, change its Korean too.
 """
 from __future__ import annotations
 
@@ -30,14 +34,18 @@ class Pick:
     first: Speaker
     frame: Frame
     script: tuple[tuple[Speaker, str], ...]  # (speaker, English line) in order
+    # Sohee's Korean for each line, in the same order: a pick does not ask Claude for it (todo 13). A line without it
+    # is interpreted when tapped, like any other script's.
+    ko: tuple[str, ...] = ()
 
 
 def _pick(id: str, title_ko: str, situation: str, first: Speaker, roles: tuple[str, str, str, str],
-          script: tuple[tuple[Speaker, str], ...]) -> Pick:
-    """roles: the learner, Ryan, the place, the goal, in Korean (the rest of the frame)."""
+          lines: tuple[tuple[Speaker, str, str], ...]) -> Pick:
+    """roles: the learner, Ryan, the place, the goal, in Korean (the rest of the frame). lines: (speaker, English
+    line, Sohee's Korean for it)."""
     user, ryan, place, goal = roles
     frame = Frame(title_ko=title_ko, user_role_ko=user, ryan_role_ko=ryan, place_ko=place, goal_ko=goal)
-    return Pick(id, title_ko, situation, first, frame, script)
+    return Pick(id, title_ko, situation, first, frame, tuple((s, t) for s, t, _ in lines), tuple(k for *_, k in lines))
 
 
 @dataclass(frozen=True)
@@ -71,37 +79,58 @@ TOPICS: tuple[Topic, ...] = (
                   "3호선으로 갈아타고, 경복궁역 5번 출구로 나가면 궁으로 바로 이어진다.", "ryan",
                   ("길을 알려 주는 서울 사람", "경복궁에 가려는 외국인 관광객", "명동역 근처",
                    "관광객에게 경복궁 가는 길을 알려 주기"),
-                  (("ryan", "Excuse me, do you speak English? I'm trying to get to Gyeongbokgung Palace."),
-                   ("user", "Sure. Take Line 4 from here, just one stop to Chungmuro."),
-                   ("ryan", "Chungmuro, got it. And then what?"),
-                   ("user", "Change to Line 3 there, and get off at Gyeongbokgung."),
-                   ("ryan", "Great. Which exit should I use?"),
-                   ("user", "Take Exit 5. It goes straight into the palace."),
-                   ("ryan", "Perfect. Thank you so much!"))),
+                  (("ryan", "Excuse me, do you speak English? I'm trying to get to Gyeongbokgung Palace.",
+                    "실례합니다, 영어 할 줄 아세요? 경복궁에 가려고 하는데요."),
+                   ("user", "Sure. Take Line 4 from here, just one stop to Chungmuro.",
+                    "그럼요. 여기서 4호선을 타고 충무로까지 한 정거장만 가세요."),
+                   ("ryan", "Chungmuro, got it. And then what?",
+                    "충무로요, 알겠어요. 그다음엔 어떻게 해요?"),
+                   ("user", "Change to Line 3 there, and get off at Gyeongbokgung.",
+                    "거기서 3호선으로 갈아타고 경복궁역에서 내리세요."),
+                   ("ryan", "Great. Which exit should I use?",
+                    "좋아요. 몇 번 출구로 나가야 해요?"),
+                   ("user", "Take Exit 5. It goes straight into the palace.",
+                    "5번 출구로 나가세요. 궁으로 바로 이어져요."),
+                   ("ryan", "Perfect. Thank you so much!",
+                    "잘 알겠어요. 정말 감사합니다!"))),
             _pick("t-tmoney", "지하철역에서 교통카드 충전",
                   "서울 지하철역에서 외국인 관광객이 교통카드(티머니)를 충전하는 법을 묻는다. 역의 교통카드 충전기에서 "
                   "현금으로만 충전한다. 편의점에서도 충전할 수 있다.", "ryan",
                   ("충전하는 법을 알려 주는 서울 사람", "교통카드를 충전하려는 외국인 관광객", "서울의 지하철역",
                    "관광객에게 교통카드 충전하는 법을 알려 주기"),
-                  (("ryan", "Hi, sorry to bother you. How do I add money to my T-money card?"),
-                   ("user", "You can use the card machine right over there."),
-                   ("ryan", "Oh, nice. Can I pay with a credit card?"),
-                   ("user", "No, I'm afraid the machine only takes cash."),
-                   ("ryan", "Got it. Is this the only place I can do that?"),
-                   ("user", "No, a convenience store can top it up too."),
-                   ("ryan", "Good to know. Thanks for your help!"))),
+                  (("ryan", "Hi, sorry to bother you. How do I add money to my T-money card?",
+                    "안녕하세요, 귀찮게 해서 죄송해요. 티머니 카드는 어떻게 충전해요?"),
+                   ("user", "You can use the card machine right over there.",
+                    "바로 저기 있는 교통카드 충전기를 쓰시면 돼요."),
+                   ("ryan", "Oh, nice. Can I pay with a credit card?",
+                    "아, 잘됐네요. 신용카드로 결제할 수 있어요?"),
+                   ("user", "No, I'm afraid the machine only takes cash.",
+                    "아니요, 아쉽지만 저 충전기는 현금만 받아요."),
+                   ("ryan", "Got it. Is this the only place I can do that?",
+                    "알겠어요. 충전할 수 있는 데가 여기뿐이에요?"),
+                   ("user", "No, a convenience store can top it up too.",
+                    "아니요, 편의점에서도 충전할 수 있어요."),
+                   ("ryan", "Good to know. Thanks for your help!",
+                    "그렇군요. 도와주셔서 감사합니다!"))),
             _pick("t-samgyeopsal", "홍대에서 삼겹살집 추천",
                   "홍대입구역 근처에서 외국인 관광객이 한국식 고기구이를 먹을 만한 곳을 묻는다. 삼겹살을 권하고, 보통 "
                   "2인분부터 주문한다고 알려 준다.", "ryan",
                   ("먹을 곳을 알려 주는 서울 사람", "한국식 고기구이를 먹어 보고 싶은 외국인 관광객", "홍대입구역 근처",
                    "관광객에게 삼겹살을 권하고 주문하는 법을 알려 주기"),
-                  (("ryan", "Excuse me. I want to try Korean barbecue. Any ideas around here?"),
-                   ("user", "You should try samgyeopsal. It's grilled pork belly."),
-                   ("ryan", "Sounds great! Is there a good place nearby?"),
-                   ("user", "Yeah, there are lots of places around this station."),
-                   ("ryan", "Awesome. Anything I should know before I order?"),
-                   ("user", "Most places want you to order at least two servings."),
-                   ("ryan", "Good to know. Thanks a lot!"))),
+                  (("ryan", "Excuse me. I want to try Korean barbecue. Any ideas around here?",
+                    "저기요, 한국식 고기구이를 먹어 보고 싶은데요. 이 근처에서 뭘 먹으면 좋을까요?"),
+                   ("user", "You should try samgyeopsal. It's grilled pork belly.",
+                    "삼겹살 한번 드셔 보세요. 돼지 뱃살을 구워 먹는 거예요."),
+                   ("ryan", "Sounds great! Is there a good place nearby?",
+                    "좋네요! 이 근처에 잘하는 데 있어요?"),
+                   ("user", "Yeah, there are lots of places around this station.",
+                    "네, 이 역 근처에 그런 데가 많아요."),
+                   ("ryan", "Awesome. Anything I should know before I order?",
+                    "잘됐네요. 주문하기 전에 알아 둘 게 있을까요?"),
+                   ("user", "Most places want you to order at least two servings.",
+                    "대부분 가게에서는 2인분 이상 시켜야 해요."),
+                   ("ryan", "Good to know. Thanks a lot!",
+                    "그렇군요. 정말 고마워요!"))),
         ),
     ),
     Topic(
@@ -122,35 +151,53 @@ TOPICS: tuple[Topic, ...] = (
                   "나온다.", "ryan",
                   ("하와이에 여행 온 한국 사람", "새우 트럭 직원", "하와이 오아후 노스쇼어 카후쿠의 지오반니 새우 트럭",
                    "마늘 새우 접시를 주문하기"),
-                  (("ryan", "Aloha! Welcome to Giovanni's. What can I get for you?"),
-                   ("user", "Hi! It's my first time here. What do you have?"),
-                   ("ryan", "We've got shrimp scampi, hot and spicy, and lemon butter."),
-                   ("user", "I'll have the shrimp scampi plate, please."),
-                   ("ryan", "You got it. It comes with two scoops of rice."),
-                   ("user", "Great. I heard it's really garlicky."),
-                   ("ryan", "Oh, it is. Lots of garlic. Enjoy!"))),
+                  (("ryan", "Aloha! Welcome to Giovanni's. What can I get for you?",
+                    "알로하! 지오반니에 오신 걸 환영합니다. 뭘 드릴까요?"),
+                   ("user", "Hi! It's my first time here. What do you have?",
+                    "안녕하세요! 여기 처음 왔는데요. 어떤 메뉴가 있어요?"),
+                   ("ryan", "We've got shrimp scampi, hot and spicy, and lemon butter.",
+                    "새우 스캠피, 매운맛, 레몬 버터 맛이 있어요."),
+                   ("user", "I'll have the shrimp scampi plate, please.",
+                    "새우 스캠피 한 접시 주세요."),
+                   ("ryan", "You got it. It comes with two scoops of rice.",
+                    "네, 알겠습니다. 밥 두 스쿱이 같이 나와요."),
+                   ("user", "Great. I heard it's really garlicky.",
+                    "좋아요. 마늘 맛이 아주 진하다고 들었어요."),
+                   ("ryan", "Oh, it is. Lots of garlic. Enjoy!",
+                    "그럼요, 마늘이 듬뿍 들어가요. 맛있게 드세요!"))),
             # the name on the booking and the checkout time are small made-up values: the hotel has no name
             _pick("u-hotel-checkin", "뉴욕 호텔 체크인",
                   "뉴욕 맨해튼의 호텔 프런트에서 예약한 방에 체크인한다. 예약한 이름을 말하고 여권과 카드를 내고, "
                   "체크아웃 시간과 와이파이를 묻는다.", "user",
                   ("뉴욕에 여행 온 한국 사람", "호텔 프런트 직원", "뉴욕 맨해튼의 호텔 프런트",
                    "예약한 방에 체크인하고 체크아웃 시간과 와이파이를 묻기"),
-                  (("user", "Hi, I'd like to check in. The reservation is under Kim."),
-                   ("ryan", "Welcome! May I see your passport and a credit card, please?"),
-                   ("user", "Of course, here they are. When is checkout?"),
-                   ("ryan", "Checkout is at 11 a.m. Here are your room keys."),
-                   ("user", "Thanks. And how do I get on the Wi-Fi?"),
-                   ("ryan", "Just pick the hotel network. The password is on your key card sleeve. Enjoy your stay!"))),
+                  (("user", "Hi, I'd like to check in. The reservation is under Kim.",
+                    "안녕하세요, 체크인하려고요. 김 이름으로 예약했어요."),
+                   ("ryan", "Welcome! May I see your passport and a credit card, please?",
+                    "어서 오세요! 여권이랑 신용카드 좀 보여 주시겠어요?"),
+                   ("user", "Of course, here they are. When is checkout?",
+                    "네, 여기 있어요. 체크아웃은 몇 시예요?"),
+                   ("ryan", "Checkout is at 11 a.m. Here are your room keys.",
+                    "체크아웃은 오전 열한 시입니다. 여기 객실 키입니다."),
+                   ("user", "Thanks. And how do I get on the Wi-Fi?",
+                    "감사합니다. 그리고 와이파이는 어떻게 연결해요?"),
+                   ("ryan", "Just pick the hotel network. The password is on your key card sleeve. Enjoy your stay!",
+                    "호텔 와이파이를 고르시면 돼요. 비밀번호는 카드키 봉투에 적혀 있어요. 즐거운 시간 보내세요!"))),
             _pick("u-sneaker-size", "알라모아나 센터에서 운동화 사이즈",
                   "하와이 호놀룰루 알라모아나 센터의 신발 가게에서 점원에게 운동화를 다른 사이즈로 신어 볼 수 있는지 "
                   "묻는다. 한국 사이즈 270은 미국 남자 사이즈 9다.", "user",
                   ("하와이에 여행 온 한국 사람", "신발 가게 점원", "하와이 호놀룰루 알라모아나 센터의 신발 가게",
                    "운동화를 다른 사이즈로 신어 보기"),
-                  (("user", "Hi, could I try these on in another size?"),
-                   ("ryan", "Sure! What size do you need?"),
-                   ("user", "In Korea I wear a 270. That's a men's 9, right?"),
-                   ("ryan", "That's right, a men's 9. Let me grab a pair from the back."),
-                   ("user", "Great, thank you. I'll wait here."))),
+                  (("user", "Hi, could I try these on in another size?",
+                    "안녕하세요, 이거 다른 사이즈로 신어 봐도 될까요?"),
+                   ("ryan", "Sure! What size do you need?",
+                    "그럼요! 몇 사이즈 찾으세요?"),
+                   ("user", "In Korea I wear a 270. That's a men's 9, right?",
+                    "한국에서는 270을 신어요. 그게 남성 9 사이즈 맞죠?"),
+                   ("ryan", "That's right, a men's 9. Let me grab a pair from the back.",
+                    "맞아요, 남성 9 사이즈예요. 창고에서 한 켤레 가져다 드릴게요."),
+                   ("user", "Great, thank you. I'll wait here.",
+                    "좋아요, 감사합니다. 여기서 기다릴게요."))),
         ),
     ),
     Topic(
