@@ -4,6 +4,10 @@
 import { createSpeechWatch, type SpeechRule } from "../flow/speechWatch";
 
 export const LEVEL_EVERY_MS = 100;
+// expo-audio on Android gives this when the recorder's amplitude is 0 or cannot be read, never undefined. A live mic is
+// never that silent (a quiet room read -55~-63), so it is no reading: a phone whose amplitude is always 0 must not have
+// every recording cancelled at 5 s (final review).
+const NO_AMPLITUDE_DB = -160;
 
 type Options = {
   read: () => number | undefined; // the level now (dBFS), or nothing
@@ -26,6 +30,7 @@ export function startLevelPoll({ read, onLevel, onNoSpeech, onSpeechEnd, rule, n
     } catch {
       db = undefined; // a recorder going away mid-read: no level, which never cancels
     }
+    if (db !== undefined && !(db > NO_AMPLITUDE_DB)) db = undefined;
     onLevel(db);
     if ((!onNoSpeech && !onSpeechEnd) || told) return;
     const heard = watch.feed(now() - from, db);

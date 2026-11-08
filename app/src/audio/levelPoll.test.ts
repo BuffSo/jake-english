@@ -84,3 +84,25 @@ test("a long pause after speech calls onSpeechEnd once, and never onNoSpeech", (
   expect(onNoSpeech).not.toHaveBeenCalled();
   stop();
 });
+
+// final review: expo-audio on Android gives -160 when the recorder's amplitude is 0 or cannot be read, never
+// undefined; a phone whose amplitude is always 0 must not have every recording cancelled at 5 s
+test("readings of -160 (no amplitude) count as no level, so they never cancel", () => {
+  const onNoSpeech = jest.fn();
+  const seen: (number | undefined)[] = [];
+  const stop = startLevelPoll({ read: () => -160, onLevel: (db) => seen.push(db), onNoSpeech });
+  jest.advanceTimersByTime(30_000);
+  expect(onNoSpeech).not.toHaveBeenCalled();
+  expect(seen[0]).toBeUndefined();
+  stop();
+});
+
+test("-160 readings at the start do not stop a quiet room from cancelling", () => {
+  // the first readings after the mic comes on are -160 on the phone, then the room's level
+  const onNoSpeech = jest.fn();
+  let n = 0;
+  const stop = startLevelPoll({ read: () => (++n <= 3 ? -160 : -60), onLevel: () => {}, onNoSpeech });
+  jest.advanceTimersByTime(SPEECH_RULE.waitMs);
+  expect(onNoSpeech).toHaveBeenCalledTimes(1);
+  stop();
+});
