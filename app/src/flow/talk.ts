@@ -72,10 +72,11 @@ export const canSpeak = (s: TalkState) => s.phase === "ready" || s.phase === "ry
 export const canEnd = canSpeak;
 // the 🔊, interpretation and my recording of past bubbles: only on my turn, not over Ryan's sound
 export const mayListenTalk = (s: TalkState) => s.phase === "ready";
-// Ryan's current bubble while he is still on: no buttons on it yet and its bars move (spec free-talk-design 9). It is
-// the last bubble in `waiting`, `replying` and `ryan`; once my words come back the last bubble is mine.
+// Ryan's current bubble while he is still on: no buttons on it yet and its bars move (spec free-talk-design 9). Only
+// in `ryan`, when his reply is the last bubble. In `waiting` and `replying` the last Ryan bubble is his previous,
+// finished line (what he writes now is the pending bubble), so its opened subtitle must not fold (Task 7 review).
 export function ryanSpeaking(s: TalkState, idx: number): boolean {
-  if (s.phase !== "waiting" && s.phase !== "replying" && s.phase !== "ryan") return false;
+  if (s.phase !== "ryan") return false;
   const last = s.bubbles[s.bubbles.length - 1];
   return last?.kind === "ryan" && last.idx === idx;
 }

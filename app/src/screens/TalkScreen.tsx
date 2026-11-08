@@ -340,7 +340,7 @@ export function TalkScreen({ sounds, onHome }: Props) {
                 ))}
           </Text>
         ) : (
-          <HiddenWords moving={speaking && s.phase !== "waiting"} />
+          <HiddenWords moving={speaking} />
         )}
         {opened && subs && notesOpen[b.idx] && three === "loading" && (
           <Text style={common.sub}>{keepWords("세 줄을 만들고 있어요…")}</Text>

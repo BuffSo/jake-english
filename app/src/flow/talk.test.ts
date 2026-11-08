@@ -358,8 +358,11 @@ test("Ryan's current bubble is speaking until his turn ends", () => {
   const a = answered();
   expect(ryanSpeaking(a, 2)).toBe(true);
   expect(ryanSpeaking(a, 0)).toBe(false); // a past bubble
+  // while my turn waits his old line is still the last bubble, but finished: what he says next is the pending bubble,
+  // so an opened subtitle on it must not fold (Task 7 review)
   const waiting = run(ready(), { type: "recordStart", heard: null }, { type: "recordStop" });
-  expect(ryanSpeaking(waiting, 0)).toBe(true); // his old line is still the last bubble until my words come back
+  expect(ryanSpeaking(waiting, 0)).toBe(false);
+  expect(ryanSpeaking(run(waiting, ev(waiting, { type: "text", delta: "Nice! " })), 0)).toBe(false); // replying
   expect(ryanSpeaking(run(waiting, ev(waiting, heardE)), 0)).toBe(false);
   expect(ryanSpeaking(run(ready(), { type: "recordStart", heard: null }), 0)).toBe(false);
   expect(ryanSpeaking(run(a, { type: "ryanDone" }), 2)).toBe(false);
