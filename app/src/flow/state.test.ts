@@ -164,6 +164,27 @@ describe("back goes to the screen before", () => {
   test("home has nothing before it", () => {
     expect(reduce(initial, { type: "back" })).toBe(initial);
   });
+
+  test("back from the free talk goes home", () => {
+    const talk = reduce(initial, { type: "openTalk" });
+    expect(reduce(talk, { type: "back" })).toEqual(initial);
+  });
+});
+
+// --- free talk (spec free-talk-design 1, 2) ------------------------------------------------------------------------
+
+test("openTalk opens the free talk from home", () => {
+  const s = reduce(initial, { type: "openTalk" });
+  expect(s.screen).toBe("talk");
+  expect(s).toEqual({ ...initial, screen: "talk" });
+});
+
+test("openTalk elsewhere does nothing", () => {
+  // the second tap of a double tap on the card finds the talk open already, so one talk is made
+  const talk = reduce(initial, { type: "openTalk" });
+  expect(reduce(talk, { type: "openTalk" })).toBe(talk);
+  expect(reduce(situation, { type: "openTalk" })).toBe(situation);
+  expect(reduce(at("ready"), { type: "openTalk" }).screen).toBe("roleplay");
 });
 
 // --- practice after the roleplay (spec roleplay-practice 1, 2, 4, 5, 6) --------------------------------------------

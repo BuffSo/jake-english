@@ -18,10 +18,11 @@ type Props = {
   home: Home | null;
   setHome: (h: Home) => void;
   onRoleplay: () => void;
+  onTalk: () => void;
   onReview: () => void;
 };
 
-export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Props) {
+export function HomeScreen({ sounds, home, setHome, onRoleplay, onTalk, onReview }: Props) {
   const [error, setError] = useState<string | null>(null);
   // App keeps `home` for as long as the app runs, so having it when this screen opens means Ryan has greeted
   // already and the learner came back, whichever way. Kept as it was at opening: `home` arriving from `load`
@@ -76,8 +77,9 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
               {keepWords(l.text)}
             </Text>
           ))}
-          {/* new or again: the first screen splits only these two (spec review-practice 1); each says what it does
-              in a line, and the two colours tell them apart (spec review-screens 1) */}
+          {/* new or again: two new ones (with a script, without) and one again (spec review-practice 1,
+              free-talk-design 1); each says what it does in a line, and the three colours tell them apart (spec
+              review-screens 1) */}
           <View style={styles.choices}>
             <ChoiceCard
               icon="💬"
@@ -85,6 +87,14 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
               line="상황을 정하면 라이언과 영어로 주고받아요"
               color={colors.primary}
               onPress={() => leaveHome(sounds, onRoleplay)}
+            />
+            <View style={styles.gap} />
+            <ChoiceCard
+              icon="🗣️"
+              title="자유 대화"
+              line="대본 없이 라이언과 영어로 이야기해요"
+              color={colors.free}
+              onPress={() => leaveHome(sounds, onTalk)}
             />
             <View style={styles.gap} />
             <ChoiceCard

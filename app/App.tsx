@@ -14,6 +14,7 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { RoleplayScreen } from "./src/screens/RoleplayScreen";
 import { SituationScreen } from "./src/screens/SituationScreen";
+import { TalkScreen } from "./src/screens/TalkScreen";
 import { laterPictures } from "./src/ui/faces";
 import { Preload } from "./src/ui/Preload";
 import { ThinkingFaces } from "./src/ui/ThinkingFace";
@@ -41,6 +42,7 @@ export default function App() {
         home={home}
         setHome={setHome}
         onRoleplay={() => dispatch({ type: "chooseRoleplay" })}
+        onTalk={() => dispatch({ type: "openTalk" })}
         onReview={() => dispatch({ type: "openReview" })}
       />
     );
@@ -58,6 +60,9 @@ export default function App() {
   } else if (state.screen === "past" || state.screen === "saved") {
     // the two tabs of 「복습하기」: one screen, so switching tabs keeps it (spec review-screens 2)
     screen = <ReviewScreen tab={state.screen} dispatch={dispatch} />;
+  } else if (state.screen === "talk") {
+    // the free talk keeps its own flow (`flow/talk.ts`); back, 「끝」 and a talk with nothing said go home
+    screen = <TalkScreen sounds={sounds} onHome={() => dispatch({ type: "home" })} />;
   } else if (state.screen === "roleplay") {
     // keyed by roleplay: saved practice moves between roleplays, and the screen's notes, Sohee's lines and the
     // models it has played are kept by line number (spec review-practice 7)

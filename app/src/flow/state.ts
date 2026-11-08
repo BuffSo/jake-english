@@ -6,8 +6,9 @@ import { passRecorded, recordedOf, resumeHistory, resumeSeen } from "./resume";
 import type { SituationStart } from "./situation";
 
 // past and saved: the two tabs of 「복습하기」 (spec review-screens 2; it was a menu of two buttons before). The last
-// conversation of a past situation is the end screen with `past` set (spec review-practice 3).
-export type Screen = "home" | "situation" | "roleplay" | "end" | "past" | "saved";
+// conversation of a past situation is the end screen with `past` set (spec review-practice 3). talk: the free talk and
+// its fixes, one screen with its own flow (`flow/talk.ts`, spec free-talk-design 2, 7).
+export type Screen = "home" | "situation" | "roleplay" | "end" | "past" | "saved" | "talk";
 export type Phase = "loading" | "ryan" | "ready" | "recording" | "evaluating" | "evaluated" | "error";
 // a learner bubble keeps the script line next to what was heard (spec roleplay-practice 2), its line number for
 // 「이 줄 다시」 (9), and the recording of that turn for 「🔊 내 녹음」 (spec three-line-listen 3). Its `text` is ""
@@ -117,6 +118,7 @@ export type Action =
   | { type: "interpret"; open: boolean }
   | { type: "practiseLine"; kind: "mine" | "shadow"; idx: number }
   | { type: "openReview" }
+  | { type: "openTalk" }
   | { type: "openPast" }
   | { type: "openSaved" }
   | { type: "openPastRun"; group: string; title: string }
@@ -321,7 +323,8 @@ export function reduce(s: State, a: Action): State {
     case "back":
       // the on-screen back button and the phone's back key: the screen before this one
       // 「복습하기」 goes home from either tab: switching tabs is not a step back (spec review-screens 2)
-      if (s.screen === "situation" || s.screen === "past" || s.screen === "saved") return { ...initial };
+      // the free talk goes home without asking and is not resumed (spec free-talk-design 2)
+      if (s.screen === "situation" || s.screen === "past" || s.screen === "saved" || s.screen === "talk") return { ...initial };
       if (s.screen === "roleplay" && s.practice) return leavePractice(s);
       if ((s.screen === "roleplay" || s.screen === "end") && s.returnTo) return restore(s.returnTo);
       if (s.screen === "end" && s.past) return { ...initial, screen: "past" };
@@ -501,6 +504,10 @@ export function reduce(s: State, a: Action): State {
     case "openReview":
       // 「복습하기」 opens on the past tab (spec review-screens 2)
       return s.screen === "home" ? { ...initial, screen: "past" } : s;
+    case "openTalk":
+      // 「자유 대화」 opens the talk at once, no situation to pick (spec free-talk-design 1). Only from home: the second
+      // tap of a double tap on the card finds the talk open already, so one talk is made on the Mac.
+      return s.screen === "home" ? { ...initial, screen: "talk" } : s;
     case "openPast":
     case "openSaved": {
       // the tabs, taken only on 「복습하기」

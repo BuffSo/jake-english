@@ -10,7 +10,7 @@
 // `englishTurns` and goes back instead of asking the Mac for fixes.
 import type { Roleplay, Said, ScriptLine, TalkEnd, TalkEvent, TryRef } from "../api/types";
 import type { ErrorCode } from "../api/client";
-import { NO_SPEECH, messageFor } from "./state";
+import { MIC_FAILED, NO_SPEECH, messageFor } from "./state";
 
 export type TalkPhase = "opening" | "ryan" | "ready" | "recording" | "waiting" | "replying" | "ending" | "fixes" | "error";
 
@@ -28,6 +28,9 @@ export type TalkState = {
   pending: string; // Ryan's text so far, before his line is whole
   done: boolean; // everything Ryan has to say is in
   message: string | null;
+  // the message says something failed (a request, Claude, the mic): drawn in red, as in the roleplay, though my turn
+  // comes back at once. Ryan's no-speech words and the no-speech notice are not failures (`talkMessageIsError`).
+  failure: boolean;
   micUsed: boolean; // for the first-turn hint 「🎤를 누르고 말하세요」
   end: TalkEnd | null;
   errorFrom: "opening" | "ending" | null;
@@ -42,6 +45,7 @@ export const talkInitial: TalkState = {
   pending: "",
   done: false,
   message: null,
+  failure: false,
   micUsed: false,
   end: null,
   errorFrom: null,
@@ -54,6 +58,7 @@ export type TalkAction =
   | { type: "ryanDone" }
   | { type: "recordStart"; heard: number | null }
   | { type: "recordCancel" }
+  | { type: "micFailed" }
   | { type: "noSpeech" }
   | { type: "recordStop" }
   | { type: "event"; turn: number; e: TalkEvent }
@@ -67,6 +72,10 @@ export const canEnd = canSpeak;
 // the 🔊, interpretation and my recording of past bubbles: only on my turn, not over Ryan's sound
 export const mayListenTalk = (s: TalkState) => s.phase === "ready";
 export const isCurrent = (s: TalkState, turn: number) => turn === s.turn;
+// the message is drawn in red after a failure; Ryan's no-speech words and the no-speech notice are not one
+export const talkMessageIsError = (s: TalkState) => s.phase === "error" || (s.message !== null && s.failure);
+// the roleplay's soft errors (`state.ts` event): my turn again, said in plain words
+const SOFT = new Set(["no_speech", "too_long"]);
 export const englishTurns = (s: TalkState) => s.bubbles.filter((b) => b.kind === "me" && !b.korean).length;
 // 「N번째」: my turns so far, plus the one being taken until my words come back
 export const turnNo = (s: TalkState) =>
@@ -123,8 +132,12 @@ export function talkReduce(s: TalkState, a: TalkAction): TalkState {
       return { ...s, phase: "recording", bubbles: withCut(s, a.heard), turn: s.turn + 1, micUsed: true, message: null };
     case "recordCancel":
       return s.phase === "recording" ? { ...s, phase: "ready" } : s;
+    case "micFailed":
+      // no permission or the recorder failed: my turn again, saying why, as the roleplay does (todo 20261108_34 1).
+      // Like 「취소」, a cut made by the tap stays for the next turn.
+      return s.phase === "recording" ? { ...s, phase: "ready", message: MIC_FAILED, failure: true } : s;
     case "noSpeech":
-      return s.phase === "recording" ? { ...s, phase: "ready", message: NO_SPEECH } : s;
+      return s.phase === "recording" ? { ...s, phase: "ready", message: NO_SPEECH, failure: false } : s;
     case "recordStop":
       return s.phase === "recording" ? { ...s, phase: "waiting", heardIn: false, pending: "", done: false } : s;
     case "event": {
@@ -159,6 +172,7 @@ export function talkReduce(s: TalkState, a: TalkAction): TalkState {
             phase: "ready",
             pending: "",
             message: messageFor(e.code as ErrorCode, e.say ?? undefined),
+            failure: !SOFT.has(e.code),
           };
         default:
           return s; // `audio` only tells the screen to preload
@@ -167,7 +181,7 @@ export function talkReduce(s: TalkState, a: TalkAction): TalkState {
     case "failed":
       if (!isCurrent(s, a.turn)) return s;
       if (s.phase !== "waiting" && s.phase !== "replying" && s.phase !== "ryan") return s;
-      return { ...s, phase: "ready", pending: "", message: a.message };
+      return { ...s, phase: "ready", pending: "", message: a.message, failure: true };
     case "endStart":
       if (!canEnd(s)) return s;
       return { ...s, phase: "ending", bubbles: withCut(s, a.heard), message: null };

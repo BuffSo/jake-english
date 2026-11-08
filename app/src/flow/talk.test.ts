@@ -1,7 +1,7 @@
 import type { Roleplay, Said, ScriptLine, TalkEnd, TalkEvent } from "../api/types";
 import roleplayJson from "../../../contract/roleplay.json";
 import talkJson from "../../../contract/talk.json";
-import { NO_SPEECH } from "./state";
+import { MIC_FAILED, NO_SPEECH } from "./state";
 import {
   canEnd,
   canSpeak,
@@ -11,6 +11,7 @@ import {
   isCurrent,
   lineSounds,
   mayListenTalk,
+  talkMessageIsError,
   replaysSituation,
   savedBefore,
   talkInitial,
@@ -160,6 +161,31 @@ test("no speech goes back to my turn with Ryan's words", () => {
   expect(s.phase).toBe("ready");
   expect(s.message).toBe(NO_SPEECH);
   expect(cutOf(s)).toBe(1);
+});
+
+test("a mic that did not start gives my turn back saying why, in red", () => {
+  const s = run(answered(), { type: "recordStart", heard: 1 }, { type: "micFailed" });
+  expect(s.phase).toBe("ready");
+  expect(s.message).toBe(MIC_FAILED);
+  expect(talkMessageIsError(s)).toBe(true);
+  expect(cutOf(s)).toBe(1); // like 「취소」: the cut stays for the next turn
+  const r = ready();
+  expect(talkReduce(r, { type: "micFailed" })).toBe(r);
+});
+
+test("failures are said in red, as in the roleplay; no speech and a long turn are not", () => {
+  const s0 = run(ready(), { type: "recordStart", heard: null }, { type: "recordStop" });
+  const say = { text: "잘 안 들렸어요.", audio: key("h") };
+  const down = talkReduce(s0, ev(s0, { type: "error", code: "claude_unavailable", say: null }));
+  const lost = talkReduce(s0, { type: "failed", turn: s0.turn, message: "맥에 연결할 수 없어요." });
+  const unheard = talkReduce(s0, ev(s0, { type: "error", code: "no_speech", say }));
+  const tooLong = talkReduce(s0, ev(s0, { type: "error", code: "too_long", say }));
+  const silent = run(ready(), { type: "recordStart", heard: null }, { type: "noSpeech" });
+  for (const s of [down, lost]) expect(talkMessageIsError(s)).toBe(true);
+  for (const s of [unheard, tooLong, silent, ready()]) expect(talkMessageIsError(s)).toBe(false);
+  // speaking again clears it; an opening or ending that failed is red
+  expect(talkMessageIsError(talkReduce(down, { type: "recordStart", heard: null }))).toBe(false);
+  expect(talkMessageIsError(talkReduce(talkInitial, { type: "openFailed", message: "x" }))).toBe(true);
 });
 
 test("Claude down drops the half reply and keeps my bubble", () => {
