@@ -173,7 +173,10 @@ def test_recording_is_served_after_an_attempt(client, speech_bytes):
     client.get(f"/roleplays/{rp['id']}/lines/1")
     client.post(f"/roleplays/{rp['id']}/lines/1/attempts?mode=turn", content=speech_bytes)
     r = client.get(f"/roleplays/{rp['id']}/lines/1/attempts/1/recording")
-    assert r.status_code == 200 and r.headers["content-type"] == "audio/mp4" and r.content == speech_bytes
+    # the play copy, moov first (spec play-button-feedback 4); a whole tone keeps its length
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mp4"
+    assert r.content != speech_bytes and r.content[4:8] == b"ftyp"
+    assert r.content.index(b"moov") < r.content.index(b"mdat")
 
 
 def test_recording_missing_is_404_and_creates_nothing(client, settings):

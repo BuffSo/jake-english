@@ -69,6 +69,33 @@ async def has_speech(wav: Path) -> bool:
     return await asyncio.to_thread(_has_speech, wav)
 
 
+# The play copy of a recording (spec play-button-feedback 4): from just before the first speech to just after the
+# last, so a replay is not silence first. Gentler than SPEECH_MIN_DBFS: on 19 recordings (2026-11-08) -35 dBFS started
+# two of them 0.75-1.1 s late, cutting a soft first word; at -45 dBFS they matched the rest within 0.1 s.
+PLAY_MIN_DBFS = -45.0
+PLAY_LEAD = 0.2  # kept before the first speech
+PLAY_TAIL = 0.4  # kept after the last; a recording ended by an 8 s pause would otherwise keep its 8 s
+
+
+def speech_span(wav: Path) -> tuple[float, float] | None:
+    """Start of the first and end of the last 50 ms window at or over PLAY_MIN_DBFS, in seconds; None if none."""
+    windows, _ = _window_dbfs(wav)
+    loud = [i for i, d in enumerate(windows) if d >= PLAY_MIN_DBFS]
+    if not loud:
+        return None
+    return loud[0] * WINDOW, (loud[-1] + 1) * WINDOW
+
+
+async def play_cut(src: Path, span: tuple[float, float] | None, seconds: float, dst: Path) -> None:
+    """Copies `src` to `dst` cut to `span` with its lead and tail, without re-encoding, moov first so the phone can
+    start playing before it has the whole file. No span keeps it whole."""
+    args = ["-i", str(src), "-c", "copy", "-movflags", "+faststart", str(dst)]
+    if span is not None:
+        start, end = max(0.0, span[0] - PLAY_LEAD), min(seconds, span[1] + PLAY_TAIL)
+        args = ["-ss", f"{start:.3f}", "-to", f"{end:.3f}", *args]
+    await _ffmpeg(*args)
+
+
 async def with_rate(src: Path, rate: float, dst: Path) -> None:
     """Changes speed, keeps pitch (ffmpeg atempo)."""
     await _ffmpeg("-i", str(src), "-filter:a", f"atempo={rate}", "-c:a", "aac", "-b:a", "96k", str(dst))
