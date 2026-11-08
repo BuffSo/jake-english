@@ -9,7 +9,8 @@ import type { SituationStart } from "./situation";
 export type Screen = "home" | "situation" | "roleplay" | "end" | "past" | "saved";
 export type Phase = "loading" | "ryan" | "ready" | "recording" | "evaluating" | "evaluated" | "error";
 // a learner bubble keeps the script line next to what was heard (spec roleplay-practice 2), its line number for
-// 「이 줄 다시」 (9), and the recording of that turn for 「🔊 내 녹음」 (spec three-line-listen 3)
+// 「이 줄 다시」 (9), and the recording of that turn for 「🔊 내 녹음」 (spec three-line-listen 3). Its `text` is ""
+// for a line skipped without a recording: the script only (spec record-cancel-skip 3).
 export type Bubble = { kind: "ryan" | "user" | "feedback"; text: string; idx?: number; script?: string; rec?: TryRef };
 // Practice: the learner's lines again (mine) or Ryan's lines to follow (shadow), in order. From the end screen it
 // goes back to the end; from a past bubble in the roleplay (one line) it goes back to the roleplay (spec 9).
@@ -79,6 +80,7 @@ export type Action =
   | { type: "recordStart" }
   | { type: "recordStop" }
   | { type: "recordCancel" }
+  | { type: "skip" }
   | { type: "event"; e: AttemptEvent }
   | { type: "failed"; code: ErrorCode; say?: { text: string } }
   | { type: "retry" }
@@ -149,6 +151,13 @@ export function canReplay(p: Phase): boolean {
 // moves the roleplay on. 「🔊 다시 듣기」 at the bottom is not held back.
 export function mayListen(p: Phase, answering: boolean): boolean {
   return (canReplay(p) || p === "error") && !answering;
+}
+
+// 「건너뛰기」: my turn waits for a recording, before recording or after teacher Ryan's answer, which offers only
+// 「다시 해 보기」. Not after a try that offers 「다음」, which moves on already (spec record-cancel-skip 2).
+export function canSkip(s: State): boolean {
+  const toSay = s.line !== null && (s.line.speaker === "user" || s.mode === "shadow");
+  return s.screen === "roleplay" && toSay && (s.phase === "ready" || (s.phase === "evaluated" && s.aside));
 }
 
 const freshTurn = { heard: null, heardRec: null, feedback: "", aside: false, message: null, errorFrom: null } as const;
@@ -342,6 +351,26 @@ export function reduce(s: State, a: Action): State {
         ...s,
         ...freshTurn,
         history: [...s.history, ...exchange(s)],
+        idx: s.nextIdx ?? s.idx + 1,
+        nextIdx: null,
+        mode: "turn",
+        phase: "loading",
+        line: null,
+      };
+    }
+    case "skip": {
+      // where 「다음」 goes, without a recording: nothing is sent, so the line has no try (spec record-cancel-skip 2)
+      if (!canSkip(s)) return s;
+      if (s.practice) return advance(s);
+      const line = s.line!;
+      // the line stays in the conversation as its script, unless a try at it is there already (spec 3); teacher
+      // Ryan's answer is not kept, as after 「다시 해 보기」
+      const said = s.history.some((b) => b.kind === "user" && b.idx === line.idx);
+      const skipped: Bubble = { kind: "user", text: "", script: line.text, idx: line.idx };
+      return {
+        ...s,
+        ...freshTurn,
+        history: said ? s.history : [...s.history, skipped],
         idx: s.nextIdx ?? s.idx + 1,
         nextIdx: null,
         mode: "turn",
