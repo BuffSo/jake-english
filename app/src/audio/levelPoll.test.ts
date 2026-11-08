@@ -69,3 +69,18 @@ test("a reading that throws counts as no level, so it never cancels", () => {
   expect(seen[0]).toBeUndefined();
   stop();
 });
+
+test("a long pause after speech calls onSpeechEnd once, and never onNoSpeech", () => {
+  const onNoSpeech = jest.fn();
+  const onSpeechEnd = jest.fn();
+  let n = 0;
+  const stop = startLevelPoll({ read: () => (++n >= 10 && n <= 15 ? -10 : -90), onLevel: () => {}, onNoSpeech, onSpeechEnd });
+  jest.advanceTimersByTime(1500 + SPEECH_RULE.endMs - LEVEL_EVERY_MS);
+  expect(onSpeechEnd).not.toHaveBeenCalled();
+  jest.advanceTimersByTime(LEVEL_EVERY_MS);
+  expect(onSpeechEnd).toHaveBeenCalledTimes(1);
+  jest.advanceTimersByTime(20_000);
+  expect(onSpeechEnd).toHaveBeenCalledTimes(1);
+  expect(onNoSpeech).not.toHaveBeenCalled();
+  stop();
+});

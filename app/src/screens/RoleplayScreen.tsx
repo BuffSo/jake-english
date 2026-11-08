@@ -372,7 +372,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     dispatch({ type: "recordStart" });
     const how = await startKeepingCancel(
       startCancel,
-      () => rec.start(stopRecording, { onNoSpeech: silentCancel }),
+      // a long pause after speaking ends it as 「말하기 끝」 does, through the same gate (spec record-feedback 4)
+      () => rec.start(stopRecording, { onNoSpeech: silentCancel, onSpeechEnd: stopRecording }),
       () => !mounted.current || epoch.current !== my,
     );
     if (how === "failed") dispatch({ type: "recordCancel" });

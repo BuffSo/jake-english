@@ -39,8 +39,9 @@ export function useRecorder() {
     setLiveSince(null);
   }
 
-  // `onNoSpeech`: called once when no speech came in time after the mic came on (the roleplay screen only)
-  async function start(onAutoStop: () => void, opts: { onNoSpeech?: () => void } = {}): Promise<void> {
+  // `onNoSpeech`: called once when no speech came in time after the mic came on; `onSpeechEnd`: called once after a
+  // long pause following speech (the roleplay screen only)
+  async function start(onAutoStop: () => void, opts: { onNoSpeech?: () => void; onSpeechEnd?: () => void } = {}): Promise<void> {
     const perm = await requestRecordingPermissionsAsync();
     if (!perm.granted) throw new Error("mic");
     await recorder.prepareToRecordAsync();
@@ -56,6 +57,7 @@ export function useRecorder() {
       read: () => recorder.getStatus().metering,
       onLevel: (db) => levelSubs.current.forEach((cb) => cb(db)),
       onNoSpeech: opts.onNoSpeech,
+      onSpeechEnd: opts.onSpeechEnd,
     });
   }
 
