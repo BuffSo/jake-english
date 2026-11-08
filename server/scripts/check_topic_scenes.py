@@ -13,7 +13,8 @@ Korea (`abroad`) and long words (`hard_words`, the user asked for easy everyday 
 point; the scenes (help or small talk, who should start) are read by hand. Inputs are made up and the model's own
 sentences are printed, so printing them is fine (REVIEW.md). Prints calls, tokens and cost at the end.
 
-About $0.003 a suggestion and $0.02 a script on Sonnet. Run in server/:
+About $0.004 a suggestion and $0.007 a script on Sonnet (2026-11-08: 35 suggestions and 9 scripts, $0.19).
+Run in server/:
 uv run python scripts/check_topic_scenes.py [--runs 2] [--presses 7] [--recent filled|empty] [--example TEXT] [--scripts]
 """
 from __future__ import annotations
