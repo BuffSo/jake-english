@@ -23,15 +23,15 @@
 
 ## Review Focus
 
-1. 소희 찬스를 누르고 바로 「🎤 말하기」를 눌러, 힌트 글과 소희 소리가 녹음 중에 늦게 온다: 글은 소희 말풍선에 보이되 소리는 나지 않아야 한다(작업 A3 `test_late_hint_sound_does_not_play_while_recording`).
-2. 「소희 찬스」를 빠르게 두 번 누르거나 두 요청이 동시에 온다: Claude는 한 번만 불린다(작업 S3 `test_two_hints_at_once_ask_claude_once`, 작업 A3 게이트 시험).
-3. 앱을 거치지 않고 2단계를 1단계보다 먼저 부르거나, 첫 단계 응답에 전체 문장이 섞인다: 409 `no_hint`, 첫 단계 응답에는 `full`이 없다(작업 S3).
-4. 전체 문장을 본 뒤 전혀 다른 말을 한다: 보통 영어 차례이고 Claude의 고쳐 주기 대상이다(작업 S4 `test_far_from_the_given_sentence_is_a_plain_turn`).
-5. 소희 그림과 힌트 경로가 없는 옛 서버에 새 앱이 붙는다: 얼굴 없이 글로 보이고, 힌트 실패는 소희 말풍선의 한 줄 안내로 끝나 버튼을 다시 누를 수 있다(작업 A1 `laterPictures` 시험, 작업 A3 `chanceFailed` 시험).
+1. 소희 찬스를 누르고 바로 「🎤 말하기」를 눌러, 힌트 글과 소희 소리가 녹음 중에 늦게 온다: 글은 소희 말풍선에 보이되 소리는 나지 않아야 한다(작업 8 `test_late_hint_sound_does_not_play_while_recording`).
+2. 「소희 찬스」를 빠르게 두 번 누르거나 두 요청이 동시에 온다: Claude는 한 번만 불린다(작업 3 `test_two_hints_at_once_ask_claude_once`, 작업 8 게이트 시험).
+3. 앱을 거치지 않고 2단계를 1단계보다 먼저 부르거나, 첫 단계 응답에 전체 문장이 섞인다: 409 `no_hint`, 첫 단계 응답에는 `full`이 없다(작업 3).
+4. 전체 문장을 본 뒤 전혀 다른 말을 한다: 보통 영어 차례이고 Claude의 고쳐 주기 대상이다(작업 4 `test_far_from_the_given_sentence_is_a_plain_turn`).
+5. 소희 그림과 힌트 경로가 없는 옛 서버에 새 앱이 붙는다: 얼굴 없이 글로 보이고, 힌트 실패는 소희 말풍선의 한 줄 안내로 끝나 버튼을 다시 누를 수 있다(작업 6 `laterPictures` 시험, 작업 8 `chanceFailed` 시험).
 
 ---
 
-### Task S1: 대화 안의 영어 정해진 말, 한국어 차례를 라이언에게, 되받기 차례
+### Task 1: 대화 안의 영어 정해진 말, 한국어 차례를 라이언에게, 되받기 차례
 
 **Files:**
 - Modify: `server/je_server/phrases.py`, `server/je_server/engine.py`(`talk_english` 지움, `warm`, `speak`), `server/je_server/talk.py`(`messages`, `_turn`), `server/je_server/prompts.py`(`TALK_SYSTEM`과 표시 상수), `server/je_server/app.py`(`talk_turn`의 `WhisperError`)
@@ -92,7 +92,7 @@ async def test_roleplay_no_speech_stays_korean(...):  # engine.error("no_speech"
 - [ ] **Step 4: 시험이 통과하는지 본다** — `uv run pytest -q` / Expected: 모두 PASS
 - [ ] **Step 5: 커밋** — `feat(server): keep ryan in english in free talk and answer korean turns`
 
-### Task S2: 소희 그림을 서버 그림 목록과 첫 화면 응답에
+### Task 2: 소희 그림을 서버 그림 목록과 첫 화면 응답에
 
 **Files:**
 - Modify: `server/je_server/app.py`(`THINKING`, `ASSETS`, `/home`)
@@ -107,7 +107,7 @@ async def test_roleplay_no_speech_stays_korean(...):  # engine.error("no_speech"
 - [ ] **Step 4: 통과를 본다** — `uv run pytest -q`
 - [ ] **Step 5: 커밋** — `feat(server): serve sohee's faces for the free talk`
 
-### Task S3: 소희 찬스 힌트(1단계, 2단계)와 대화 끝의 횟수
+### Task 3: 소희 찬스 힌트(1단계, 2단계)와 대화 끝의 횟수
 
 **Files:**
 - Create: `server/je_server/hints.py`, `server/tests/test_hints.py`
@@ -158,20 +158,20 @@ async def test_sohees_phrases_are_made_ahead(engine, fake_voice):
 - [ ] **Step 2: 실패를 본다** — `uv run pytest -q tests/test_hints.py tests/test_talk.py tests/test_claude.py tests/test_api.py tests/test_contract.py`
 - [ ] **Step 3: 구현**
   - `hints.check`: 따옴표 지우기, 첫마디의 `" …"`, `"..."`는 `"…"`로. 첫마디 2~3개(넷 이상이면 앞 셋), 각 2~6낱말(…빼고), `…`로 끝, 한글 없음. 뜻은 한글이 있고 80자 안쪽. 전체 문장은 한 첫마디의 앞부분(…와 끝 쉼표를 뺀 것, 대소문자 무시)으로 시작하고 12낱말 안쪽, 한글 없음.
-  - `HINT_SYSTEM`은 2026-11-09 견주기에 쓴 글을 그대로 옮긴다(`scripts/compare_hint_models.py`가 같은 상수를 쓴다, 작업 S5). 소희가 친구처럼 귓속말로, 뜻 한 줄, 첫마디 두세 개(…로 끝, 다 만든 답과 학습자 대신 정한 사실 없음), 첫마디 하나로 시작하는 12낱말 안쪽 전체 문장.
+  - `HINT_SYSTEM`은 2026-11-09 견주기에 쓴 글을 그대로 옮긴다(`scripts/compare_hint_models.py`가 같은 상수를 쓴다, 작업 5). 소희가 친구처럼 귓속말로, 뜻 한 줄, 첫마디 두세 개(…로 끝, 다 만든 답과 학습자 대신 정한 사실 없음), 첫마디 하나로 시작하는 12낱말 안쪽 전체 문장.
   - `Talks`: 줄마다 힌트 작업 하나(`self.hinting: dict[tuple[str, int], asyncio.Task]`, `_keep`, `asyncio.shield`, `end`의 `ending`과 같은 방식). 힌트는 `engine.update_line(..., hint=...)`으로 남긴다. 로그는 시간과 개수만.
   - `warm()`은 `SOHEE_PHRASES["hint_full"]`을 소희 목소리로 미리 만든다.
 - [ ] **Step 4: 통과를 본다** — `uv run pytest -q`
 - [ ] **Step 5: 커밋** — 둘로 나눈다: `feat(server): add sohee chance hints to free talk lines`, `feat(server): count sohee chances at the end of a free talk`
 
-### Task S4: 전체 문장을 본 뒤의 차례
+### Task 4: 전체 문장을 본 뒤의 차례
 
 **Files:**
 - Modify: `server/je_server/models.py`(`ScriptLine.given`), `server/je_server/talk.py`(`_turn`, `messages`, `fix_input`, `_end`), `server/je_server/claude.py`(`fixes`), `server/je_server/prompts.py`(`TALK_HELPED`, `FIX_SYSTEM`), `server/je_server/fixes.py`(`check`)
 - Test: `server/tests/test_talk.py`, `server/tests/test_fixes.py`, `server/tests/test_claude.py`
 
 **Interfaces:**
-- Consumes: `Hint.full`, `Hint.full_shown`(작업 S3), `compare.similarity`, `compare.find_issues`, `compare.FOLLOW_MIN`, `engine.NEAR_MIN`, `claude._points`.
+- Consumes: `Hint.full`, `Hint.full_shown`(작업 3), `compare.similarity`, `compare.find_issues`, `compare.FOLLOW_MIN`, `engine.NEAR_MIN`, `claude._points`.
 - Produces: `ScriptLine.given: str | None = None`(그 차례가 말하려 한 소희의 전체 문장), `prompts.TALK_HELPED = "(said with help: a sentence Sohee showed)"`, `fix_input(rp) -> tuple[list[dict], dict[int, str], dict[int, Helped]]`, `fixes.Helped(given: str, heard: str, issues: list[Issue])`, `Claude.fixes(conversation: list[dict], helped: list[dict]) -> list[dict]`, `fixes.check(items, turns, helped: dict[int, Helped] | None = None) -> list[Found]`.
 
 - [ ] **Step 1: 실패하는 시험**
@@ -202,14 +202,14 @@ def test_claudes_grammar_pick_on_a_helped_turn_is_dropped():
 - [ ] **Step 4: 통과를 본다** — `uv run pytest -q`
 - [ ] **Step 5: 커밋** — `feat(server): compare a turn with sohee's full sentence and fix it last`
 
-### Task S5: 실제 모델 확인 스크립트
+### Task 5: 실제 모델 확인 스크립트
 
 **Files:**
 - Create: `server/scripts/compare_hint_models.py`, `server/tests/test_compare_hint_models.py`
 - Modify: `server/scripts/compare_talk_models.py`(한국어 차례, 되받기 경우와 세기), `server/tests/` 해당 시험
 
 **Interfaces:**
-- Consumes: `prompts.HINT_SYSTEM`, `HINT_SCHEMA`, `hints.check`(작업 S3), `talk.messages`의 표시(작업 S1).
+- Consumes: `prompts.HINT_SYSTEM`, `HINT_SCHEMA`, `hints.check`(작업 3), `talk.messages`의 표시(작업 1).
 - `compare_hint_models.py [--runs 2]`: 지어낸 대화 여덟(주말 계획, 묻지 않은 말, 긴 말, 예/아니요, 첫 질문, 되묻기, 추상 질문, 둘 중 고르기)을 Haiku와 Sonnet에 번갈아 묻고, `hints.check`에 걸린 수, 전체 문장이 첫마디로 시작하지 않은 수, 가운데 시간, 값을 찍는다.
 - `compare_talk_models.py`: 경우에 한국어 차례 여섯(`TALK_KOREAN` 표시)과 실수 차례 넷(마지막 user 메시지에 `TALK_ECHO`가 붙은 판과 안 붙은 판)을 더하고, `korean` 어김 수와 되받기 수(경우마다 맞는 꼴 낱말 정규식)를 찍는다.
 
@@ -219,14 +219,14 @@ def test_claudes_grammar_pick_on_a_helped_turn_is_dropped():
 - [ ] **Step 4: 통과를 본다** — `uv run pytest -q`
 - [ ] **Step 5: 커밋** — `test(server): compare hint models and count recasts on made-up talks`
 
-### Task A1: 앱 API, 소희 그림, 첫 화면 아이콘
+### Task 6: 앱 API, 소희 그림, 첫 화면 아이콘
 
 **Files:**
 - Modify: `app/src/api/types.ts`, `app/src/api/client.ts`, `app/src/ui/thinking.ts`, `app/src/ui/faces.ts`, `app/src/screens/HomeScreen.tsx`, `contract/talk-end.json`(작업 S3과 같은 값), `app/src/api/contract.test.ts`
 - Test: `app/src/api/client.test.ts`, `app/src/ui/faces.test.ts`, `app/src/ui/thinking.test.ts`
 
 **Interfaces:**
-- Consumes: 작업 S2, S3의 경로와 모양.
+- Consumes: 작업 2, S3의 경로와 모양.
 - Produces: `type Hint = { meaning_ko: string; starters: string[] }`, `type HintFull = { text: string; say: Said }`, `Thinking = { jake: string[]; ryan: string[]; sohee?: string[] }`, `Home.images.sohee?: { face: string; whisper: string }`, `TalkEnd.sohee?: number`, `Who = "jake" | "ryan" | "sohee"`, `api.getHint(id, idx): Promise<Hint>`(POST, `LONG`), `api.getHintAudio(id, idx): Promise<{ audio: string }>`, `api.showFull(id, idx): Promise<HintFull>`(POST), `api.getHintSound(id, idx, n): Promise<{ audio: string }>`, `api.getHintThree(id, idx): Promise<ThreeLine>`.
 
 - [ ] **Step 1: 실패하는 시험** — 클라이언트 경로 다섯의 주소와 메서드, `laterPictures`가 소희의 생각하는 얼굴 둘과 얼굴, 귓속말 얼굴을 넣고 옛 서버(`sohee` 없음)에서는 빼는 것, `framesFor(thinking, "sohee")`가 옛 서버에서 `[]`.
@@ -235,7 +235,7 @@ def test_claudes_grammar_pick_on_a_helped_turn_is_dropped():
 - [ ] **Step 4: 통과를 본다** — `npx jest && npx tsc --noEmit`
 - [ ] **Step 5: 커밋** — `feat(app): add sohee chance requests and pictures, coffee icon`
 
-### Task A2: 라이언 말풍선 자막 숨기기와 한국어 오류 글
+### Task 7: 라이언 말풍선 자막 숨기기와 한국어 오류 글
 
 **Files:**
 - Create: `app/src/ui/SpeakingBars.tsx`
@@ -267,7 +267,7 @@ test("Ryan's current bubble is speaking until his turn ends", ...)  // ryan phas
 - [ ] **Step 4: 통과를 본다** — `npx jest && npx tsc --noEmit`
 - [ ] **Step 5: 커밋** — `feat(app): hide ryan's subtitles in free talk until asked`
 
-### Task A3: 소희 찬스(소희 말풍선, 두 단계)
+### Task 8: 소희 찬스(소희 말풍선, 두 단계)
 
 **Files:**
 - Create: `app/src/flow/soheeChance.ts`, `app/src/flow/soheeChance.test.ts`, `app/src/ui/SoheeHint.tsx`, `app/src/ui/SoheeChanceButton.tsx`
@@ -315,14 +315,14 @@ test("a hint for an older line stays but is not the target", ...);           // 
 - [ ] **Step 4: 통과를 본다** — `npx jest && npx tsc --noEmit`
 - [ ] **Step 5: 커밋** — `feat(app): add sohee chance hints and full sentence to free talk`
 
-### Task A4: 대화 돌아보기의 「소희 찬스 N번 썼어요」와 버튼 가이드
+### Task 9: 대화 돌아보기의 「소희 찬스 N번 썼어요」와 버튼 가이드
 
 **Files:**
 - Modify: `app/src/screens/TalkFixScreen.tsx`, `app/src/flow/talkFix.ts`, `docs/guide/APP_버튼_색과_모양_20261108.md`
 - Test: `app/src/flow/talkFix.test.ts`
 
 **Interfaces:**
-- Consumes: `TalkEnd.sohee`(작업 A1).
+- Consumes: `TalkEnd.sohee`(작업 6).
 - Produces: `soheeLine(end: TalkEnd): string | null` — 1 이상이면 `` `소희 찬스 ${n}번 썼어요` ``, 0이나 없으면 `null`.
 
 - [ ] **Step 1: 실패하는 시험** — `soheeLine({ ..., sohee: 2 }) === "소희 찬스 2번 썼어요"`, `sohee: 0`과 없음은 `null`.
