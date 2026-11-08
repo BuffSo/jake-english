@@ -229,14 +229,14 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
             <>
               {/* a past view is opened to do it again, so that comes first (review-practice 3) */}
               <Button label={again} onPress={restart} disabled={copying} />
-              <Button label={`내 대사 다시 연습(${mine.length}줄)`} onPress={() => practise("mine", mine)} kind="plain" />
-              <Button label={`라이언 대사 따라 말하기(${ryans.length}줄)`} onPress={() => practise("shadow", ryans)} kind="plain" />
+              <Button label={`내 대사 다시 연습(${mine.length}줄)`} onPress={() => practise("mine", mine)} kind="secondary" />
+              <Button label={`라이언 대사 따라 말하기(${ryans.length}줄)`} onPress={() => practise("shadow", ryans)} kind="secondary" />
             </>
           ) : (
             <>
               <Button label={`내 대사 다시 연습(${mine.length}줄)`} onPress={() => practise("mine", mine)} />
-              <Button label={`라이언 대사 따라 말하기(${ryans.length}줄)`} onPress={() => practise("shadow", ryans)} kind="plain" />
-              <Button label={again} onPress={restart} kind="plain" disabled={copying} />
+              <Button label={`라이언 대사 따라 말하기(${ryans.length}줄)`} onPress={() => practise("shadow", ryans)} kind="secondary" />
+              <Button label={again} onPress={restart} kind="secondary" disabled={copying} />
             </>
           )}
         </View>

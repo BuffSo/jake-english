@@ -287,12 +287,12 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
       {ryanSays && <Text style={[common.body, styles.say]}>{keepWords(ryanSays)}</Text>}
       {step === "topic" &&
         topics.map((t) => (
-          <Button key={t.id} label={t.name_ko} onPress={() => chooseTopic(t)} kind={t.id === OTHER_TOPIC ? "plain" : "primary"} />
+          <Button key={t.id} label={t.name_ko} onPress={() => chooseTopic(t)} kind={t.id === OTHER_TOPIC ? "secondary" : "primary"} />
         ))}
       {step === "how" &&
         topic &&
         howChoices(topic).map((c, i) => (
-          <Button key={c} label={HOW_LABEL[c]} onPress={() => chooseHow(c)} kind={i === 0 ? "primary" : "plain"} />
+          <Button key={c} label={HOW_LABEL[c]} onPress={() => chooseHow(c)} kind={i === 0 ? "primary" : "secondary"} />
         ))}
       {step === "describe" && (
         <>
@@ -304,21 +304,21 @@ export function SituationScreen({ sounds, home, start, onCreated, onBack }: Prop
             multiline
             maxLength={300}
           />
-          <Button label={rec.recording ? "■ 말하기 끝" : "🎤 말로 하기"} onPress={rec.recording ? stopMic : startMic} kind="plain" />
+          <Button label={rec.recording ? "■ 말하기 끝" : "🎤 말로 하기"} onPress={rec.recording ? stopMic : startMic} kind="secondary" />
           <Button label="시작" onPress={startDescribed} disabled={rec.recording} />
         </>
       )}
       {step === "askRecommend" && (
         <>
           <Button label="좋아요" onPress={recommend} />
-          <Button label="아니요" onPress={() => toStep("describe")} kind="plain" />
+          <Button label="아니요" onPress={() => toStep("describe")} kind="secondary" />
         </>
       )}
       {step === "confirm" && jake && (
         <>
           <JakeSays text={jake.text} />
           <Button label="이걸로 할게요" onPress={pick} />
-          <Button label="다른 걸로요" onPress={another} kind="plain" />
+          <Button label="다른 걸로요" onPress={another} kind="secondary" />
         </>
       )}
       {step === "working" && (

@@ -692,23 +692,23 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           {myTurn && state.phase !== "error" && (
             <>
               <View style={styles.row}>
-                <Button label="🔊 다시 듣기" onPress={() => listen()} kind="plain" small disabled={busy || state.phase === "recording"} />
+                <Button label="🔊 다시 듣기" onPress={() => listen()} kind="secondary" small disabled={busy || state.phase === "recording"} />
                 {RATES.map((r) => (
                   <Button
                     key={r}
                     label={`${r}배${r === rate ? " ✓" : ""}`}
                     onPress={() => listen(r)}
-                    kind="plain"
+                    kind="secondary"
                     small
                     disabled={busy || state.phase === "recording"}
                   />
                 ))}
               </View>
-              {/* gray on the left, blue filling the rest, like 「다시 해 보기 | 다음」 (spec record-cancel-skip 4) */}
+              {/* outlined on the left, blue filling the rest, like 「다시 해 보기 | 다음」 (spec record-cancel-skip 4, button-colors 1) */}
               {state.phase !== "evaluated" && (
                 <View style={styles.pair}>
-                  {canSkip(state) && <Button label="건너뛰기" onPress={skipLine} kind="plain" />}
-                  {state.phase === "recording" && <Button label="취소" onPress={cancelRecording} kind="plain" />}
+                  {canSkip(state) && <Button label="건너뛰기" onPress={skipLine} kind="secondary" />}
+                  {state.phase === "recording" && <Button label="취소" onPress={cancelRecording} kind="secondary" />}
                   <Button
                     label={state.phase === "recording" ? "■ 말하기 끝" : busy ? "평가하고 있어요" : shadow ? "🎤 따라 말하기" : "🎤 말하기"}
                     onPress={state.phase === "recording" ? stopRecording : startRecording}
@@ -721,13 +721,13 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                   record-cancel-skip 2) */}
               {state.phase === "evaluated" && state.aside && (
                 <View style={styles.pair}>
-                  <Button label="건너뛰기" onPress={skipLine} kind="plain" />
+                  <Button label="건너뛰기" onPress={skipLine} kind="secondary" />
                   <Button label="다시 해 보기" onPress={again} grow />
                 </View>
               )}
               {state.phase === "evaluated" && !state.aside && (
                 <View style={styles.row}>
-                  <Button label="다시 해 보기" onPress={again} kind="plain" />
+                  <Button label="다시 해 보기" onPress={again} kind="secondary" />
                   <Button label={midway ? "대화로 돌아가기" : "다음"} onPress={() => dispatch({ type: "next" })} />
                 </View>
               )}
