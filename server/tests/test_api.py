@@ -339,3 +339,20 @@ def test_recommend_route_takes_the_topic(client, fake_claude):
     assert [a for n, a in fake_claude.calls if n == "recommend"][-1] == ([], [], "tourist")
     r = client.post("/recommend", json={"topic": "nope"})
     assert r.status_code == 422 and r.json()["code"] == "bad_request"
+
+
+def test_home_without_asking_neither_gives_nor_uses_the_tip(client):
+    # spec ryan-shadowing-tip 4: a card's `curl /home` must not use up the day's line
+    from je_server.phrases import TIPS
+
+    assert "tip" not in client.get("/home").json()
+    assert client.get("/home", params={"tip": 1}).json()["tip"]["text"] == TIPS[0]
+
+
+def test_home_gives_the_tip_once_when_asked(client):
+    from je_server.phrases import TIPS
+
+    first = client.get("/home", params={"tip": 1}).json()
+    assert first["tip"]["text"] == TIPS[0] and len(first["tip"]["audio"]) == 64
+    assert "tip" not in client.get("/home", params={"tip": 1}).json()
+    assert "tip" not in first["lines"]

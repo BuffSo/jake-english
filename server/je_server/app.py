@@ -162,11 +162,15 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         return {"ok": True}
 
     @router.get("/home")
-    def home() -> dict:
+    def home(tip: bool = Query(False)) -> dict:
         e = engine()
         lines = ("greeting", "ask_mode", "ask_again", "ask_situation", "ask_recommend", "ask_topic", "ask_how",
                  "ask_pick", "ask_describe")
-        return {"lines": {n: e.said(n).model_dump() for n in lines}, "topics": topics.public(),
+        # Ryan's shadowing tip, the day's first time the app asks for it (spec ryan-shadowing-tip 4). Only when asked:
+        # a plain `curl /home` checking the server is up must not use up the day's line.
+        said_tip = e.home_tip() if tip else None
+        extra = {"tip": said_tip.model_dump()} if said_tip else {}
+        return {"lines": {n: e.said(n).model_dump() for n in lines}, **extra, "topics": topics.public(),
                 "images": {"front": "/assets/ryan-front.png", "listening": "/assets/ryan-listening.png",
                            "jake": "/assets/jake-front.png",
                            "thinking": {who: [f"/assets/{n}" for n in names] for who, names in THINKING.items()}}}

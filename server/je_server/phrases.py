@@ -22,3 +22,15 @@ PHRASES: dict[str, str] = {
     "claude_down": "지금은 제가 대답할 수 없어요. 맥의 인터넷 연결을 확인해 주세요.",
     "too_long": "녹음이 너무 길어요. 한 문장씩 짧게 말해 볼까요?",
 }
+
+# Ryan's shadowing tip: one of these, in turn, between the greeting and the question on the day's first start (spec
+# docs/superpowers/specs/2026-11-08-ryan-shadowing-tip-design.md). Each has the word 「섀도잉」 (user). Wording: no
+# figures of speech, never the same thing twice, a length Ryan says comfortably (user, spec 1). Apart from PHRASES:
+# those are always the same, these are not.
+TIPS: tuple[str, ...] = (
+    "섀도잉은 소리 내서 여러 번 해야 입에 붙어요.",
+    "섀도잉을 하면 듣기도 늘어요. 내가 낼 수 있는 소리는 귀에도 잘 들리거든요.",
+    "섀도잉은 따라 한 내 소리를 다시 들어 볼 때 더 늘어요.",
+    "같은 문장을 섀도잉으로 여러 번 말하다 보면, 실제로 말할 때 자신감이 붙어요.",
+    "섀도잉하기 전에, 어디를 세게 읽고 어디를 이어 읽는지 잘 들어 보세요.",
+)
