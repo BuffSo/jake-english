@@ -16,9 +16,11 @@ SERVER_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = SERVER_DIR.parent
 DEFAULT_DATA_DIR = "~/Library/Application Support/jake-english"
 MIN_TOKEN = 32
-# Without JE_CLAUDE_WRITER / JE_CLAUDE_QUICK the server runs the spec's models (keys of claude.WRITERS, claude.QUICKS)
+# Without JE_CLAUDE_WRITER / JE_CLAUDE_QUICK / JE_CLAUDE_RECOMMEND the server runs the spec's models (keys of
+# claude.WRITERS, claude.QUICKS; the recommendation picks from QUICKS too)
 DEFAULT_WRITER = "sonnet"
 DEFAULT_QUICK = "haiku"
+DEFAULT_RECOMMEND = "sonnet"
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,7 @@ class Settings:
     whisper_port: int = 8788
     claude_writer: str = DEFAULT_WRITER
     claude_quick: str = DEFAULT_QUICK
+    claude_recommend: str = DEFAULT_RECOMMEND
 
 
 def _model_name(env: Mapping[str, str], key: str, choices: Mapping[str, object], default: str) -> str:
@@ -80,4 +83,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         whisper_port=int(env.get("JE_WHISPER_PORT", "8788")),
         claude_writer=_model_name(env, "JE_CLAUDE_WRITER", WRITERS, DEFAULT_WRITER),
         claude_quick=_model_name(env, "JE_CLAUDE_QUICK", QUICKS, DEFAULT_QUICK),
+        claude_recommend=_model_name(env, "JE_CLAUDE_RECOMMEND", QUICKS, DEFAULT_RECOMMEND),
     )

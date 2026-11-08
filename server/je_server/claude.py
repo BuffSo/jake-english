@@ -33,10 +33,15 @@ WRITERS: dict[str, dict[str, Any]] = {
     "sonnet": SONNET,
     "opus": {"model": "claude-opus-5-5", "effort": "low"},
 }
+QUICK_SONNET: dict[str, Any] = {"model": "claude-sonnet-5-5", "thinking": {"type": "between_tools"}}
 QUICKS: dict[str, dict[str, Any]] = {
     "haiku": HAIKU,
-    "sonnet": {"model": "claude-sonnet-5-5", "thinking": {"type": "between_tools"}},
+    "sonnet": QUICK_SONNET,
 }
+# Jake's recommendation picks from QUICKS too (JE_CLAUDE_RECOMMEND), default Sonnet: 2026-11-08 the user chose it
+# after the three quick jobs were compared on made-up inputs. Haiku wrote odd recommendation sentences 12 times in
+# 63 (the message's 「끝말:」 copied, two endings, 「제가 …」), Sonnet twice; Sohee's interpretation and Ryan's
+# feedback came out about the same and Sonnet was slower there, so they stay on the quick model.
 
 log = logging.getLogger("je_server")
 USER_TURNS = (3, 3)  # 2026-11-05 the user tried 5 on the phone, found it too many, chose 3
@@ -137,10 +142,12 @@ def _spoken(text: str) -> str:
 
 
 class Claude:
-    def __init__(self, client: Any, writer: dict[str, Any] = SONNET, quick: dict[str, Any] = HAIKU):
+    def __init__(self, client: Any, writer: dict[str, Any] = SONNET, quick: dict[str, Any] = HAIKU,
+                 recommender: dict[str, Any] = QUICK_SONNET):
         self.client = client
         self.writer = writer
         self.quick = quick
+        self.recommender = recommender
 
     def _request(self, model: dict[str, Any], output_config: dict[str, Any]) -> dict[str, Any]:
         kw = {k: v for k, v in model.items() if k != "effort"}
@@ -283,7 +290,7 @@ class Claude:
             message += "\n\n목록에 있는 상황:\n" + "\n".join(f"- {p.title_ko}" for p in topic.picks)
         if turned_down:  # suggested on the situation screen and turned down with 「다른 걸로요」 (2026-11-06)
             message += "\n\n방금 거절한 상황:\n" + "\n".join(f"- {t}" for t in turned_down)
-        data = await self._json(self.quick, prompts.RECOMMEND_SYSTEM, message, prompts.RECOMMEND_SCHEMA, 300)
+        data = await self._json(self.recommender, prompts.RECOMMEND_SYSTEM, message, prompts.RECOMMEND_SCHEMA, 300)
         text = (data or {}).get("request_ko", "").strip() if isinstance(data, dict) else ""
         if not text:
             raise ClaudeUnavailable("empty recommendation")

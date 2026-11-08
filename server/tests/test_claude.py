@@ -92,7 +92,7 @@ async def test_refusal_becomes_unavailable():
         await Claude(FakeAnthropic([refusal_response()])).make_script("길 묻기", OTHER)
 
 
-async def test_recommend_uses_haiku_and_avoids_recent():
+async def test_recommend_uses_sonnet_and_avoids_recent():
     fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황을 추천해요."})])
     text = await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], [], OTHER, "상황을 추천해요.")
     assert text == "카페에서 주문하는 상황을 추천해요."
@@ -101,7 +101,8 @@ async def test_recommend_uses_haiku_and_avoids_recent():
     # Jake suggests the situation to the learner, he does not ask for it on the learner's behalf (user, same day).
     system = str(r["system"])
     assert "끝말" in system and "반말" not in system and "싶어" not in system
-    assert r["model"] == "claude-haiku-5-5" and r["thinking"] == {"type": "disabled"}
+    # 2026-11-08 the user moved it to Sonnet after a comparison (Haiku wrote odd sentences 12 times in 63)
+    assert r["model"] == "claude-sonnet-5-5" and r["thinking"] == {"type": "between_tools"}
     assert "effort" not in r.get("output_config", {})
     assert "케이블카" in r["messages"][0]["content"]
 
