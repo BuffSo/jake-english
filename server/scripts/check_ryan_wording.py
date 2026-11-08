@@ -10,7 +10,10 @@ is printed with the rules it broke:
 - the practice called 「역할극」 instead of 「대화」, double quotes (in the model's own answer: the server drops them)
 - a particle after an English word that does not fit how the word ends in Hangul (room이, where가)
 - a pointed word missing, the whole transcript quoted, or the wrong ending (next line / conversation done)
-- a word a case requires or forbids (`must`, `never`): a wish to skip names 「건너뛰기」, an app wish never says 「말해야」
+- a word a case requires or forbids (`must`, `never`): a wish to skip names 「건너뛰기」, an app wish never says 「말해야」,
+  a question about the try before names its words and never says nothing was pointed out (todo 40 1)
+The materials' names are looked for in the model's own answer: the server drops those sentences (`ASIDE_LEAKS`), and a
+name it dropped is flagged 「(server dropped)」.
 The lines are made up (REVIEW.md), so printing them is fine. Prints tokens and cost at the end.
 
 Feedback costs about $0.0003 a call on Haiku and $0.007 on Sonnet; teacher Ryan about $0.007 on Sonnet. Tell the
@@ -34,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import anthropic  # noqa: E402
 
 from je_server import sounds  # noqa: E402
-from je_server.claude import QUICKS, WRITERS, Claude  # noqa: E402
+from je_server.claude import ASIDE_LEAKS, QUICKS, WRITERS, Claude  # noqa: E402
 from je_server.config import load_settings  # noqa: E402
 from je_server.models import Frame, Issue  # noqa: E402
 
@@ -72,8 +75,12 @@ PARTICLE = re.compile(r"([A-Za-z][A-Za-z']*)(이|가|은|는|을|를|과|와)(?!
 WITH_BATCHIM, WITHOUT = set("이은을과"), set("가는를와")
 # 「짚을」, 「상관없는」, 「혼잣말」: teacher Ryan said how the server sorted a recording, in the words of his prompt
 # (phone 2026-11-08: 「대사와 상관없는 말로 들려서 따로 짚을 곳이 없어요」; live: 「…상관없는 혼잣말로 들렸어요」)
-NAMES = ("짚을", "후보", "소리 내는 법", "설명", "자료", "받은", "역할극", "따로 말", "말하지 않을게",
-         "라고 말했", "라고 하셨", "말했는데", "상관없는", "혼잣말", "대사와 다른 말")
+# The server's own list (`ASIDE_LEAKS`) too: it drops those sentences, and the model saying them still breaks the rule.
+# 「갈라」, 「비어 있」: on a try at the line with no points teacher Ryan read his rules out (todo 40 2, 2026-11-08:
+# 「「짚을 것」이 비어 있으니 … 갈라 말하지 않고 …」)
+NAMES = tuple(dict.fromkeys(("짚을", "후보", "소리 내는 법", "설명", "자료", "받은", "역할극", "따로 말", "말하지 않을게",
+                             "라고 말했", "라고 하셨", "말했는데", "상관없는", "혼잣말", "대사와 다른 말", "갈라", "비어 있",
+                             *ASIDE_LEAKS)))
 QUOTES = "\"“”"
 
 
@@ -88,6 +95,10 @@ class Case:
     heard_ko: str | None = None
     must: tuple[str, ...] = ()  # words the answer has to say (spec record-cancel-skip 6: the skip button)
     never: tuple[str, ...] = ()  # words it must not say
+    # teacher Ryan only: the line's tries before this one, oldest first, as (heard, points, Ryan's answer)
+    earlier: list[tuple[str, list[Issue], str]] = field(default_factory=list)
+    frame: Frame | None = None  # teacher Ryan only; FRAME when None
+    before: str = "Welcome. Do you have a reservation?"  # teacher Ryan only: Ryan's line before the learner's
 
 
 def issue(target: str, heard: str, explain: str = "", sound: tuple[str, str] = ("R", "L")) -> Issue:
@@ -131,6 +142,8 @@ FEEDBACK = [
 ]
 FRAME = Frame(title_ko="호텔 체크인", user_role_ko="손님", ryan_role_ko="호텔 직원", place_ko="호텔 프런트",
               goal_ko="방 열쇠 받기")
+SUBWAY = Frame(title_ko="지하철 길 알려 주기", user_role_ko="길을 알려 주는 사람", ryan_role_ko="관광객",
+               place_ko="지하철역 개찰구 앞", goal_ko="관광객에게 갈아타는 길 알려 주기")
 ASIDE = [
     Case("near miss tip", "The room is on the tenth floor.", "The loom is on the tent floor.",
          [issue("room", "loom", RL), issue("tenth", "tent")]),
@@ -153,6 +166,23 @@ ASIDE = [
     # made up: the learner wants to move past the line; Ryan points to 「건너뛰기」 (spec record-cancel-skip 6)
     Case("off skip wish", "Here is your key card.", "I just want to skip this line.", [],
          heard_ko="이 줄은 그냥 넘어가고 싶어요.", must=("건너뛰기",)),
+    # made up in the shape of todo 40 1: a Korean question about what the try before pointed out. Ryan answered that
+    # he had pointed out nothing: the earlier tries did not go to him
+    Case("asks about a point", "Can I get a late checkout?",
+         "I don't get why late sounded like lake. Maybe get a was misheard?", [],
+         heard_ko="late가 lake처럼 들렸다는 게 이해가 안 돼요. 혹시 get a가 잘못 들린 거 아니에요?",
+         earlier=[("Can I get a lake checkout?", [issue("late", "lake")],
+                   "나머지 낱말은 다 알아들었어요. 그런데 late가 lake처럼 들렸어요. 한 번 더 해 볼까요?")],
+         must=("late", "lake", "get a"),
+         never=("짚은 곳은 없", "짚은 곳이 없", "짚은 것은 없", "짚은 것이 없", "짚은 게 없", "짚은 게 아니",
+                "짚은 말이 아니", "짚어 드리지 못")),
+    # made up in the shape of todo 40 2: a try at the line that auto-detection heard as Korean, so no points came.
+    # Ryan read out his rules (「짚을 것」, what he would not say) and told the learner to speak slowly
+    Case("try heard as korean", "Take Line 2 and get off at Hongdae.", "Take lime too and get of at Hongdae.", [],
+         heard_ko="take lime too and get of at 홍대", frame=SUBWAY, never=("천천히", "lime"),
+         before="Excuse me, how do I get to Hongdae from here?"),
+    Case("try in hangul", "Can I get a late checkout?", "Can I get a rate check out?", [],
+         heard_ko="캔 아이 겟 어 레잇 체크아웃", never=("천천히", "rate")),
 ]
 
 
@@ -166,7 +196,10 @@ def flags(case: Case, text: str, aside: bool, raw: str = "") -> list[str]:
             out.append(f"word not pointed ({i.target})")
         if i.heard and i.heard not in text:
             out.append(f"heard word not said ({i.heard})")
-    out += [f"names {n!r}" for n in NAMES if n in text]
+    # the model's own answer: the server drops sentences that name its materials from what the learner sees (todo 40
+    # 2), and a name it dropped is still the model breaking the rule
+    said = " ".join(raw.split()) if raw else text
+    out += [f"names {n!r}" + ("" if n in text else " (server dropped)") for n in NAMES if n in said]
     out += [f"does not say {w!r}" for w in case.must if w not in text]
     out += [f"says {w!r}" for w in case.never if w in text]
     if any(q in raw for q in QUOTES):
@@ -277,8 +310,8 @@ async def main() -> None:
                 if kind == "feedback":
                     gen = claude.feedback(case.line, case.heard, case.praise, case.issues, case.last)
                 else:
-                    gen = claude.aside(FRAME, [("ryan", "Welcome. Do you have a reservation?")], case.line,
-                                       case.heard, case.heard_ko, case.issues, [])
+                    gen = claude.aside(case.frame or FRAME, [("ryan", case.before)],
+                                       case.line, case.heard, case.heard_ko, case.issues, case.earlier)
                 text, first = await timed(gen)
                 firsts[kind].append(first)
                 f = flags(case, text, kind == "aside", counting.raw[-1] if counting.raw else "")

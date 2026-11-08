@@ -53,6 +53,13 @@ QUOTES = "\"'“”‘’「」『』"
 # Ryan's live answers never show double quotes (phone test 2026-11-08: Haiku quoted the transcript in them). 「」 stay:
 # teacher Ryan puts meanings in them. Single quotes stay too: they are apostrophes in English words (I'll).
 DOUBLE_QUOTES = str.maketrans("", "", "\"“”")
+# Words of teacher Ryan's prompt that are never for the learner: the names of what he is given and how the prompt sorts
+# or holds back. A sentence with one is dropped before the learner sees or hears it (todo 40 2: on a try with no points
+# he said 「「짚을 것」이 비어 있으니 … 갈라 말하지 않고 …」). 「짚은」 stays: 「아까 짚은 곳은 …」 answers a question
+# about the try before (todo 40 1). scripts/check_ryan_wording.py counts these in the model's own answer.
+ASIDE_LEAKS = ("짚을", "대사 낱말", "들린 낱말", "영어 받아쓰기", "한국어 받아쓰기", "앞 시도", "선생님에게 한 말", "자료",
+               "지시", "갈래", "갈라 말", "말하지 않을게", "말하지 않겠")
+SENTENCE_END = re.compile(r"(?<=[.?!])\s+")  # where sentences.SentenceBuffer cuts for the voice
 
 
 # Calls made while the learner waits in a turn (feedback, teacher Ryan's answer). The app gives up after 30s without a
@@ -362,9 +369,21 @@ class Claude:
             "이 대사의 앞 시도": [{"들린 말": h, "짚은 것": [{"대사 낱말": i.target, "들린 낱말": i.heard} for i in p],
                                "라이언의 답": a} for h, p, a in earlier],
         }
-        async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600,
-                                       whole=True):
-            yield text
+        # whole sentences only, each checked for the prompt's words; the voice waits for a sentence end anyway
+        rest = ""
+        try:
+            async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600,
+                                           whole=True):
+                done, rest = _sentences(rest + text)
+                for sentence in done:
+                    if _kept(sentence):
+                        yield sentence
+        except ClaudeUnavailable:
+            if rest and _kept(rest):  # the cut piece, which `Engine._aside` ends before its fixed phrase
+                yield rest
+            raise
+        if rest and _kept(rest):
+            yield rest
 
     async def _stream(self, kw: dict[str, Any], system: str, body: dict, max_tokens: int,
                       whole: bool = False) -> AsyncIterator[str]:
@@ -392,6 +411,23 @@ class Claude:
         except anthropic.APIStatusError as e:
             log.info("claude api status %d", e.status_code)
             raise ClaudeUnavailable(f"status {e.status_code}") from e
+
+
+def _sentences(text: str) -> tuple[list[str], str]:
+    """The whole sentences in `text`, each with the space after it, and the rest that is still coming."""
+    out, start = [], 0
+    for m in SENTENCE_END.finditer(text):
+        out.append(text[start:m.end()])
+        start = m.end()
+    return out, text[start:]
+
+
+def _kept(sentence: str) -> bool:
+    """False for a sentence of teacher Ryan's that says his prompt's words; the log keeps only that one was dropped."""
+    if any(w in sentence for w in ASIDE_LEAKS):
+        log.info("aside sentence dropped")
+        return False
+    return True
 
 
 def _points(issues: list[Issue]) -> list[dict[str, str]]:

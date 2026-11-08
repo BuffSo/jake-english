@@ -686,3 +686,46 @@ def test_recommend_system_shows_no_ending_of_its_own():
     from je_server import prompts
 
     assert not any(e in prompts.RECOMMEND_SYSTEM for e, _ in JAKE_ENDINGS) and "추천해요" not in prompts.RECOMMEND_SYSTEM
+
+
+async def _aside_out(pieces) -> list[str]:
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    return [d async for d in Claude(FakeAnthropic([pieces])).aside(Frame(**FRAME), [], "a", "b", None, [], [])]
+
+
+async def test_aside_drops_sentences_that_name_its_materials(caplog):
+    # todo 40 2: teacher Ryan read his rules out (「「짚을 것」이 비어 있으니 … 말하지 않을게요」); such a sentence
+    # never reaches the learner, and the log keeps only that one was dropped
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        out = await _aside_out(["「짚을 것」이 비어 있으니 말하지 ", "않을게요. 갈래를 ", "갈라 말하지 않아요. 한 번 ",
+                                "더 해 볼까요?"])
+    assert "".join(out) == "한 번 더 해 볼까요?"
+    assert caplog.text.count("aside sentence dropped") == 2 and "짚을" not in caplog.text
+
+
+async def test_aside_with_every_sentence_dropped_yields_nothing():
+    # nothing left: `Engine._aside` says the fixed phrase, as for an empty answer
+    assert await _aside_out(["짚을 곳이 없어요."]) == []
+
+
+async def test_aside_keeps_a_sentence_about_an_earlier_point():
+    # 「짚은」 answers a question about the try before (todo 40 1); only 「짚을」 is the prompt's word
+    assert await _aside_out(["아까 짚은 곳은 late예요. ", "한 번 더 해 볼까요?"]) == [
+        "아까 짚은 곳은 late예요. ", "한 번 더 해 볼까요?"]
+
+
+async def test_aside_cut_drops_a_leaking_piece():
+    import httpx2
+
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    cut = httpx2.ReadError("cut", request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
+    got = []
+    with pytest.raises(ClaudeUnavailable):
+        async for d in Claude(FakeAnthropic([["괜찮아요. ", "짚을 것이", cut]])).aside(Frame(**FRAME), [], "a", "b",
+                                                                                     None, [], []):
+            got.append(d)
+    assert got == ["괜찮아요. "]
