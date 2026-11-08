@@ -315,7 +315,11 @@ def test_saved_routes_need_token(settings, engine, fake_voice, fake_whisper):
 def test_home_lists_topics(client):
     topics = client.get("/home").json()["topics"]
     assert [t["id"] for t in topics] == ["tourist", "usa", "other"]
-    assert len(topics[0]["picks"]) == 3 and all(set(p) == {"id", "title_ko"} for p in topics[0]["picks"])
+    # every line of the first topic's list, ids only (its count grew from 3 to 6 on 2026-11-08)
+    from je_server.topics import get
+
+    assert [p["id"] for p in topics[0]["picks"]] == [p.id for p in get("tourist").picks]
+    assert all(set(p) == {"id", "title_ko"} for p in topics[0]["picks"])
 
 
 def test_create_from_a_pick(client, fake_claude):

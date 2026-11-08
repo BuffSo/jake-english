@@ -1,6 +1,7 @@
 // The situation screen's steps (spec situation-topics 2): the topic, how to pick the situation, then the list, Jake's
 // suggestion or the learner's own words. Kept as plain functions so the screen's rules are tested without it.
 import type { Home, Topic } from "../api/types";
+import { keepWords } from "../ui/keepWords";
 
 // confirm: Jake has suggested a situation and waits for 「이걸로 할게요」 or 「다른 걸로요」 (2026-11-06, user).
 // askRecommend: 「제이크에게 상황을 하나 추천받아 볼까요?」, asked only when the learner said 「모르겠어」 while describing.
@@ -29,6 +30,12 @@ const BEFORE_TOPICS: Topic[] = [
 
 export function topicsOf(home: Pick<Home, "topics">): Topic[] {
   return home.topics?.length ? home.topics : BEFORE_TOPICS;
+}
+
+// The input box example of the topic, with its Korean words kept whole: it comes from the Mac server, so its length is
+// unknown here, and Android broke 「예: 공원에서 외국인에게 먼저 인사하는 상황」 inside 「상황」 at phone width (PR #65).
+export function placeholderOf(t: Topic | null): string | undefined {
+  return t ? keepWords(t.placeholder_ko) : undefined;
 }
 
 // 「목록에서 고르기」 only when the topic has a list: 「그 밖의 상황」 starts without one (spec 2)

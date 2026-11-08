@@ -5,26 +5,50 @@ from je_server.topics import TOPICS, get, listed, pick, public
 
 
 def test_three_topics_in_order():
-    # 2026-11-07 the user named them; 「돕기」 was turned down, then the long name was cut short
+    # 2026-11-07 the user named them; 2026-11-08 the user renamed two and kept the ids, which the records hold
+    # (spec korea-english-topic 1)
     assert [t.id for t in TOPICS] == ["tourist", "usa", "other"]
-    assert [t.name_ko for t in TOPICS] == ["외국인 관광객", "미국 여행", "그 밖의 상황"]
+    assert [t.name_ko for t in TOPICS] == ["한국에서 영어 쓰기", "미국 여행하기", "그 밖의 상황"]
 
 
-def test_tourist_starts_with_ryan_and_is_strangers():
-    # the user: the foreigner asks first; people the learner knows (a coworker) are left out
+def test_korea_topic_is_strangers_and_either_may_start():
+    # the user: a foreigner the learner has never met, a tourist or someone living here; asking for help or just
+    # greeting and chatting; the learner may speak first (spec korea-english-topic 2, 3). People the learner knows
+    # (a coworker) stay out, as before
     t = get("tourist")
-    assert t.first == "ryan" and "stranger" in t.roles_en.lower()
-    assert get("usa").first is None and get("other").first is None
+    assert t.first is None and get("usa").first is None and get("other").first is None
+    for text in (t.roles_en, t.scenes_en):
+        low = text.lower()
+        assert "never met" in low and "tourist" in low and "lives in korea" in low and "coworkers" in low
+    assert all(w in t.scenes_en.lower() for w in ("help", "small talk", "park", "cafe", "market",
+                                                  "learner speaks first"))
+    assert "learner may speak first" in t.roles_en.lower()
+
+
+def test_korea_topic_example_is_a_greeting():
+    # spec korea-english-topic 5: with the made-up recent situations all asking for help, as the learner's are today,
+    # Jake's suggestions mixed in small talk 5 times in 14 with a greeting example and 2 in 14 with the old 한복 one
+    assert get("tourist").example_ko == "한강공원에서 아침 운동하다 마주친 외국인과 인사를 나누는 상황"
+
+
+def test_other_leaves_out_the_korea_topic():
+    # 「그 밖의 상황」 is what the two topics do not cover; talking in Korea with a foreigner one has never met is now
+    # the first topic, chatting included
+    s = get("other").scenes_en.lower()
+    assert "helping a foreign tourist" not in s and "never met" in s and "united states" in s
 
 
 def test_starting_lists():
     # three per topic to try it first (user), none yet for 「그 밖의 상황」; 2026-11-08 the user added two reservation
     # scenes to 「미국 여행」, at the end so the first three keep their places (todo 38)
-    assert [len(get(t).picks) for t in ("tourist", "usa", "other")] == [3, 5, 0]
+    assert [len(get(t).picks) for t in ("tourist", "usa", "other")] == [6, 5, 0]
     assert [p.id for p in get("usa").picks] == ["u-shrimp-truck", "u-hotel-checkin", "u-sneaker-size",
                                                 "u-hotel-online", "u-seafood-walkin"]
     assert [p.first for p in get("usa").picks] == ["ryan", "user", "user", "ryan", "ryan"]
-    assert all(p.first == "ryan" for p in get("tourist").picks)
+    # 2026-11-08 small talk first, so the list does not read as helping tourists only (spec korea-english-topic 4)
+    assert [p.id for p in get("tourist").picks] == ["t-hangang-run", "t-market-hotteok", "t-cafe-seat",
+                                                    "t-gyeongbokgung", "t-tmoney", "t-samgyeopsal"]
+    assert [p.first for p in get("tourist").picks] == ["user", "ryan", "ryan", "ryan", "ryan", "ryan"]
     ids = [p.id for t in TOPICS for p in t.picks]
     assert len(ids) == len(set(ids))
 
@@ -104,6 +128,8 @@ def test_script_keeps_the_facts_of_its_description():
                                                      "king room", "high floor"))
     assert all(w in said["u-seafood-walkin"] for w in ("reservation", "table for two", "30-minute wait", "bar",
                                                        "put my name down"))
+    assert all(w in said["t-market-hotteok"] for w in ("line for hotteok", "wait a long time",
+                                                       "vegetables and glass noodles"))
 
 
 def test_ryans_list_lines_are_one_or_two_sentences():
@@ -166,6 +192,7 @@ def test_korean_keeps_the_facts():
     assert all(w in said["u-sneaker-size"] for w in ("270", "9 사이즈"))
     assert all(w in said["u-hotel-online"] for w in ("온라인", "확인 번호", "2박", "킹 침대", "높은 층"))
     assert all(w in said["u-seafood-walkin"] for w in ("예약", "두 명", "30분", "바에", "이름"))
+    assert all(w in said["t-market-hotteok"] for w in ("호떡 줄", "오래 기다려요", "채소", "당면"))
 
 
 def test_tmoney_korean_says_cash_only_of_the_machine():
@@ -200,3 +227,44 @@ def test_reservation_values_are_in_the_description():
 def test_walk_in_korean_says_no_more_than_the_english():
     # the bar is only another place to sit: 「바로」(right away) is not in the English
     assert not any("바로" in k for k in pick("usa", "u-seafood-walkin").ko)
+
+
+# --- small talk in Korea (spec korea-english-topic 4, 2026-11-08) -------------------------------------------------
+
+SMALL_TALK = ("t-hangang-run", "t-market-hotteok", "t-cafe-seat")
+
+
+def test_small_talk_values_are_in_the_description():
+    # the made-up values and the market facts the scripts say are facts of their descriptions too (REVIEW.md
+    # 「목록 대본의 사실」); the market facts were checked on the web on 2026-11-08
+    run, market, cafe = (pick("tourist", i).situation for i in SMALL_TALK)
+    assert all(w in run for w in ("한강공원", "지난달", "2년째", "먼저 인사"))
+    assert all(w in market for w in ("남대문시장", "야채호떡", "오래 줄", "채소와 당면"))
+    assert all(w in cafe for w in ("처음", "일주일", "옆자리"))
+
+
+def test_a_small_talk_pick_starts_with_the_learner():
+    # the user: in Korea the learner may greet a foreigner first (spec korea-english-topic 3)
+    p = pick("tourist", "t-hangang-run")
+    assert p.first == "user" and p.script[0][0] == "user"
+
+
+def test_small_talk_picks_end_on_the_learner():
+    # spec fixed-list-scripts 1: Ryan's last line would only echo the goodbye, so the learner closes
+    assert all(pick("tourist", i).script[-1][0] == "user" for i in SMALL_TALK)
+
+
+def test_market_script_says_nothing_of_taste_or_price():
+    # the description has what is inside the vegetable hotteok, not how it tastes or what it costs; the stall has
+    # no name (spec korea-english-topic 4)
+    said = " ".join(t for _, t in pick("tourist", "t-market-hotteok").script).lower()
+    assert not any(w in said for w in ("sweet", " won", "$", "spicy", "price"))
+
+
+def test_market_script_says_which_hotteok_has_glass_noodles():
+    # PR #65 review: after "the line for hotteok?", "Vegetables and glass noodles." read as what every hotteok has; the
+    # usual one is sweet. The user chose "This kind has ..." (2026-11-08), and the frame names the stall
+    p = pick("tourist", "t-market-hotteok")
+    said = " ".join(t for _, t in p.script)
+    assert "This kind has vegetables and glass noodles." in said
+    assert "야채호떡" in p.frame.place_ko and "야채호떡 노점" in p.situation
