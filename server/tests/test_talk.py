@@ -6,11 +6,12 @@ import re
 import pytest
 from fakes import talk_example
 
+from je_server.claude import ClaudeUnavailable
 from je_server.engine import NotFound
 from je_server.models import Said
 from je_server.phrases import PHRASES, TALK_OPENERS
 from je_server.prompts import TALK_CUT, TALK_CUT_SILENT, TALK_START
-from je_server.talk import TALK_FRAME, TalkBusy, Talks, messages
+from je_server.talk import TALK_FRAME, TalkBusy, TalkEnded, Talks, messages
 
 pytestmark = pytest.mark.anyio
 
@@ -342,3 +343,188 @@ async def test_turn_log_has_times_and_counts_only(talks, speech_bytes, fake_whis
     await run(talks, rp.id, speech_bytes)
     assert f"talk {rp.id}/1 n=1 korean=False " in caplog.text
     assert fake_whisper.text not in caplog.text and not [s for s in REPLY if s in caplog.text]
+
+
+# --- ending a talk (spec free-talk-design 6, 7) ------------------------------------------------------------------
+
+SAID = ["I go to the park yesterday.", "I eat two apple there.", "My friend come with me.", "We was very happy."]
+FIXED = ["I went to the park yesterday.", "I ate two apples there.", "My friend came with me.", "We were very happy."]
+WHY = ["지난 일이라 go를 went로 바꿔요.", "사과가 둘이라 apples예요.", "지난 일이라 came이에요.", "we 뒤에는 were를 써요."]
+NO_SOUND = {"heard": "", "meant": "", "say_ko": ""}
+
+
+def fix_item(i: int, idx: int) -> dict:
+    """What Claude picks for my turn at line `idx`, from the made-up fix number `i`."""
+    return {"idx": idx, "said": SAID[i], "fixed": FIXED[i], "why_ko": WHY[i], "sound": dict(NO_SOUND)}
+
+
+async def talked(talks, fake_whisper, speech_bytes, said=SAID[:2]) -> str:
+    """A talk with my English turns `said` at lines 1, 3, 5…, each answered by Ryan."""
+    rp = await talks.create()
+    for text in said:
+        fake_whisper.text = text
+        await run(talks, rp.id, speech_bytes)
+    return rp.id
+
+
+def no_fixes(engine) -> dict:
+    return {"items": [], "say": engine.said("talk_no_fixes").model_dump()}
+
+
+async def test_end_appends_the_checked_fixes_as_my_lines(talks, engine, speech_bytes, fake_whisper, fake_claude):
+    rp_id = await talked(talks, fake_whisper, speech_bytes, SAID)
+    fake_claude.fix_items = [fix_item(i, 1 + 2 * i) for i in range(4)]
+    body = await talks.end(rp_id)
+    added = engine.load(rp_id).lines[9:]  # after the opener and four turns with Ryan's replies
+    assert [(l.idx, l.speaker, l.kind, l.text) for l in added] == [(9 + i, "user", "fix", FIXED[i]) for i in range(3)]
+    assert [(l.fix.of, l.fix.said, l.fix.why_ko) for l in added] == [(1 + 2 * i, SAID[i], WHY[i]) for i in range(3)]
+    assert [it["line"]["idx"] for it in body["items"]] == [9, 10, 11]
+    assert [it["rec"] for it in body["items"]] == [{"rp_id": rp_id, "idx": 1 + 2 * i, "n": 1} for i in range(3)]
+    assert body["say"] is None
+
+
+async def test_end_makes_the_first_fix_sounds_first_and_urgent(talks, engine, speech_bytes, fake_whisper,
+                                                                fake_claude, fake_voice):
+    rp_id = await talked(talks, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(0, 1), fix_item(1, 3)]
+    fake_voice.calls.clear()
+    body = await talks.end(rp_id)
+    await engine.line(rp_id, 6)  # the second fix's sounds, made behind
+    first = [(WHY[0], "ryan", "korean", True), (FIXED[0], "ryan", "english", True)]
+    later = [n for n, c in enumerate(fake_voice.calls) if c[0] in (WHY[1], FIXED[1])]
+    assert later and max(fake_voice.calls.index(c) for c in first) < min(later)
+    assert (WHY[1], "ryan", "korean", False) in fake_voice.calls
+    assert (FIXED[1], "ryan", "english", False) in fake_voice.calls
+    line = body["items"][0]["line"]
+    assert line["audio"] == fake_voice.key("ryan", "english", FIXED[0])
+    assert line["fix"]["why_audio"] == fake_voice.key("ryan", "korean", WHY[0])
+
+
+async def test_two_ends_at_once_ask_claude_once(talks, speech_bytes, fake_whisper, fake_claude):
+    rp_id = await talked(talks, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(0, 1)]
+    fake_claude.fix_gate = asyncio.Event()
+    both = asyncio.gather(talks.end(rp_id), talks.end(rp_id))
+    await until(lambda: fake_claude.fix_calls)
+    fake_claude.fix_gate.set()
+    a, b = await both
+    assert len(fake_claude.fix_calls) == 1 and a == b and len(a["items"]) == 1
+
+
+async def test_end_again_returns_the_same_fixes_without_claude(talks, speech_bytes, fake_whisper, fake_claude):
+    rp_id = await talked(talks, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(0, 1)]
+    fake_claude.annotate_gate = asyncio.Event()  # the fix line's notes, made behind, do not change it in between
+    first = await talks.end(rp_id)
+    second = await talks.end(rp_id)
+    assert len(fake_claude.fix_calls) == 1 and first == second and first["items"]
+    fake_claude.annotate_gate.set()
+    await until(lambda: not talks.engine.threes)
+
+
+async def test_end_without_english_turns_says_nothing_to_fix_without_claude(talks, engine, speech_bytes,
+                                                                             fake_whisper, fake_claude):
+    rp = await talks.create()
+    fake_whisper.by_lang = {"en": "I am 피곤해 today", "ko": "오늘 피곤해요"}
+    await run(talks, rp.id, speech_bytes)
+    body = await talks.end(rp.id)
+    assert body == no_fixes(engine) and body["say"]["text"] == PHRASES["talk_no_fixes"]
+    assert fake_claude.fix_calls == []
+
+
+@pytest.mark.parametrize("items", [[], [fix_item(0, 2)]])  # nothing, or only Ryan's line picked
+async def test_end_with_nothing_to_fix_says_so(talks, engine, speech_bytes, fake_whisper, fake_claude, items):
+    rp_id = await talked(talks, fake_whisper, speech_bytes)
+    lines = engine.load(rp_id).lines
+    fake_claude.fix_items = items
+    assert await talks.end(rp_id) == no_fixes(engine)
+    assert len(fake_claude.fix_calls) == 1 and engine.load(rp_id).lines == lines
+
+
+async def test_end_sends_english_turns_and_ryans_replies_only(talks, speech_bytes, fake_whisper, fake_claude):
+    rp = await talks.create()
+    fake_whisper.by_lang = {"en": "I am 피곤해 today", "ko": "오늘 피곤해요"}
+    await run(talks, rp.id, speech_bytes)  # my Korean turn (1) and Ryan's Korean answer (2)
+    fake_whisper.by_lang = {}
+    fake_whisper.text = SAID[0]
+    await run(talks, rp.id, speech_bytes)  # my English turn (3) and Ryan's reply (4)
+    await talks.end(rp.id)
+    [sent] = fake_claude.fix_calls
+    assert [(c["차례"], c["말한 사람"]) for c in sent] == [(0, "라이언"), (3, "학습자"), (4, "라이언")]
+    assert not [c for c in sent if HANGUL.search(c["말"])]
+    assert [c["말"] for c in sent] == [rp.lines[0].text, SAID[0], " ".join(REPLY)]
+
+
+async def test_end_while_a_turn_runs_is_busy(talks, speech_bytes, fake_claude):
+    rp = await talks.create()
+    fake_claude.talk_gate = asyncio.Event()
+    turn = asyncio.create_task(run(talks, rp.id, speech_bytes))
+    await until(lambda: fake_claude.talk_calls)
+    with pytest.raises(TalkBusy):
+        await talks.end(rp.id)
+    fake_claude.talk_gate.set()
+    await turn
+    assert fake_claude.fix_calls == []
+
+
+async def test_a_turn_while_the_talk_ends_is_busy(talks, engine, speech_bytes, fake_whisper, fake_claude):
+    # a turn sent while Claude picks the fixes would take the line number the first fix line gets
+    rp_id = await talked(talks, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(0, 1)]
+    fake_claude.fix_gate = asyncio.Event()
+    ending = asyncio.create_task(talks.end(rp_id))
+    await until(lambda: fake_claude.fix_calls)
+    with pytest.raises(TalkBusy):
+        talks.check_open(rp_id)
+    assert await run(talks, rp_id, speech_bytes) == [{"type": "error", "code": "busy", "say": None}]
+    fake_claude.fix_gate.set()
+    body = await ending
+    assert body["items"][0]["line"]["idx"] == 5 and len(engine.load(rp_id).lines) == 6
+
+
+async def test_a_turn_after_end_is_ended(talks, speech_bytes, fake_whisper, fake_claude):
+    rp_id = await talked(talks, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(0, 1)]
+    await talks.end(rp_id)
+    with pytest.raises(TalkEnded):
+        talks.check_open(rp_id)
+
+
+async def test_end_marks_where_ryan_was_cut_off(talks, engine, speech_bytes, fake_whisper):
+    rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])
+    await talks.end(rp_id, heard=1)
+    assert engine.load(rp_id).lines[2].heard_upto == 1
+
+
+async def test_end_puts_ryans_last_sounds_behind_the_fixes(talks, engine, speech_bytes, fake_whisper, fake_voice):
+    rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])
+    assert fake_voice.demoted == []
+    await talks.end(rp_id)
+    assert fake_voice.demoted == [p.audio for p in engine.load(rp_id).lines[2].parts]
+
+
+async def test_end_of_a_roleplay_is_not_found(talks, engine):
+    rp = await engine.create("길 묻기")
+    with pytest.raises(NotFound):
+        await talks.end(rp.id)
+
+
+async def test_end_when_claude_is_down_raises_and_keeps_no_lines(talks, engine, speech_bytes, fake_whisper,
+                                                                  fake_claude):
+    rp_id = await talked(talks, fake_whisper, speech_bytes)
+    lines = engine.load(rp_id).lines
+    fake_claude.fail_next = True
+    with pytest.raises(ClaudeUnavailable):
+        await talks.end(rp_id)
+    assert engine.load(rp_id).lines == lines
+    fake_claude.fix_items = [fix_item(0, 1)]
+    assert len((await talks.end(rp_id))["items"]) == 1  # tried again on the next end
+
+
+async def test_end_log_has_times_and_counts_only(talks, speech_bytes, fake_whisper, fake_claude, caplog):
+    caplog.set_level(logging.INFO, logger="je_server")
+    rp_id = await talked(talks, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(0, 1), fix_item(1, 3)]
+    await talks.end(rp_id)
+    assert re.search(rf"talk end {rp_id} fixes=2 first_fix_sound=\d+\.\d\d total=\d+\.\d\d", caplog.text)
+    assert not [t for t in (*SAID, *FIXED, *WHY) if t in caplog.text]

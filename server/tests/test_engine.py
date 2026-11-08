@@ -500,3 +500,65 @@ async def test_speak_does_not_tell_a_text_claude_cut_off(engine):
     events = await _spoken(engine, _pieces("Sounds fun! ", fail=True), on_text_end=on_text_end)
     assert told == [] and "reply" not in [e["type"] for e in events]
     assert [e["code"] for e in events if e["type"] == "error"] == ["claude_unavailable"]
+
+
+# --- a fix line of a free talk (spec free-talk-design 7, 8) -----------------------------------------------------
+
+def _saved_talk(engine, **fix_line):
+    """contract/talk.json saved, with line 7 (the fix of my turn at line 5) changed by `fix_line`; `why_audio` goes on
+    its fix."""
+    from fakes import talk_example
+
+    rp = talk_example()
+    line = rp.lines[7]
+    fix = line.fix.model_copy(update={"why_audio": fix_line.pop("why_audio", line.fix.why_audio)})
+    rp.lines[7] = line.model_copy(update={**fix_line, "fix": fix})
+    engine.store.save(rp)
+    return rp
+
+
+async def test_a_fix_line_waits_for_its_explanation_sound_too(engine, fake_voice):
+    rp = _saved_talk(engine, audio=None, why_audio=None)
+    fix = rp.lines[7].fix
+    line = await engine.line(rp.id, 7)
+    assert line.audio == fake_voice.key("ryan", "english", line.text)
+    assert line.fix.why_audio == fake_voice.key("ryan", "korean", fix.why_ko)
+    n = fake_voice.calls.index((fix.why_ko, "ryan", "korean", False))
+    assert fake_voice.ranks[n] == 7
+
+
+async def test_a_fix_line_without_its_explanation_sound_is_not_prepared(engine, fake_voice):
+    from fakes import noted, talk_example
+
+    rp = _saved_talk(engine, why_audio=None, three=noted(talk_example().lines[7].text))
+    assert not engine.prepared(rp.lines[7]) and not engine.ready(rp.lines[7])
+    line = await engine.line(rp.id, 7)
+    assert line.fix.why_audio == fake_voice.key("ryan", "korean", rp.lines[7].fix.why_ko)
+    assert line.audio == rp.lines[7].audio  # the model sound it had is kept
+
+
+async def test_a_fix_lines_notes_see_the_turn_it_fixes(engine, fake_claude):
+    rp = _saved_talk(engine)
+    await engine.three(rp.id, 7)
+    [context] = [args[1] for name, args in fake_claude.calls if name == "annotate"]
+    assert rp.lines[rp.lines[7].fix.of - 1].text in context and rp.lines[6].text not in context
+
+
+async def test_interpreting_a_fix_line_uses_ryans_line_before_the_turn(engine, fake_claude):
+    from je_server.fixes import line_before
+
+    rp = _saved_talk(engine)
+    await engine.ko(rp.id, 7)
+    call = fake_claude.interpret_calls[0]
+    assert call["before"] == ("ryan", line_before(rp, 7).text) and call["after"] is None
+
+
+async def test_practising_a_fix_line_aside_sees_the_conversation_up_to_the_turn(engine, speech_bytes, fake_whisper,
+                                                                                fake_claude):
+    rp = _saved_talk(engine)
+    fake_whisper.text = "I have no idea at all."
+    [e async for e in engine.attempt(rp.id, 7, speech_bytes, "practice")]
+    [call] = fake_claude.aside_calls
+    # my English turns and Ryan's English replies before the turn it fixes: no Korean turn (1), help (2) or fix (7)
+    assert call["history"] == [("ryan", rp.lines[0].text), ("user", rp.lines[3].text), ("ryan", rp.lines[4].text)]
+    assert call["history"][-1] == ("ryan", rp.lines[rp.lines[7].fix.of - 1].text)

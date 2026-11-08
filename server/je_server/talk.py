@@ -7,6 +7,9 @@ given only the text (`messages`), and never my Korean turns or Ryan's Korean ans
 A turn (`Talks.turn`) is my line with its try and recording, then Ryan's line: his English reply streamed sentence by
 sentence (spec 4), or the fixed Korean `talk_english` when I spoke Korean (spec 3). The learner may cut Ryan's sounds
 off and speak again once his line is saved (spec 2).
+
+Ending a talk (`Talks.end`, spec 6, 7) asks Claude for the fixes, keeps those `fixes.check` lets through as my `fix`
+lines after the talk, and makes the first one's sounds before answering. Those lines mark the talk as ended.
 """
 from __future__ import annotations
 
@@ -18,12 +21,12 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
 
-from . import audio, sentences
+from . import audio, fixes, sentences
 from .asr import WhisperError
 from .claude import ClaudeUnavailable
 from .compare import words
 from .engine import HANGUL, MAX_SECONDS, Engine, NotFound, _keep
-from .models import Attempt, Frame, Roleplay, Said, ScriptLine
+from .models import Attempt, Fix, Frame, Roleplay, Said, ScriptLine
 from .phrases import TALK_OPENERS
 from .prompts import TALK_CUT, TALK_CUT_SILENT, TALK_START
 from .tts import VoiceError
@@ -63,12 +66,30 @@ def messages(rp: Roleplay) -> list[dict]:
     return out
 
 
+def fix_input(rp: Roleplay) -> tuple[list[dict], dict[int, str]]:
+    """What Claude is given to pick the fixes (spec 7): Ryan's English replies and my English turns with their line
+    numbers, and my English turns by line number for `fixes.check`. My Korean turns and Ryan's Korean answers are left
+    out (spec 7 「고치지 않는 것」), as in `messages`."""
+    conversation: list[dict] = []
+    turns: dict[int, str] = {}
+    for line in rp.lines:
+        if line.kind == "reply" and line.speaker == "ryan":
+            who = "라이언"
+        elif line.kind == "turn":
+            who = "학습자"
+            turns[line.idx] = line.text
+        else:
+            continue
+        conversation.append({"차례": line.idx, "말한 사람": who, "말": line.text})
+    return conversation, turns
+
+
 class TalkEnded(Exception):
     """The talk was ended: it has its fix lines, so it takes no more turns."""
 
 
 class TalkBusy(Exception):
-    """A turn of the talk is running and Ryan's line is not saved yet."""
+    """A turn of the talk is running and Ryan's line is not saved yet, or the talk is being ended."""
 
 
 class _Unheard(Exception):
@@ -85,6 +106,8 @@ class Talks:
         self.turning: set[str] = set()  # talks with a turn running whose Ryan line is not saved yet
         # the rest of a cut-off reply still being made for 「🔊 듣기」, one task per line (`_mark_heard`)
         self.finishing: dict[tuple[str, int], asyncio.Task] = {}
+        # talks being ended, one task per talk: a second 「대화 끝내기」 waits for the same Claude call
+        self.ending: dict[str, asyncio.Task] = {}
 
     async def create(self) -> Roleplay:
         """A new free talk that starts with Ryan's next first question. The turn is taken and kept in one go, so two
@@ -107,15 +130,98 @@ class Talks:
 
     def check_open(self, rp_id: str) -> Roleplay:
         """The talk, when it can take a turn now. NotFound: no such free talk. TalkEnded: it was ended. TalkBusy: a turn
-        is running and Ryan's line is not saved yet."""
+        is running and Ryan's line is not saved yet, or the talk is being ended (a turn then would take the line number
+        of the first fix line)."""
         rp = self.engine.load(rp_id)
         if rp.kind != "talk":
             raise NotFound(rp_id)
         if any(line.kind == "fix" for line in rp.lines):
             raise TalkEnded(rp_id)
-        if rp_id in self.turning:
+        if rp_id in self.turning or self._ending(rp_id) is not None:
             raise TalkBusy(rp_id)
         return rp
+
+    def _ending(self, rp_id: str) -> asyncio.Task | None:
+        task = self.ending.get(rp_id)
+        return task if task is not None and not task.done() else None
+
+    async def end(self, rp_id: str, heard: int | None = None) -> dict:
+        """「대화 끝내기」 (spec 6, 7): the fixes of my English turns as `fix` lines, each with the recording of the turn
+        it fixes. `heard`: how many sentences of Ryan's last reply I heard (as in `turn`). Asked again, the same lines
+        without Claude; two at once share one Claude call. NotFound: no such free talk. TalkBusy: a turn is running.
+        ClaudeUnavailable: Claude could not pick the fixes; nothing is kept and the next end asks again."""
+        rp = self.engine.load(rp_id)
+        if rp.kind != "talk":
+            raise NotFound(rp_id)  # an ended talk is not refused, unlike `check_open`: it answers with its fixes
+        if rp_id in self.turning:
+            raise TalkBusy(rp_id)
+        done = [line for line in rp.lines if line.kind == "fix"]
+        if done:
+            return self._end_body(rp, done)
+        task = self._ending(rp_id)
+        if task is None:  # no await since the checks: a turn sent now finds this task and is refused
+            task = _keep(self.ending, rp_id, asyncio.create_task(self._end(rp_id, heard)))
+        return await asyncio.shield(task)
+
+    async def _end(self, rp_id: str, heard: int | None) -> dict:
+        engine, voice = self.engine, self.engine.voice
+        t0 = time.perf_counter()
+        first_sound = 0.0
+        rp = engine.load(rp_id)
+        await self._mark_heard(rp, heard)
+        last = rp.lines[-1]
+        if last.speaker == "ryan" and last.kind == "reply" and last.parts:
+            # the rest of Ryan's last reply, when its sounds are still being made, waits behind the fixes' sounds
+            # (the voice leaves out those made)
+            voice.demote([p.audio for p in last.parts])
+        conversation, turns = fix_input(rp)
+        # no English turn of mine: nothing to fix, and Claude is not asked (spec 6)
+        found = fixes.check(await engine.claude.fixes(conversation), turns) if turns else []
+        lines: list[ScriptLine] = []
+        if found:
+            async with engine.lock(rp_id):
+                rp = engine.store.load(rp_id)
+                lines = [line for line in rp.lines if line.kind == "fix"]
+                added = not lines  # else made meanwhile: those stand
+                if added:
+                    lines = [ScriptLine(idx=len(rp.lines) + i, speaker="user", kind="fix", text=f.fixed,
+                                        fix=Fix(of=f.of, said=f.said, why_ko=f.why_ko)) for i, f in enumerate(found)]
+                    rp.lines.extend(lines)
+                    engine.store.save(rp)
+            if added:
+                # the closing review opens on the first fix with Ryan's explanation, then its model sound: those two
+                # first and urgent (spec 7 「기다림」); the rest, and every line's notes, are made behind
+                first = lines[0]
+                made: dict = {}
+                try:
+                    why = await voice.say(first.fix.why_ko, "ryan", "korean", urgent=True)
+                    made["fix"] = first.fix.model_copy(update={"why_audio": why})
+                    made["audio"] = await voice.say(first.text, "ryan", "english", urgent=True)
+                    first_sound = time.perf_counter() - t0
+                except VoiceError:
+                    log.info("first fix sound failed")  # made again behind, with the rest
+                if made:
+                    await engine.update_line(rp_id, first.idx, first.text, **made)
+                for line in lines:
+                    engine.schedule(rp_id, line.idx)
+            rp = engine.load(rp_id)
+            lines = [line for line in rp.lines if line.kind == "fix"]
+        # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
+        log.info("talk end %s fixes=%d first_fix_sound=%.2f total=%.2f", rp_id, len(lines), first_sound,
+                 time.perf_counter() - t0)
+        return self._end_body(rp, lines)
+
+    def _end_body(self, rp: Roleplay, lines: list[ScriptLine]) -> dict:
+        """The answer to `end`: each fix line with the recording of my last try at the turn it fixes (for 「🔊 내 녹음
+        들어 보기」), or no lines and Ryan's 「고칠 곳을 찾지 못했어요」 (spec 7)."""
+        if not lines:
+            return {"items": [], "say": self.engine.said("talk_no_fixes").model_dump()}
+        items = []
+        for line in lines:
+            tries = [a for a in rp.attempts.get(line.fix.of, []) if a.mode == "turn"]
+            rec = {"rp_id": rp.id, "idx": line.fix.of, "n": tries[-1].n} if tries else None
+            items.append({"line": line.model_dump(mode="json"), "rec": rec})
+        return {"items": items, "say": None}
 
     async def turn(self, rp_id: str, body: bytes, heard: int | None) -> AsyncIterator[dict]:
         """One turn of mine and Ryan's line after it. `heard`: how many sentences of Ryan's last reply I heard before I
