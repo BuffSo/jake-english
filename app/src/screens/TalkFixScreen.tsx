@@ -3,7 +3,7 @@
 // three lines and ☆; 「🎤 따라 말하기」 tried as the end screen's 「내 대사 다시 연습」, the result below. No interpretation
 // here. `fixReduce` decides what shows; this loads the line, plays the sounds and records (`useMic`).
 //
-// The bubble styles are copied from `RoleplayScreen` (its `styles`), which this PR does not touch; they move into one
+// The bubble styles are a copy of `RoleplayScreen`'s `styles`; they move into one
 // place with the recording wiring (docs/todo 20261108_44_todo_roleplay_use_usemic.md).
 import { useEffect, useReducer, useRef, useState, type ComponentRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";

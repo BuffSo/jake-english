@@ -7,7 +7,7 @@
 // recording and with 「대화 끝내기」, and the stream's events are checked against it through `now` (`isCurrent`): the
 // answer to an older turn, its sounds and its 「sounds ended」 are dropped before a sound is queued.
 //
-// The bubbles are the roleplay's, copied from `RoleplayScreen`, which this PR does not touch: its `styles` (bubble,
+// The bubbles are the roleplay's, copies of `RoleplayScreen`'s parts: its `styles` (bubble,
 // ryan, user, feedback, ryanOpen, userOpen, ryanText, plainText, links, link, hint, micHint, count and the frame) and
 // the bubble handlers `playFromBubble`, `toggleThree` (here `toggleNotes`), `toggleKo`, `toggleBubble`, `ryanBubble` and
 // `myBubble`. They move into one place with the recording wiring (docs/todo 20261108_44_todo_roleplay_use_usemic.md).
