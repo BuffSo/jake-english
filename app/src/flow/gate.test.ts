@@ -1,4 +1,4 @@
-import { createGate, createHold, createLatch, runThenHold, stopThenSend, TAP_HOLD_MS, tapThenHold } from "./gate";
+import { createGate, createHold, createLatch, createStartCancel, runThenHold, stopThenSend, TAP_HOLD_MS, tapThenHold } from "./gate";
 
 test("a second call while the first runs is ignored", async () => {
   // PR #12 review: a double tap on 「■ 말하기 끝」 uploaded the same recording twice
@@ -126,4 +126,54 @@ test("a tap that puts 「건너뛰기」 under it holds the next tap", async () 
   expect(skip).not.toHaveBeenCalled();
   t += TAP_HOLD_MS;
   expect(await runThenHold(createGate(), hold, skip)).toBe(true);
+});
+
+// todo 26 1: 「취소」 shows as soon as 「🎤 말하기」 is tapped, but while the mic was starting (permission, getting ready)
+// the gate was busy and the cancel was lost; the mic came on and the 55s auto-stop sent it
+describe("a cancel while the mic is starting", () => {
+  test("is not kept when no start is running", () => {
+    const sc = createStartCancel();
+    expect(sc.ask()).toBe(false);
+    sc.begin();
+    expect(sc.end()).toBe(false);
+  });
+
+  test("is kept until the mic is on, once", () => {
+    const sc = createStartCancel();
+    sc.begin();
+    expect(sc.ask()).toBe(true);
+    expect(sc.ask()).toBe(true); // a double tap on 「취소」 asks the same
+    expect(sc.end()).toBe(true);
+    expect(sc.end()).toBe(false);
+    expect(sc.ask()).toBe(false); // the mic is on: a cancel now goes the usual way, through the gate
+  });
+
+  test("is not left for the next start", () => {
+    const sc = createStartCancel();
+    sc.begin();
+    sc.ask();
+    sc.begin();
+    expect(sc.end()).toBe(false);
+  });
+
+  test("taken with the gate busy starting", async () => {
+    const gate = createGate();
+    const sc = createStartCancel();
+    let micOn!: () => void;
+    const order: string[] = [];
+    const start = gate.run(async () => {
+      sc.begin();
+      try {
+        await new Promise<void>((r) => (micOn = r));
+        order.push("mic on");
+      } finally {
+        if (sc.end()) order.push("cancelled");
+      }
+    });
+    // the screen's cancel: kept if a start is running, else through the gate (which is busy and would drop it)
+    expect(sc.ask() || (await gate.run(async () => true)) === true).toBe(true);
+    micOn();
+    await start;
+    expect(order).toEqual(["mic on", "cancelled"]);
+  });
 });
