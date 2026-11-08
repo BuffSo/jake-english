@@ -78,6 +78,27 @@ def check(text: str, three: ThreeLine) -> list[Problem]:
     return problems
 
 
+def _vowel(letter: str) -> int:
+    """The vowel (medial jamo) of a Hangul syllable letter."""
+    return (ord(letter) - 0xAC00) // 28 % 21
+
+
+def tidy(three: ThreeLine) -> ThreeLine:
+    """The note with each strong syllable's highlight made a letter of its ko, where the model plainly meant one: it
+    gave the letter without its final consonant (ko 딛, hi 디) and only one letter of ko has that vowel. Otherwise the
+    note is as given and `check` finds the highlight. In a 2026-11-08 first-try diagnosis all 16 `hi` problems were
+    this: the prompt's 「the letter that carries the vowel」 was read as the letter without the final consonant."""
+
+    def fixed(s: Syllable) -> Syllable:
+        if s.m != "s" or not HANGUL.match(s.hi) or s.hi in s.ko:
+            return s
+        same = [c for c in s.ko if HANGUL.match(c) and _vowel(c) == _vowel(s.hi)]
+        return s.model_copy(update={"hi": same[0]}) if len(same) == 1 else s
+
+    return three.model_copy(update={"words": [w.model_copy(update={"syl": [fixed(s) for s in w.syl]})
+                                              for w in three.words]})
+
+
 def plain(text: str) -> ThreeLine:
     return ThreeLine(words=[Word(syl=[Syllable(en=t, ko="", m="n")]) for t in text.split()], reading="")
 

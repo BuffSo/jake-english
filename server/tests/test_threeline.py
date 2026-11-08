@@ -1,6 +1,6 @@
 from je_server.models import Syllable as S
 from je_server.models import ThreeLine, Word
-from je_server.threeline import check, degrade, korean_line, plain, refs
+from je_server.threeline import check, degrade, korean_line, plain, refs, tidy
 
 
 def coffee(stress_first=True, hi="카"):
@@ -119,3 +119,26 @@ def test_korean_line_joins_linked_words():
 def test_plain_line_passes():
     assert check("Where is it?", plain("Where is it?")) == []
     assert [w.syl[0].en for w in plain("Where is it?").words] == ["Where", "is", "it?"]
+
+
+def test_tidy_puts_the_final_consonant_back():
+    # the model gives the letter without its final consonant (ko 딛, hi 디): the one letter with that vowel is meant
+    did = Word(syl=[S(en="did", ko="딛", m="s", hi="디")])
+    spring = Word(syl=[S(en="spring.", ko="스프링", m="s", hi="리")])
+    out = tidy(line(I, did, spring, reading="[[딛]]"))
+    assert out.words[1].syl[0].hi == "딛" and out.words[2].syl[0].hi == "링"
+    assert out.words[0] == I and out.reading == "[[딛]]"
+    assert check("I did spring.", out) == []
+
+
+def test_tidy_leaves_what_it_cannot_tell():
+    twice = Word(syl=[S(en="bilbil", ko="빌빌", m="s", hi="비")])  # two letters with that vowel
+    other = Word(syl=[S(en="ob", ko="압", m="s", hi="옵"), S(en="ject?", ko="젝트", m="w")])  # no letter with it
+    stray = Word(syl=[S(en="ob", ko="압", m="n", hi="아"), S(en="ject?", ko="젝트", m="w")])  # not a strong syllable
+    for w in (twice, other, stray):
+        assert tidy(line(w)) == line(w)
+        assert kinds(check(word_text_of(w), tidy(line(w)))) == ["hi"]
+
+
+def word_text_of(w):
+    return "".join(s.en for s in w.syl)

@@ -76,6 +76,15 @@ async def test_annotate_retries_then_degrades():
     assert "stress" in fake.requests[1]["messages"][0]["content"]
 
 
+async def test_annotate_tidies_hi_before_checking():
+    # made-up one-word line: the model's highlight 「타」 lacks the final consonant of 「스탑」
+    stop = json.dumps({"words": [{"syl": [{"en": "Stop.", "ko": "스탑", "m": "s", "hi": "타"}], "emph": False,
+                                  "link": False}], "reading": "[[탑]]을 세게."})
+    fake = FakeAnthropic([stop])
+    three = await Claude(fake).annotate("Stop.", "")
+    assert len(fake.requests) == 1 and three.words[0].syl[0].hi == "탑"
+
+
 async def test_annotate_bad_json_falls_back_to_plain():
     fake = FakeAnthropic(["not json", "{}", "[1]"])
     three = await Claude(fake).annotate("I like coffee.", "")
