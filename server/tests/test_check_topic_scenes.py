@@ -14,6 +14,11 @@ def test_known_people_are_flagged():
     assert cs.known_people("회사 동료에게 영어로 인사하는 상황") and cs.known_people("my coworker asks")
     assert cs.known_people("외국인 친구와 카페에서 만나는 상황") and cs.known_people("a friend from work")
     assert not cs.known_people("처음 보는 외국인과 인사하는 상황") and not cs.known_people("Nice to meet you!")
+    # final review: a neighbour or a regular is the likeliest person the learner already knows in the widened topic
+    assert cs.known_people("아파트에서 매일 마주치는 외국인 이웃") and cs.known_people("my neighbor from next door")
+    assert cs.known_people("단골 카페 사장님") and cs.known_people("an acquaintance from the gym")
+    assert cs.known_people("지인의 소개로 만난 외국인")
+    assert not cs.known_people("홍대입구역에 있는 한국 현지인")  # 지인 inside 현지인 (a local) is not someone known
 
 
 def test_abroad_is_flagged():

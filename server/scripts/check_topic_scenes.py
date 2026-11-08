@@ -41,8 +41,9 @@ TYPED = ("명동에서 외국인이 환전소가 어디냐고 묻는 상황",
          "지하철에서 길을 헤매는 외국인에게 먼저 도와줄지 묻는 상황",
          "헬스장", "고궁")
 
-_KNOWN = re.compile(r"동료|친구|직장|회사 사람|상사|선배|후배|룸메이트|아는 사이|"
-                    r"\b(?:co-?workers?|colleagues?|friends?|boss|classmates?|roommates?)\b", re.I)
+_KNOWN = re.compile(r"동료|친구|직장|회사 사람|상사|선배|후배|룸메이트|아는 사이|이웃|단골|(?<!현)지인|"
+                    r"\b(?:co-?workers?|colleagues?|friends?|boss|classmates?|roommates?|neighbou?rs?|"
+                    r"acquaintances?)\b", re.I)
 _ABROAD = re.compile(r"뉴욕|미국|하와이|도쿄|일본|파리|런던|해외|중국|베이징|"
                      r"\b(?:new york|tokyo|hawaii|america|united states|paris|london|abroad|overseas)\b", re.I)
 HARD_LEN = 11  # letters; long words to read first, not a verdict
