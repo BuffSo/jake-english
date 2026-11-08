@@ -1,7 +1,8 @@
 // Screen flow as a reducer, so taps that arrive at the wrong moment (double taps, taps while Ryan is
 // still talking) are ignored in one place.
 import type { ErrorCode } from "../api/client";
-import type { AttemptEvent, AttemptMode, Progress, Roleplay, Said, ScriptLine, TryRef } from "../api/types";
+import type { AttemptEvent, AttemptMode, Progress, Resume, Roleplay, Said, ScriptLine, TryRef } from "../api/types";
+import { resumeHistory, resumeSeen } from "./resume";
 import type { SituationStart } from "./situation";
 
 // past and saved: the two tabs of 「복습하기」 (spec review-screens 2; it was a menu of two buttons before). The last
@@ -108,7 +109,8 @@ export type Action =
   | { type: "openPastRun"; group: string; title: string }
   | { type: "pastLoaded"; roleplay: Roleplay }
   | { type: "startSaved"; runs: Roleplay[]; order: number[] }
-  | { type: "toggleBefore" };
+  | { type: "toggleBefore" }
+  | { type: "resumed"; resume: Resume };
 
 export const initial: State = {
   screen: "home",
@@ -220,13 +222,6 @@ export function practiceFor(s: State, b: Pick<Bubble, "kind" | "idx">): "mine" |
   return null;
 }
 
-// Whether going back needs 「대화를 그만둘까요?」 first: only when a roleplay in progress would be lost. Back from
-// a practice returns to the roleplay or the end screen, so nothing is lost. Back is the only way out of the screen
-// since 「처음으로」 went (2026-11-06 user).
-export function askFirst(s: State): boolean {
-  return !s.practice;
-}
-
 // Whether the roleplay screen goes away. Back from a line practised mid-roleplay stays on it, so the screen must
 // drop only that practice's recording and stream, not everything after it.
 export function leavesScreen(s: State): boolean {
@@ -270,8 +265,10 @@ export function reduce(s: State, a: Action): State {
       if (s.screen === "roleplay" && s.practice) return leavePractice(s);
       if ((s.screen === "roleplay" || s.screen === "end") && s.returnTo) return restore(s.returnTo);
       if (s.screen === "end" && s.past) return { ...initial, screen: "past" };
-      if (s.screen === "roleplay" || s.screen === "end")
-        return { ...initial, screen: "situation", situationFrom: s.situationFrom };
+      // a conversation left mid-way: the topic step, whose last row resumes it (spec resume-roleplay 5, the user's
+      // choice); it used to come back to the step it was picked from, like the end screen still does
+      if (s.screen === "roleplay") return { ...initial, screen: "situation" };
+      if (s.screen === "end") return { ...initial, screen: "situation", situationFrom: s.situationFrom };
       return s;
     case "endPractice":
       return s.screen === "roleplay" && s.practice ? leavePractice(s) : s;
@@ -481,5 +478,21 @@ export function reduce(s: State, a: Action): State {
     }
     case "toggleBefore":
       return s.line ? { ...s, beforeOpen: !s.beforeOpen } : s;
+    case "resumed": {
+      // the newest conversation from where it stopped, with what was said before it (spec resume-roleplay 2); only
+      // from the situation screen, so a second tap on the row does nothing
+      if (s.screen !== "situation") return s;
+      const r = a.resume;
+      return {
+        ...initial,
+        screen: "roleplay",
+        roleplay: r.roleplay,
+        idx: r.at,
+        history: resumeHistory(r),
+        seen: resumeSeen(r),
+        progress: r.progress,
+        phase: "loading",
+      };
+    }
   }
 }

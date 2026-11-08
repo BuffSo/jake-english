@@ -1,6 +1,6 @@
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState, type ComponentRef, type Dispatch } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 
 import { api } from "../api";
 import { ApiError } from "../api/client";
@@ -12,7 +12,7 @@ import { useRecorder } from "../audio/useRecorder";
 import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
-import { askFirst, canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
+import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { InRowButton } from "../ui/InRowButton";
@@ -156,9 +156,9 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
 
   // Leaving (back): sounds stop, a recording in progress is deleted without being sent, and a
-  // stream still answering is dropped by `epoch` (and by `mounted` when the screen goes away). A roleplay cannot
-  // be picked up again later yet (이어 하기), so leaving one in progress asks first; a practice has nothing to lose
-  // (`askFirst`).
+  // stream still answering is dropped by `epoch` (and by `mounted` when the screen goes away). Nothing is asked: the
+  // Mac keeps the conversation's place and the topic step offers to resume it (spec resume-roleplay 5). It used to
+  // ask 「대화를 그만둘까요?」 when a conversation could not be picked up again.
   async function leave() {
     // set before anything is awaited: a stop or start still finishing sees it (PR #13 review)
     epoch.current += 1;
@@ -168,19 +168,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     dispatch(leaveAction(state));
   }
 
-  function askLeave() {
-    if (!askFirst(state)) return void leave();
-    Alert.alert(
-      "대화를 그만둘까요?",
-      "하던 대화는 아직 이어 할 수 없어요.",
-      [
-        { text: "계속하기", style: "cancel" },
-        { text: "그만두기", style: "destructive", onPress: () => void leave() },
-      ],
-      { cancelable: true },
-    );
-  }
-  useBackKey(askLeave);
+  const goBack = () => void leave();
+  useBackKey(goBack);
 
   // A sound asked for from a bubble (🔊, or a tap on a bubble that plays): stops what plays and plays it, only while
   // my turn waits and not over Ryan's answer (`mayListen`, spec three-line-listen 5)
@@ -556,7 +545,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
-        <BackButton onPress={askLeave} />
+        <BackButton onPress={goBack} />
         <View style={styles.titleRow}>
           <Text style={[common.title, styles.titleText]}>{keepWords(title)}</Text>
           {count && <Text style={styles.count}>{count}</Text>}
