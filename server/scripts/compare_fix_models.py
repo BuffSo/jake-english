@@ -9,8 +9,8 @@ fragment answer not made a complete sentence (`complete`), a misheard word fille
 Whether a kept correction is wrong (a right sentence "fixed", a recognition slip called a grammar mistake) is judged by
 reading the output.
 
-Money: Sonnet about 0.5 cent a call, Haiku a tenth of that; the default 10 cases x 3 runs x 2 models is 60 calls,
-about $0.17 (real API credit, outside the subscription). Say so before running (AGENTS.md).
+Money: Sonnet about 0.5 cent a call, Haiku a tenth of that; the default 11 cases x 3 runs x 2 models is 66 calls,
+about $0.18 (real API credit, outside the subscription). Say so before running (AGENTS.md).
 
     uv run python scripts/compare_fix_models.py [--runs 3] [--only N]    (PYTHONPATH=. if je_server is not found)
 """
@@ -83,7 +83,13 @@ CASES: list[Case] = [
         ("ryan", "Sorry, I didn't catch that. Could you say it again?"),
         ("user", "I am going to visit my grandmother this weekend."),
     ], {1, 3}),
-    # complete short sentences are left alone; a bare fragment is not (2026-11-09: 「Good.」 alone is now fixed)
+    # bare answer words and complete short sentences are left alone; only a fragment answer to a what, where or when
+    # question is completed (the two cases after these; 2026-11-09)
+    Case("bare answer words", [
+        ("ryan", "How was your weekend?"), ("user", "Good."),
+        ("ryan", "Nice! Do you like spicy food?"), ("user", "Yes."),
+        ("ryan", "Me too. Shall we try the new Thai place on Friday?"), ("user", "Sounds good."),
+    ], {1, 3, 5}),
     Case("complete short answers", [
         ("ryan", "Hi! How are you today?"), ("user", "I'm good."),
         ("ryan", "Glad to hear it! Do you drink coffee every morning?"), ("user", "Yes, I do."),

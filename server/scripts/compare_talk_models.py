@@ -50,9 +50,10 @@ CASES: list[tuple[str, list[str]]] = [
 ]
 # cases whose reply should answer for Ryan himself (the learner asked back), counted with `answers_back`
 ANSWER_BACK = {"misheard asks back"}
-# Ryan telling his own: "I had a sandwich", "I just grabbed a salad", "my lunch was"; not the learner's words back
-ANSWERED = re.compile(r"\bI('ve| just| also)? (had|ate|grabbed|got|made|tried|went for)\b|\bmy (own )?lunch\b|"
-                      r"\bme too\b", re.I)
+# Ryan telling his own: "I had a sandwich", "I just grabbed a salad", "my lunch was"; not the learner's words back,
+# and not "me too", which is also how he agrees
+ANSWERED = re.compile(r"\bI('ve| just| also)? (had|ate|grabbed|got|made|tried|went for)\b|\bmy (own )?lunch\b",
+                      re.I)
 K = TALK_KOREAN
 # turns the learner said in Korean (marked as the server marks them); Ryan must answer in English, and answer them
 KOREAN_CASES: list[tuple[str, list[str]]] = [

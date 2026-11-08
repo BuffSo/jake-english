@@ -103,4 +103,4 @@ def test_cases_cover_short_answers_and_a_misheard_word():
     assert set(rights) <= {c.name for c in cf.CASES}
     assert any(c.far for c in cf.CASES)
     right = {text for c in cf.CASES for i, (_, text) in enumerate(c.conversation) if i in c.keep_off}
-    assert {"Yes, I do.", "I'm good."} <= right
+    assert {"Yes.", "Good.", "Yes, I do.", "I'm good."} <= right  # bare answer words and complete short sentences

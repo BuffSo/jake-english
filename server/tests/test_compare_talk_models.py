@@ -67,3 +67,4 @@ def test_a_misheard_question_back_counts_ryan_answering_for_himself():
     assert ct.answers_back("Nice combo! Me, I just grabbed a salad. What do you like best?")
     assert not ct.answers_back("Kimbap and ramen, nice combo! Do you often eat at your desk?")
     assert not ct.answers_back("Oh, you had kimbap and ramen? Was it good?")
+    assert not ct.answers_back("Me too, I love ramen! Do you cook it at home?")  # agreeing, not answering

@@ -909,13 +909,16 @@ def test_fix_prompt_words_helped_turns_by_the_macs_points_only():
 def test_fix_prompt_completes_fragments_and_keeps_misheard_words():
     rules = prompts.FIX_SYSTEM
     assert '"도움 받은 차례": true' in rules  # the mark `talk.fix_input` puts on a helped turn
-    assert "완성 문장" in rules and "Yes, I do." in rules and "I'm good." in rules
-    assert "Good., Yes, I like it." not in rules  # a bare fragment is no longer left alone
+    # only a fragment answer to a what, where or when question is completed; bare answer words and complete short
+    # sentences stay as they are
+    assert "완성 문장" in rules and "무엇, 어디, 언제" in rules
+    assert "Yes., No., Good., Sure., Sounds good." in rules and "Yes, I do., I'm good." in rules
     assert "소리가 가장 가깝" in rules and "소리가 전혀 다른" in rules
 
 
 def test_talk_prompt_reads_a_nonsense_word_as_a_similar_sounding_one():
     assert "similar-sounding" in prompts.TALK_SYSTEM and "question back" in prompts.TALK_SYSTEM
+
 
 def test_talk_prompt_carries_on_after_a_helped_turn():
     assert prompts.TALK_HELPED == "(said with help: a sentence Sohee showed)"

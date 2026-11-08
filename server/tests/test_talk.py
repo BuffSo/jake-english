@@ -952,6 +952,7 @@ def test_fix_input_marks_helped_turns_in_the_talk():
     assert [c["차례"] for c in conversation if c.get("도움 받은 차례") is True] == [3, 5]
     assert [c for c in conversation if c["차례"] == 1] == [{"차례": 1, "말한 사람": "학습자", "말": "I walked."}]
 
+
 def test_helped_input_is_what_claude_is_given_for_the_helped_turns():
     from je_server.fixes import Helped
     from je_server.models import Issue
