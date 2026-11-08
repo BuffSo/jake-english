@@ -318,10 +318,11 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             raise ApiError(404, "not_found") from None
 
     @router.get("/roleplays/{rp_id}/lines/{idx}/attempts/{n}/recording")
-    def recording(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0), n: int = PathParam(ge=1)):
-        # found by a checked ID and two integers only, inside the roleplay's rec folder (REVIEW.md 「맥 서버 보안」)
+    async def recording(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0), n: int = PathParam(ge=1)):
+        # found by a checked ID and two integers only, inside the roleplay's rec folder (REVIEW.md 「맥 서버 보안」);
+        # its play copy, cut to the speech (spec play-button-feedback 4)
         try:
-            return FileResponse(engine().recording(rp_id, idx, n), media_type="audio/mp4")
+            return FileResponse(await engine().recording(rp_id, idx, n), media_type="audio/mp4")
         except NotFound:
             raise ApiError(404, "not_found") from None
 

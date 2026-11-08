@@ -146,6 +146,11 @@ class Store:
             return None
         return path if path.is_file() else None
 
+    def play_path(self, rp_id: str, idx: int, n: int) -> Path:
+        """The play copy of a recording, beside it (spec play-button-feedback 4). Not `{idx}-{n}.m4a`, so it is never
+        taken for a try. Creates no folder."""
+        return self._dir(rp_id) / "rec" / f"{idx}-{n}.play.m4a"
+
     def rec_path(self, rp_id: str, idx: int, n: int) -> Path:
         d = self._dir(rp_id) / "rec"
         d.mkdir(parents=True, exist_ok=True)

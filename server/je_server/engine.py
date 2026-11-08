@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import re
 import threading
 import time
@@ -64,6 +65,7 @@ class Engine:
         self.saved_lock = asyncio.Lock()  # the saved-sentence file is read and written one change at a time
         # `/home` runs in a worker thread: two at once must not both take the day's tip
         self.tip_lock = threading.Lock()
+        self.plays: dict[str, asyncio.Task] = {}  # play copies being made, one per recording
 
     # --- fixed phrases ------------------------------------------------------------------------
 
@@ -292,12 +294,48 @@ class Engine:
             log.info("line sound failed: %s/%d", rp_id, idx)
         return self.get_line(rp_id, idx)[1]
 
-    def recording(self, rp_id: str, idx: int, n: int) -> Path:
-        """The learner's recording of one try, for replay on the end screen. The phone plays it, never keeps it."""
-        path = self.store.find_rec(rp_id, idx, n)
-        if path is None:
+    async def recording(self, rp_id: str, idx: int, n: int) -> Path:
+        """The learner's recording of one try, for replay. The phone plays it, never keeps it. What is served is its
+        play copy, cut to the speech with moov first, so a replay is not silence first (spec play-button-feedback 4);
+        made now when it is not there yet, and the original when it cannot be made."""
+        src = self.store.find_rec(rp_id, idx, n)
+        if src is None:
             raise NotFound(f"{rp_id}/{idx}/{n}")
-        return path
+        dst = self.store.play_path(rp_id, idx, n)
+        if dst.is_file():
+            return dst
+        try:
+            await asyncio.shield(self._play_job(src, dst))
+        except (audio.AudioError, OSError) as e:
+            # its kind only, never the path (REVIEW.md 「녹음 처리」)
+            log.info("play copy failed: %s", type(e).__name__)
+            return src
+        return dst
+
+    def _play_job(self, src: Path, dst: Path) -> asyncio.Task:
+        """Makes the play copy once: requests for the same one at the same time share it (as `Voice.rate_file`)."""
+        key = str(dst)
+        job = self.plays.get(key)
+        if job is None:
+            job = asyncio.ensure_future(self._make_play(src, dst))
+            self.plays[key] = job
+
+            # made at the first replay only, which waits for it: a copy made beside the answer was left running at
+            # the end of a test and closing the event loop then hung now and then; a server restart could too
+            job.add_done_callback(lambda _: self.plays.pop(key, None))
+        return job
+
+    async def _make_play(self, src: Path, dst: Path) -> None:
+        wav = self.store.tmp_dir / f"play-{self.store.new_id()}.wav"
+        tmp = self.store.tmp_dir / f"play-{self.store.new_id()}.m4a"
+        try:
+            seconds = await audio.to_wav16k(src, wav)
+            span = await asyncio.to_thread(audio.speech_span, wav)
+            await audio.play_cut(src, span, seconds, tmp)
+            os.replace(tmp, dst)
+        finally:
+            wav.unlink(missing_ok=True)
+            tmp.unlink(missing_ok=True)
 
     def progress(self, rp_id: str, idx: int) -> dict[str, int]:
         return progress_of(self.load(rp_id), idx)

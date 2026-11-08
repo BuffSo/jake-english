@@ -348,7 +348,8 @@ async def test_heard_carries_the_recording_number(engine_with_rp, speech_bytes, 
         events = [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "retry")]
         heard = next(e for e in events if e["type"] == "heard")
         assert heard["n"] == n
-        assert engine.recording(rp_id, user_idx, n).read_bytes() == speech_bytes
+        # the original as sent; a replay gets its play copy (spec play-button-feedback 4)
+        assert engine.store.find_rec(rp_id, user_idx, n).read_bytes() == speech_bytes
 
 
 # --- situation topics (spec situation-topics 4, 7) ---------------------------------------------------------------

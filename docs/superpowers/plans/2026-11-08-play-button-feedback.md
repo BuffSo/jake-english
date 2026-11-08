@@ -5,7 +5,7 @@
 **Goal:** 듣기 버튼을 누르면 그 버튼의 🔊가 소리가 끝날 때까지 쿵쿵 울린다. 다시 누르면 멈춘다. 맥은 녹음 대신, 첫 말소리 0.2초 앞부터 마지막 말소리 0.4초 뒤까지 자른 듣기용 사본을 내준다.
 
 **Architecture:**
-- 서버: `audio.speech_span`이 50ms 창으로 말소리 구간을 재고, `audio.play_cut`이 ffmpeg로 다시 인코딩 없이 자른다(`-c copy -movflags +faststart`). `Engine.recording`은 같은 폴더의 `{idx}-{n}.play.m4a`를 만들어(한 번, 동시 요청은 하나로) 내주고, 실패하면 원본을 내준다. 시도를 받은 뒤 곁에서 미리 만든다.
+- 서버: `audio.speech_span`이 50ms 창으로 말소리 구간을 재고, `audio.play_cut`이 ffmpeg로 다시 인코딩 없이 자른다(`-c copy -movflags +faststart`). `Engine.recording`은 같은 폴더의 `{idx}-{n}.play.m4a`를 처음 들으러 올 때 만들어(한 번, 동시 요청은 하나로) 내주고, 실패하면 원본을 내준다.
 - 앱: 소리 대기열(`SoundQueue`)에 이름표(tag)를 붙인다. 지금 울리는 이름표와 같은 버튼만 🔊(`PlayIcon`)를 움직인다. 누르기 규칙은 순수 함수(`playTap`)다.
 
 **Tech Stack:** Python 3 + FastAPI + ffmpeg(`cd server && uv run pytest -q`), React Native + Expo + jest(`cd app && npx jest && npx tsc --noEmit`). 새 꾸러미 없음.
