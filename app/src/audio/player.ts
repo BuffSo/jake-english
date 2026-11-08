@@ -4,8 +4,13 @@ import { createAudioPlayer, type AudioSource } from "expo-audio";
 
 const STUCK_MS = 30_000; // a sound that never finishes (bad file, lost connection) must not block the queue
 
-// a sound, or a stretch of quiet between two (the first and this run's recording, spec review-practice 4)
-type Item = { src: AudioSource } | { pause: number };
+// a sound, or a stretch of quiet between two (the first and this run's recording, spec review-practice 4). `tag` names
+// the button that asked for it, whose 🔊 bounces while it plays (spec play-button-feedback 1); sounds the app plays by
+// itself (Ryan, a practice's model) have none.
+type Item = ({ src: AudioSource } | { pause: number }) & { tag?: string };
+
+// the tag of what plays now and since when (ms), for the button's 🔊 and its tap rule (`playTap`)
+export type NowTag = { tag: string | null; since: number };
 
 export class SoundQueue {
   private player = createAudioPlayer(null);
@@ -15,6 +20,8 @@ export class SoundQueue {
   private watchdog: ReturnType<typeof setTimeout> | undefined;
   // screens that wait for quiet before offering a button that would cut a speaker off (spec roleplay-practice 9)
   private listeners = new Set<(playing: boolean) => void>();
+  private now: NowTag = { tag: null, since: 0 };
+  private tagListeners = new Set<(now: NowTag) => void>();
 
   constructor() {
     this.player.addListener("playbackStatusUpdate", (status) => {
@@ -22,13 +29,32 @@ export class SoundQueue {
     });
   }
 
-  enqueue(src: AudioSource): void {
-    this.add({ src });
+  enqueue(src: AudioSource, tag?: string): void {
+    this.add({ src, tag });
   }
 
-  // quiet for `ms` before what is queued next; it counts as playing, so nothing cuts in, and clear() drops it
-  enqueuePause(ms: number): void {
-    this.add({ pause: ms });
+  // quiet for `ms` before what is queued next; it counts as playing, so nothing cuts in, and clear() drops it. A pair
+  // gives its pause the same tag, so the 🔊 keeps bouncing through it.
+  enqueuePause(ms: number, tag?: string): void {
+    this.add({ pause: ms, tag });
+  }
+
+  nowTag(): NowTag {
+    return this.now;
+  }
+
+  // called only when the tag changes; the returned function stops it
+  subscribeTag(cb: (now: NowTag) => void): () => void {
+    this.tagListeners.add(cb);
+    return () => {
+      this.tagListeners.delete(cb);
+    };
+  }
+
+  private setTag(tag: string | null): void {
+    if (this.now.tag === tag) return;
+    this.now = { tag, since: tag === null ? 0 : Date.now() };
+    this.tagListeners.forEach((cb) => cb(this.now));
   }
 
   private add(item: Item): void {
@@ -42,6 +68,7 @@ export class SoundQueue {
     clearTimeout(this.watchdog);
     this.player.pause();
     this.setPlaying(false);
+    this.setTag(null);
   }
 
   onIdle(cb: () => void): void {
@@ -70,6 +97,7 @@ export class SoundQueue {
   private next(): void {
     clearTimeout(this.watchdog);
     const item = this.queue.shift();
+    this.setTag(item?.tag ?? null);
     if (!item) {
       this.setPlaying(false);
       const cbs = this.idle;
