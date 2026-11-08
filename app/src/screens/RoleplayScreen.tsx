@@ -418,17 +418,19 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {idx !== undefined && (!folds || opened) && open[idx] && three && three !== "loading" && <ThreeLineView three={three} />}
         {idx !== undefined && (!folds || opened) && koLine(idx)}
         {idx !== undefined && (!folds || opened) && (
+          // one flow of buttons, 「따라 말하기 ›」 pushed right on whichever row it lands: with 「🔊 듣기」 in front, a
+          // nested group took a whole row on a 360dp phone and left it alone on a third (spec three-line-listen 2A)
           <View style={styles.links}>
-            <View style={styles.linkGroup}>
-              {folds && listenButton(idx)}
-              <Pressable onPress={() => toggleThree(idx)} hitSlop={8}>
-                <Text style={styles.link}>{open[idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
-              </Pressable>
-              <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
-              {star && <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />}
-            </View>
+            {folds && listenButton(idx)}
+            <Pressable onPress={() => toggleThree(idx)} hitSlop={8}>
+              <Text style={styles.link}>{open[idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
+            </Pressable>
+            <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
+            {star && <StarButton saved={star.saved} onPress={star.onPress} busy={star.busy} />}
             {follow && (
-              <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} inRow />
+              <View style={styles.right}>
+                <PractiseLink label="따라 말하기 ›" disabled={!canPractise} onPress={() => practise("shadow", idx)} inRow />
+              </View>
             )}
           </View>
         )}
@@ -729,7 +731,8 @@ const styles = StyleSheet.create({
   plainText: { fontSize: 17, color: colors.text, lineHeight: 25 },
   hint: { fontSize: 13, color: colors.weak, marginTop: 4 },
   practise: { alignSelf: "flex-end", marginTop: 6 },
-  links: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 8 },
+  links: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", rowGap: 12, columnGap: 16, marginTop: 8 },
+  right: { marginLeft: "auto" },
   linkGroup: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 16 },
   linkRow: { marginTop: 4 },
   link: { fontSize: 15, color: colors.primary, fontWeight: "600" },
