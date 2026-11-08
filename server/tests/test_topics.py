@@ -89,6 +89,19 @@ def test_script_keeps_the_facts_of_its_description():
     assert "270" in said["u-sneaker-size"] and "men's 9" in said["u-sneaker-size"]
 
 
+def test_ryans_list_lines_are_one_or_two_sentences():
+    # prompts.SCRIPT_SYSTEM asks Claude for Ryan's lines in one or two sentences; the hand-written list scripts keep the
+    # same rule (todo fixed-list-scripts minors 2). a.m. and p.m. do not end a sentence
+    import re
+
+    def sentences(text):
+        text = re.sub(r"\b([ap])\.m\.", r"\1m", text)
+        return [x for x in re.split(r"(?<=[.?!])\s+", text.strip()) if x]
+
+    long = [(p.id, t) for p in ALL for s, t in p.script if s == "ryan" and len(sentences(t)) > 2]
+    assert long == []
+
+
 def test_a_route_split_over_turns_says_more_is_coming():
     # 2026-11-08 the user, after the gyeongbokgung pick on the phone: the first answer sounded like the whole way,
     # so the tourist's 「And then what?」 sounded like it had waited for the next piece
