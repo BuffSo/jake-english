@@ -142,6 +142,9 @@ class Voice:
         if fut is None:
             fut = asyncio.get_running_loop().create_future()
             self.inflight[key] = fut
+        if urgent:
+            # a new reply's sound is not the cut-off reply's rest, even when the sentence is the same
+            self.demoted.discard(key)
         # an urgent ask for a queued prepared job queues it again in front; the consumer skips duplicates
         self.queue.put_nowait((0 if urgent else 1, 0 if urgent else rank, next(self.seq), key, text, voice, lang,
                                check))

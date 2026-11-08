@@ -292,3 +292,19 @@ async def test_demoted_jobs_still_go_before_prepared_ones(voice, tmp_path):
     voice.demote([audio_key("ryan", "english", "old rest")])
     await asyncio.gather(busy, prepared, old)
     assert calls(tmp_path).index("old rest") < calls(tmp_path).index("prepared")
+
+
+async def test_an_urgent_say_of_a_demoted_key_is_not_pushed_back(voice, tmp_path):
+    # a new reply whose first sentence equals an unmade sentence of the cut-off reply is the new reply's first sound
+    busy = asyncio.create_task(voice.say("busy", "ryan", "english", urgent=True))
+    await asyncio.sleep(0.02)
+    other = asyncio.create_task(voice.say("other old", "ryan", "english", urgent=True))
+    same = asyncio.create_task(voice.say("same text", "ryan", "english", urgent=True))
+    await asyncio.sleep(0)
+    key = audio_key("ryan", "english", "same text")
+    voice.demote([audio_key("ryan", "english", "other old"), key])
+    again = asyncio.create_task(voice.say("same text", "ryan", "english", urgent=True))
+    await asyncio.sleep(0)
+    assert key not in voice.demoted
+    await asyncio.gather(busy, other, same, again)
+    assert calls(tmp_path).index("same text") < calls(tmp_path).index("other old")
