@@ -201,6 +201,49 @@ TOPICS: tuple[Topic, ...] = (
                     "맞아요, 남성 9 사이즈예요. 창고에서 한 켤레 가져다 드릴게요."),
                    ("user", "Great, thank you. I'll wait here.",
                     "좋아요, 감사합니다. 여기서 기다릴게요."))),
+            # 2026-11-08 the user: most trips are booked ahead, online or by phone (todo 38). Unlike 「뉴욕 호텔
+            # 체크인」, the booking itself is talked over. Two nights, the king room and the twelfth floor are small
+            # made-up values: the hotel has no name (REVIEW.md 「목록 대본의 사실」)
+            _pick("u-hotel-online", "로스앤젤레스 호텔에서 온라인 예약 확인",
+                  "로스앤젤레스의 호텔 프런트에서 체크인한다. 온라인으로 예약했다고 말하고 확인 번호를 보여 준다. "
+                  "직원이 킹 침대 방 2박 예약을 확인해 준다. 높은 층 방을 부탁하자 직원이 12층 방을 준다.", "ryan",
+                  ("로스앤젤레스에 여행 온 한국 사람", "호텔 프런트 직원", "로스앤젤레스의 호텔 프런트",
+                   "온라인으로 한 예약을 확인하고 체크인하기"),
+                  (("ryan", "Hi, welcome! Are you checking in?",
+                    "안녕하세요, 어서 오세요! 체크인하시나요?"),
+                   ("user", "Yes, I booked online. Here's my confirmation number.",
+                    "네, 온라인으로 예약했어요. 여기 확인 번호요."),
+                   ("ryan", "Thanks. I have you down for two nights in a king room.",
+                    "감사합니다. 킹 침대 방으로 2박 예약되어 있네요."),
+                   ("user", "That's right. Could I get a room on a high floor?",
+                    "맞아요. 높은 층 방으로 받을 수 있을까요?"),
+                   ("ryan", "Sure, you're on the twelfth floor. Here are your keys.",
+                    "그럼요, 12층으로 드릴게요. 여기 객실 키입니다."),
+                   ("user", "Awesome, the higher the better. Thank you!",
+                    "좋네요, 높을수록 좋아요. 감사합니다!"))),
+            # the user: walking in without a booking and being asked for one (todo 38). The 30-minute wait and the
+            # name on the list are small made-up values: the restaurant has no name, as a real one's wait and bar
+            # change by the day. A waitlist takes a first name, so Jake (the user, 2026-11-08); the hotel keeps Kim
+            _pick("u-seafood-walkin", "와이키키 해산물 식당에 예약 없이 가기",
+                  "하와이 호놀룰루 와이키키의 해산물 식당에 예약 없이 둘이 간다. 직원이 예약했는지 묻고, 자리가 거의 "
+                  "차서 테이블은 30분쯤 기다려야 하고 바에는 앉을 수 있다고 한다. 테이블을 기다리기로 하고 대기 명단에 "
+                  "제이크라는 이름을 올린다.", "ryan",
+                  ("하와이에 여행 온 한국 사람", "식당 입구의 안내 직원", "하와이 호놀룰루 와이키키의 해산물 식당",
+                   "예약 없이 간 식당에서 자리를 묻고 대기 명단에 이름 올리기"),
+                  (("ryan", "Aloha, welcome in! Do you have a reservation?",
+                    "알로하, 어서 오세요! 예약하셨어요?"),
+                   ("user", "No, we don't. Do you have a table for two?",
+                    "아니요, 안 했어요. 두 명 앉을 자리 있어요?"),
+                   ("ryan", "We're pretty full right now. It's about a 30-minute wait, or you can sit at the bar.",
+                    "지금은 자리가 거의 찼어요. 30분쯤 기다리셔야 하고, 아니면 바에 앉으셔도 돼요."),
+                   ("user", "We'll wait for a table. Can I put my name down?",
+                    "테이블 자리를 기다릴게요. 이름 올려 둘 수 있을까요?"),
+                   ("ryan", "Sure, what name should I put down?",
+                    "그럼요, 어떤 이름으로 올려 드릴까요?"),
+                   ("user", "It's Jake. Thank you!",
+                    "제이크요. 감사합니다!"),
+                   ("ryan", "Great, we'll call you when your table is ready.",
+                    "네, 자리가 나면 불러 드릴게요."))),
         ),
     ),
     Topic(
