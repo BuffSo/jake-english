@@ -1,4 +1,4 @@
-{"type": "heard", "text": "I'd like a cup of copy", "followed": true}
+{"type": "heard", "text": "I'd like a cup of copy", "followed": true, "n": 1}
 {"type": "text", "delta": "문장을 끝까지 "}
 {"type": "text", "delta": "자신 있게 말했어요. 그런데 coffee가 copy처럼 들렸어요. "}
 {"type": "audio", "key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}

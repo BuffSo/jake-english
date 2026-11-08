@@ -377,7 +377,8 @@ class Engine:
         if not (words(shown) or HANGUL.search(shown)):
             yield self.error("no_speech")
             return
-        yield {"type": "heard", "text": shown, "followed": followed}
+        # n: the recording just saved, so the app can play it back at once (spec three-line-listen 7)
+        yield {"type": "heard", "text": shown, "followed": followed, "n": n}
 
         issues: list[Issue] = []
         said: list[str] = []
