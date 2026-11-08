@@ -920,6 +920,7 @@ describe("resume", () => {
     at: 2,
     progress: { no: 1, total: 1 },
     said: [{ idx: 1, heard: "I'd like a cup of coffee.", n: 1 }],
+    ended: false,
   };
   const resumed = () => reduce(situation, { type: "resumed", resume });
 

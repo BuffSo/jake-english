@@ -32,11 +32,12 @@ const roleplay: Roleplay = {
   topic: null,
   pick: null,
 };
-const resume = (at: number, said: Resume["said"]): Resume => ({
+const resume = (at: number, said: Resume["said"], ended = false): Resume => ({
   roleplay: { ...roleplay, pos: at },
   at,
   progress: { no: 2, total: 2 },
   said,
+  ended,
 });
 
 test("the lines before the start, with what was heard", () => {
@@ -59,6 +60,12 @@ test("nothing before the first line", () => {
   expect(resumeSeen(resume(0, []))).toEqual({});
 });
 
-test("the label says the situation and my line", () => {
-  expect(resumeLabel(resume(2, []))).toBe("호텔 체크인하기 · 내 대사 2/2");
+test("the label of a conversation left mid-way", () => {
+  expect(resumeLabel(resume(2, [], false))).toBe("호텔 체크인하기 · 내 대사 2/2");
+});
+
+test("the label of a conversation gone to the end: how many lines of mine are unrecorded", () => {
+  const said = [{ idx: 3, heard: "Sure, here you go.", n: 1 }];
+  expect(resumeLabel(resume(0, said, true))).toBe("호텔 체크인하기 · 녹음 안 한 줄 1개");
+  expect(resumeLabel(resume(0, [], true))).toBe("호텔 체크인하기 · 녹음 안 한 줄 2개");
 });

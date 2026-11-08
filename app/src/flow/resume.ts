@@ -22,7 +22,12 @@ export function resumeSeen(r: Resume): Record<number, ScriptLine> {
   return Object.fromEntries(before(r).map((l) => [l.idx, l]));
 }
 
-// The resume row's second line: which conversation, and which line of mine comes next
+// The resume row's second line: which conversation, and which line of mine comes next. One gone to the end has only
+// its unrecorded lines left, and 「내 대사 1/3」 would read as starting over: how many it has (spec resume-unrecorded 4).
 export function resumeLabel(r: Resume): string {
-  return `${r.roleplay.frame.title_ko} · 내 대사 ${r.progress.no}/${r.progress.total}`;
+  const title = r.roleplay.frame.title_ko;
+  if (!r.ended) return `${title} · 내 대사 ${r.progress.no}/${r.progress.total}`;
+  const recorded = new Set(r.said.map((s) => s.idx));
+  const left = r.roleplay.lines.filter((l) => l.speaker === "user" && !recorded.has(l.idx)).length;
+  return `${title} · 녹음 안 한 줄 ${left}개`;
 }
