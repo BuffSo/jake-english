@@ -284,8 +284,8 @@ def _compare(target: str, heard: str, hangul: bool = False) -> Comparison:
         names = bool(ta) and all(map(is_name, ta))
         if tag == "replace" and len(ta) == len(hb):
             korean |= any(HANGUL_WORD.match(h) and not (is_name(t) and resembles(t, h)) for t, h in zip(ta, hb))
-        else:
-            korean |= any(HANGUL_WORD.match(h) and not (names and any(resembles(t, h) for t in ta)) for h in hb)
+        else:  # a span of other counts: Hangul like one of its names is that name (「Get off 홍대」 with at dropped)
+            korean |= any(HANGUL_WORD.match(h) and not any(is_name(t) and resembles(t, h) for t in ta) for h in hb)
         if tag == "equal" or "".join(ta) == "".join(hb):  # checkout and check out
             count += len(ta)
             heard_count += len(hb)

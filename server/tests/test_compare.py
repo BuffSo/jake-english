@@ -350,6 +350,8 @@ def test_hangul_at_the_name_is_not_korean():
     ("Take Line 2 and get off at Hongdae.", "Take line 2 and get off at 홍대 근데 이거 맞아요?"),
     ("Get off at Hongdae.", "Get off at 네"),  # Korean where the name goes
     ("Get off at Chungmuro.", "Get off at 어디였지"),
+    ("Change to Line 3 there, and get off at Gyeongbokgung.", "Change to line 3 there and get off at 어 뭐였더라"),
+    ("Get off at Hongdae.", "Get off at 거기"),  # the name forgotten (final branch review)
 ])
 def test_korean_at_the_name_is_still_korean(line, heard):
     # the engine then treats the try as not followed, however close the English words are
@@ -364,3 +366,10 @@ def test_hangul_like_the_name_is_a_try_at_it(line, heard):
     assert not korean_said(line, heard) and len(compare(line, heard).diffs) == 1
     # Korean outside the name: compared as before, without the Hangul
     assert compare("Get off at Hongdae.", "Get off at Hongdae 아 뭐였지").diffs == []
+
+
+def test_a_name_in_hangul_beside_a_dropped_word_is_a_try():
+    # final branch review: with 「at」 dropped the span is [at, hongdae] against [홍대]; the Hangul looks like the name,
+    # so it is a try at the line, and the span is pointed out as before
+    assert not korean_said("Get off at Hongdae.", "Get off 홍대")
+    assert [(d.target, d.heard) for d in compare("Get off at Hongdae.", "Get off 홍대").diffs] == [("at hongdae", "홍대")]

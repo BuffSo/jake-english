@@ -77,7 +77,7 @@ WITH_BATCHIM, WITHOUT = set("이은을과"), set("가는를와")
 # (phone 2026-11-08: 「대사와 상관없는 말로 들려서 따로 짚을 곳이 없어요」; live: 「…상관없는 혼잣말로 들렸어요」)
 # The server's own list (`ASIDE_LEAKS`) too: it drops those sentences, and the model saying them still breaks the rule.
 # 「갈라」, 「비어 있」: on a try at the line with no points teacher Ryan read his rules out (todo 40 2, 2026-11-08:
-# 「「짚을 것」이 비어 있으니 … 갈라 말하지 않고 …」)
+# the material's name 「짚을 것」, what he would not say and how he sorts)
 NAMES = tuple(dict.fromkeys(("짚을", "후보", "소리 내는 법", "설명", "자료", "받은", "역할극", "따로 말", "말하지 않을게",
                              "라고 말했", "라고 하셨", "말했는데", "상관없는", "혼잣말", "대사와 다른 말", "갈라", "비어 있",
                              *ASIDE_LEAKS)))

@@ -55,14 +55,14 @@ QUOTES = "\"'“”‘’「」『』"
 DOUBLE_QUOTES = str.maketrans("", "", "\"“”")
 # Words of teacher Ryan's prompt that are never for the learner: the names of what he is given and how the prompt sorts
 # or holds back. A sentence with one is dropped before the learner sees or hears it (todo 40 2: on a try with no points
-# he said 「「짚을 것」이 비어 있으니 … 갈라 말하지 않고 …」). 「짚은」 stays: 「아까 짚은 곳은 …」 answers a question
-# about the try before (todo 40 1). 「갈래」 only as the prompt's noun: 「넘어갈래요」 is an ordinary verb (PR #62
-# review). The prompt calls the learner 「학습자」 and sorts what was said into 혼잣말 and 상관없는 말; live, he once
+# he named 「짚을 것」 and said what he would not say and how he sorts). 「짚은」 stays: 「아까 짚은 곳은 …」 answers a question
+# about the try before (todo 40 1). 「갈래」, 「지시」 and 「자료」 only in the prompt's own phrases: 「넘어갈래요」,
+# 「만지시면」, 「직원의 지시를」 and 「안내 자료」 are ordinary words a meaning may need (PR #62 reviews). The prompt calls the learner 「학습자」 and sorts what was said into 혼잣말 and 상관없는 말; live, he once
 # began 「학습자가 한국어로 혼잣말을 한 경우.」 and often 「대사와는 상관없는 말로 들렸어요」 (PR #42 fixed the prompt
 # for it). scripts/check_ryan_wording.py counts these in the model's own answer.
-ASIDE_LEAKS = ("짚을", "대사 낱말", "들린 낱말", "영어 받아쓰기", "한국어 받아쓰기", "앞 시도", "선생님에게 한 말", "자료",
-               "지시", "갈래 이름", "갈래로", "갈래를", "갈래가", "갈라 말", "말하지 않을게", "말하지 않겠", "학습자",
-               "상관없는 말", "혼잣말")
+ASIDE_LEAKS = ("짚을", "대사 낱말", "들린 낱말", "영어 받아쓰기", "한국어 받아쓰기", "앞 시도", "선생님에게 한 말",
+               "받은 자료", "자료 이름", "자료의 이름", "자료가 없", "이 지시", "지시문", "지시에 따라", "갈래 이름",
+               "갈래로", "갈래를", "갈래가", "갈라 말", "말하지 않을게", "말하지 않겠", "학습자", "상관없는 말", "혼잣말")
 # where sentences.SentenceBuffer cuts for the voice, and also after a closing bracket or quote right after the mark
 # (「…뜻이에요.」 다시 …), so a dropped sentence does not take the next one with it (PR #62 review)
 SENTENCE_END = re.compile(r"(?<=[.?!])[」』)\]\"'”’]*\s+")

@@ -456,7 +456,7 @@ def test_aside_prompt_answers_about_an_earlier_point():
 
 def test_aside_prompt_covers_a_try_without_points():
     # todo 40 2: a try at the line heard as Korean came with no points; between 「only the points given」 and 「never
-    # say there are none」 teacher Ryan read his rules out (「「짚을 것」이 비어 있으니 …」)
+    # say there are none」 teacher Ryan read his rules out (the material's name and what he would not say)
     from je_server import prompts
 
     p = prompts.ASIDE_SYSTEM
@@ -709,10 +709,10 @@ async def _aside_out(pieces) -> list[str]:
 
 
 async def test_aside_drops_sentences_that_name_its_materials(caplog):
-    # todo 40 2: teacher Ryan read his rules out (「「짚을 것」이 비어 있으니 … 말하지 않을게요」); such a sentence
+    # todo 40 2: teacher Ryan read his rules out (the material's name, what he would not say); such a sentence
     # never reaches the learner, and the log keeps only that one was dropped
     with caplog.at_level(logging.INFO, logger="je_server"):
-        out = await _aside_out(["「짚을 것」이 비어 있으니 말하지 ", "않을게요. 갈래를 ", "갈라 말하지 않아요. 한 번 ",
+        out = await _aside_out(["짚을 것이 없으니 말하지 ", "않을게요. 갈래를 ", "갈라 말하지 않아요. 한 번 ",
                                 "더 해 볼까요?"])
     assert "".join(out) == "한 번 더 해 볼까요?"
     assert caplog.text.count("aside sentence dropped") == 2 and "짚을" not in caplog.text
@@ -729,6 +729,13 @@ async def test_aside_keeps_a_sentence_that_only_ends_in_garae():
     # PR #62 review: 「갈래」 alone also dropped 「넘어갈래요」, so the skip guidance could vanish
     said = "「건너뛰기」를 누르면 다음 대사로 넘어갈래요? "
     assert await _aside_out([said, "아니면 한 번 더 해 볼까요?"]) == [said, "아니면 한 번 더 해 볼까요?"]
+
+
+@pytest.mark.parametrize("said", ["「만지시면 안 돼요」라는 뜻이에요. ", "「직원의 지시를 따르세요」라는 뜻이에요. ",
+                                  "「안내 자료」라는 뜻이에요. ", "「같이 갈래요?」라는 뜻이에요. "])
+async def test_aside_keeps_meanings_with_words_like_the_prompts(said):
+    # final branch review: 「지시」 and 「자료」 as bare words dropped answers to what a line means
+    assert await _aside_out([said, "다시 해 볼까요?"]) == [said, "다시 해 볼까요?"]
 
 
 async def test_aside_cuts_after_a_closing_bracket():
