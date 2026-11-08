@@ -1,5 +1,6 @@
-from je_server.compare import (FOLLOW_MIN, compare, find_issues, issue_ko, praise_candidates, similarity, sound_pairs,
-                                words)
+from je_server import sounds
+from je_server.compare import (FOLLOW_MIN, compare, find_issues, issue_ko, listed_sound, praise_candidates, similarity,
+                                sound_pairs, words)
 from je_server.models import Issue
 
 
@@ -276,3 +277,11 @@ def test_a_price_read_without_dollars_is_notation():
     assert compare("That's $2.05.", "That's two oh five.").diffs == []
     assert compare("It's five ninety-nine.", "It's $5.99.").diffs == []
     assert compare("It's $5.99.", "It's five forty-nine.").diffs != []  # another price is still a point
+
+
+def test_listed_sound_for_one_word_each():
+    found = listed_sound("right", "light")
+    assert found is not None
+    assert set(found[0]) == {"R", "L"} and found[1] == sounds.find("R", "L").explain
+    assert listed_sound("cut", "cat") is None  # a sound change that is not on the list
+    assert listed_sound("restaurant", "rest around") is None  # one word each only

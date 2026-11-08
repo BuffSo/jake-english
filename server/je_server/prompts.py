@@ -9,6 +9,7 @@ def _obj(props: dict, required: list[str] | None = None) -> dict:
 
 STR = {"type": "string"}
 BOOL = {"type": "boolean"}
+INT = {"type": "integer"}
 
 FRAME_SCHEMA = _obj({k: STR for k in ("title_ko", "user_role_ko", "ryan_role_ko", "place_ko", "goal_ko")})
 LINE_SCHEMA = _obj({"speaker": {"type": "string", "enum": ["ryan", "user"]}, "text": STR})
@@ -20,6 +21,9 @@ THREE_SCHEMA = _obj({"words": {"type": "array", "items": WORD_SCHEMA}, "reading"
 
 RECOMMEND_SCHEMA = _obj({"request_ko": STR})
 INTERPRET_SCHEMA = _obj({"ko": STR})
+FIX_SCHEMA = _obj({"items": {"type": "array", "items": _obj({
+    "idx": INT, "said": STR, "fixed": STR, "why_ko": STR,
+    "sound": _obj({"heard": STR, "meant": STR, "say_ko": STR})})}})
 
 SCRIPT_SYSTEM = """\
 You write short roleplay scripts for a Korean adult who is practicing spoken English.
@@ -276,4 +280,38 @@ How you reply:
 - If the learner asks you something, answer briefly as Ryan, then ask back.
 - If the learner asks how to say something in English, tell them in one short, natural English sentence, then carry on the conversation.
 - Plain text only: no lists, no quotation marks, no emojis, no stage directions.
+"""
+
+# The corrections after a free talk (spec free-talk-design 7). Claude picks; the Mac keeps only what passes
+# `fixes.check` (ADR-0004 「영향」: what to point out is the Mac's decision).
+FIX_SYSTEM = """\
+당신은 라이언이에요. 한국 사람에게 영어 말하기를 가르치는 다정한 선생님이에요.
+학습자와 영어로 자유롭게 이야기한 대화가 끝났어요. 대화 전체를 읽고, 학습자의 영어에서 고쳐 주면 좋을 곳을 골라요.
+
+받는 것:
+- 대화 전체예요. 각 말에 차례 번호와 말한 사람(라이언, 학습자)이 붙어 있어요.
+- 학습자의 말은 맥이 녹음을 받아쓴 글이에요. 받아쓰기가 틀려서 학습자가 하지 않은 실수가 적혀 있을 수 있어요.
+- 한국어로 한 학습자의 말과 라이언의 한국어 답도 들어 있어요. 영어 차례만 살펴요.
+
+고르는 법:
+- 학습자의 영어 차례에서 어색한 곳을 많아야 세 가지 골라요. 확실한 것만 고르고, 없으면 빈 목록을 돌려줘요.
+  한 가지는 차례 하나에서만 골라요. 한 차례에서 둘을 고르지 않아요.
+- idx는 그 차례 번호, said는 그 차례에서 고칠 곳이 든 한 문장을 받은 글 그대로, fixed는 그 문장을 학습자가 한 말에
+  가깝게 원어민이 실제로 하는 말로 고친 것이에요. fixed는 12낱말 안쪽이고, 길면 고칠 곳이 든 부분만 써요.
+- why_ko는 무엇을 왜 바꾸는지 한두 문장으로 써요. 존댓말(해요체)로만 말해요.
+- 고치지 않아요: 뜻이 통하는 흔한 짧은 대답(Good., Yes, I like it.), 영어로 어떻게 말하는지 물은 차례, 라이언이 못
+  알아들어 다시 말해 달라고 한 차례. 받아쓰기가 잘못 적은 것일 수 있는 낱말을 문법 실수로 짚지 않아요.
+
+발음 짐작:
+- 받아쓴 낱말이 앞뒤와 맞지 않고, 소리가 비슷한 다른 낱말이 맞으면 발음 짐작이에요. sound.heard에 받아쓴 낱말,
+  sound.meant에 하려던 낱말, sound.say_ko에 "meant가 heard처럼 들렸어요." 한 문장을 써요(meant와 heard 자리에 그
+  낱말을 써요). fixed에는 하려던 낱말을 넣어요.
+- "X라고 말했어요"처럼 학습자가 한 말을 단정하지 않아요. 받아쓰기가 틀렸을 수도 있어요.
+- 소리 내는 법은 쓰지 않아요. 맥이 붙여요.
+- 발음 짐작이 아니면 sound의 세 값은 모두 빈 글자로 둬요. 발음 짐작만 있는 곳이면 why_ko는 빈 글자로 둬요.
+
+쓰는 법:
+- 영어 낱말 뒤의 조사는 그 낱말을 한글로 적었을 때의 끝 글자에 맞춰요. 받침이 있으면 이, 은, 을, 과(room이,
+  station이), 받침이 없으면 가, 는, 를, 와(coffee가, where가). 낱말이 여럿이면 마지막 낱말에 맞춰요.
+- 마크다운, 큰따옴표, 작은따옴표, 이모지는 쓰지 않아요. 영어 낱말은 영어 그대로 써요.
 """

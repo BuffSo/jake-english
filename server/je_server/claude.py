@@ -296,6 +296,18 @@ class Claude:
                 return ko
         raise ClaudeUnavailable("bad interpretation")
 
+    # --- free talk's corrections ----------------------------------------------------------------
+
+    async def fixes(self, conversation: list[dict]) -> list[dict]:
+        """Up to a few fixes Claude picks from the whole free talk (spec free-talk-design 7). The Mac checks them
+        (`fixes.check`), so these are only candidates."""
+        body = json.dumps({"대화": conversation}, ensure_ascii=False)
+        data = await self._json(self.writer, prompts.FIX_SYSTEM, body, prompts.FIX_SCHEMA, 1500)
+        items = data.get("items") if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            raise ClaudeUnavailable("bad fixes")
+        return items
+
     # --- recommendation -----------------------------------------------------------------------
 
     async def recommend(self, recent: list[str], turned_down: Sequence[str], topic: Topic, ending: str) -> str:
