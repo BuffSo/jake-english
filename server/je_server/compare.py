@@ -212,9 +212,20 @@ def _issue(target: list[str], heard: list[str], found: tuple[tuple[str, str], st
 
 
 def _restart(line: list[str], at: int, added: list[str]) -> bool:
-    """Added words that repeat the line's words right before or after them: the learner started over."""
+    """Added words where the learner started over: the line's words right before or after them said once or more
+    ("we need, we need two tickets", "we, we, we need"), or a try at the words after them that came out wrong and was
+    then said again (the same first word and at least half the same: "could I sit the, could I see the menu"). The
+    Mac points at what the learner finally said (todo follow-feedback leftovers 2)."""
     n = len(added)
-    return (at >= n and line[at - n:at] == added) or line[at:at + n] == added
+    for m in range(1, n + 1):
+        if n % m:
+            continue
+        chunks = [line[at:at + m]] + ([line[at - m:at]] if at >= m else [])
+        if any(len(c) == m and added == c * (n // m) for c in chunks):
+            return True
+    ahead = line[at:at + n]
+    return (n >= 2 and len(ahead) == n and added[0] == ahead[0]
+            and SequenceMatcher(None, added, ahead, autojunk=False).ratio() >= 0.5)
 
 
 def compare(target: str, heard: str) -> Comparison:

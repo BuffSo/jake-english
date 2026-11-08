@@ -229,6 +229,16 @@ def test_similarity_of_plain_differences_is_as_before():
     assert similarity("Turn left here.", "Sorry, I am new here.") < FOLLOW_MIN
 
 
+def test_a_word_said_again_and_again_is_a_restart():
+    assert find_issues("We need two tickets.", "We, we, we need two tickets.", limit=2) == []
+    assert find_issues("We need two tickets.", "We need, we need, we need two tickets.", limit=2) == []
+
+
+def test_a_start_that_went_wrong_and_was_said_again_is_a_restart():
+    # the words before the restart came out wrong, but the learner said them again as written
+    assert find_issues("Could I see the menu?", "Could I sit the, could I see the menu?", limit=2) == []
+
+
 def test_a_word_added_inside_the_line_is_still_a_point():
     assert find_issues("We need two tickets.", "We need two more tickets.", limit=2) == [
         Issue(target="", heard="more")]
