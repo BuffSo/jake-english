@@ -62,8 +62,10 @@ export type State = {
   message: string | null;
   errorFrom: "loading" | "evaluating" | null;
   practice: Practice | null;
-  // the roleplay as it was when a past line was picked for practice; restored as it is when the practice ends
-  resume: State | null;
+  // the roleplay as it was when a past line was picked for practice; restored as it is when the practice ends. Not
+  // named after resuming, which is the newest conversation from the Mac (`resumed`, spec resume-roleplay; todo
+  // 20261108_32 2)
+  beforePractice: State | null;
   // counts practices, so the same line practised twice plays its model again (see `modelKey`)
   practiceNo: number;
   closingPlayed: boolean; // the end screen's closing words are said once, not again after each practice
@@ -143,7 +145,7 @@ export const initial: State = {
   message: null,
   errorFrom: null,
   practice: null,
-  resume: null,
+  beforePractice: null,
   practiceNo: 0,
   closingPlayed: false,
   history: [],
@@ -235,7 +237,7 @@ function moveOn(s: State, idx: number, history: Bubble[]): State {
 // Leaving a practice. From the end screen: back on the end screen, ready for the next one. From the roleplay: the
 // roleplay exactly as it was, so nothing is said again and the evaluation on screen stays (spec 9).
 function leavePractice(s: State): State {
-  if (s.practice?.from === "roleplay" && s.resume) return { ...s.resume, practiceNo: s.practiceNo };
+  if (s.practice?.from === "roleplay" && s.beforePractice) return { ...s.beforePractice, practiceNo: s.practiceNo };
   if (s.practice?.from === "saved") return { ...initial, screen: "saved" };
   return { ...s, ...freshTurn, screen: "end", practice: null, mode: "turn" };
 }
@@ -464,7 +466,7 @@ export function reduce(s: State, a: Action): State {
         practice: { kind: a.kind, order: [a.idx], at: 0, from: "roleplay" },
         practiceNo: s.practiceNo + 1,
         micUsed: false,
-        resume: s,
+        beforePractice: s,
         idx: a.idx,
         line,
         reading: false,
