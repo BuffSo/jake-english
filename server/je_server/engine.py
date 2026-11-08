@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import audio
+from .asr import WhisperError
 from .claude import ClaudeUnavailable
 from . import topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
@@ -27,7 +28,8 @@ log = logging.getLogger("je_server")
 LINE_WAIT = 120
 MAX_SECONDS = 60
 NEAR_MIN = 0.3  # below FOLLOW_MIN but at least this close to the line: a try at it, not something else
-ASIDES_KEPT = 3  # earlier asides on the line sent with a new one, for a question that follows Ryan's answer
+# the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer
+ASIDES_KEPT = 3
 HANGUL = re.compile(r"[가-힣]")
 
 
@@ -249,8 +251,8 @@ class Engine:
 
     async def ko(self, rp_id: str, idx: int) -> str:
         """Sohee's Korean for a line, made when first asked and kept on the line. Asks for the same line at once
-        share one Claude call. It waits neither for `self.sem`, which three-line notes can fill at the start of a
-        roleplay, nor for a rebuild of the rest of the script (spec 5, builder check)."""
+        share one Claude call. It does not wait for `self.sem`, which three-line notes can fill at the start of a
+        roleplay (spec 5, builder check)."""
         _, line = self.get_line(rp_id, idx)
         if line.ko is not None:
             return line.ko
@@ -265,7 +267,8 @@ class Engine:
 
     async def _make_ko(self, rp_id: str, idx: int) -> str:
         rp, line = self.get_line(rp_id, idx)
-        # the lines around it as the conversation went: Ryan's reply answers what the learner actually said (spec 3)
+        # the lines around it as the conversation went: in a record from before 2026-11-07, Ryan's in-role reply
+        # answers what the learner actually said (spec 3)
         went = self.history(rp, len(rp.lines))
         before = went[idx - 1] if idx > 0 else None
         after = went[idx + 1] if idx + 1 < len(went) else None
@@ -356,7 +359,12 @@ class Engine:
                 # recording that does not follow the line is asked again: a near one may be the line begun and then
                 # Korean, translated (phone test 2026-11-08). Accented English heard as Korean then loses its points;
                 # the text cannot tell the two apart (auto-detection also translates English into Korean).
-                auto, lang = await self.whisper.transcribe_auto(wav)
+                try:
+                    auto, lang = await self.whisper.transcribe_auto(wav)
+                except WhisperError:
+                    # only a check for Korean: the English transcript stands (todo offscript-aside minors 2)
+                    log.info("auto transcription failed")
+                    auto, lang = "", ""
                 if lang == "korean" and HANGUL.search(auto):
                     heard_ko = auto
             # a try at the line that came out wrong: English and close to it, so it gets the Mac's points
@@ -390,7 +398,11 @@ class Engine:
             # the Mac's points only for a try at the line; far from it, they would point at unrelated words
             if near:
                 issues = find_issues(line.text, heard, limit=2)
-            asides = [a for a in rp.attempts.get(idx, []) if a.aside][-ASIDES_KEPT:]
+            # 「바로 앞에」 (spec 3): only what came after the last try at the line (followed, with points, or an old
+            # record's), so an earlier practice's exchange is not sent along
+            tries = rp.attempts.get(idx, [])
+            since = next((i + 1 for i in range(len(tries) - 1, -1, -1) if not tries[i].aside), 0)
+            asides = tries[since:][-ASIDES_KEPT:]
             text = self._aside(self.claude.aside(rp.frame, self.history(rp, idx), line.text, heard, heard_ko, issues,
                                                  [(a.heard, a.say_ko) for a in asides]))
             # a try at the line with points moves on like a followed one, so a line whisper keeps mishearing never
@@ -414,17 +426,33 @@ class Engine:
             yield {"type": "done", "next": nxt, "issues": len(issues)}
 
     async def _aside(self, text: AsyncIterator[str]) -> AsyncIterator[str]:
-        """Teacher Ryan's answer; when Claude cannot answer (or stops midway), the fixed 「이번에는 대사를 그대로
-        따라 말해 볼까요?」 instead of an error, so the learner can try the line again (spec offscript-aside 3)."""
+        """Teacher Ryan's answer; when Claude cannot answer, stops midway or ends without text (a streamed refusal,
+        thinking that used up the tokens), the fixed 「이번에는 대사를 그대로 따라 말해 볼까요?」 instead of an
+        error or an empty box, so the learner can try the line again (spec offscript-aside 3)."""
         fixed = self.said("retry_offscript").text
-        got = False
+        sent = ""
+        held = ""  # trailing spaces wait for the next piece, so a cut piece can take its period right after the text
         try:
             async for delta in text:
-                got = True
-                yield delta
+                body = delta.rstrip()
+                if body:
+                    yield held + body
+                    sent += held + body
+                    held = delta[len(body):]
+                else:
+                    held += delta
         except ClaudeUnavailable:
             log.info("aside answer unavailable")
-            yield f" {fixed}" if got else fixed
+        else:
+            if sent:
+                return
+            log.info("aside answer empty")
+        if not sent:
+            yield fixed
+            return
+        # a cut sentence ends before the fixed phrase, at the marks SentenceBuffer cuts at, so both read and voice
+        # it as two sentences
+        yield ("" if sent.endswith((".", "?", "!")) else ".") + " " + fixed
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
                     timings: dict[str, float], t0: float) -> AsyncIterator[dict]:
@@ -477,7 +505,8 @@ class Engine:
 
     @staticmethod
     def history(rp: Roleplay, upto: int) -> Draft:
-        """The conversation as it went: for a line said differently, what the learner actually said."""
+        """The conversation as it went: for a line said differently in a record from before 2026-11-07, what the
+        learner actually said."""
         out: Draft = []
         for l in rp.lines[:upto]:
             text = l.text
@@ -494,9 +523,10 @@ class Engine:
 
     def summary(self, rp_id: str, rps: list[Roleplay] | None = None) -> dict:
         """The end screen: every line with the learner's tries made inside the roleplay (spec roleplay-practice 3).
-        Practice after the roleplay is left out: 「주고받은 말」 is what was said, and Ryan's reply to a line said
-        differently answers that try. The closing words go by the same tries. `rps`: every record, when the caller
-        has just read them (`latest`), so they are not read again (todo 01, ADR-0011 「영향」)."""
+        Practice after the roleplay is left out: 「주고받은 말」 is what was said, and in a record from before
+        2026-11-07 Ryan's in-role reply to a line said differently answers that try. The closing words go by the
+        same tries. `rps`: every record, when the caller has just read them (`latest`), so they are not read again
+        (todo 01, ADR-0011 「영향」)."""
         rp = self.load(rp_id)
         group = group_of(rp)
         all_rps = self.store.all() if rps is None else rps
@@ -510,8 +540,8 @@ class Engine:
             lines.append({"line": l.model_dump(mode="json"), "tries": [
                 {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
                  "issues": [{"target": i.target, "heard": i.heard, "say_ko": issue_ko(i)} for i in a.issues],
-                 # Ryan's one point for a roleplay turn said differently; a retry said differently only asked
-                 # to follow the line, which is not a point (final review)
+                 # Ryan's one point for a roleplay turn said differently, in records from before 2026-11-07 (asides
+                 # are left out above); a retry said differently only asked to follow the line, not a point
                  # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
                  "point_ko": a.say_ko if a.mode == "turn" and not a.followed and not a.issues else ""}
                 for a in tries], "first": first_try(runs, rp, l.idx)})
@@ -532,7 +562,8 @@ class Engine:
 
     def saved(self) -> list[dict]:
         """Saved sentences, newest first (spec review-practice 6). The line is found again by its sentence when the
-        script was rebuilt after it was saved; one that is gone is left out of the list but kept in the file."""
+        script was rebuilt after it was saved (records from before 2026-11-07); one that is gone is left out of the
+        list but kept in the file."""
         out = []
         items = self.store.load_saved()  # in the order saved, so two saves in one second keep their order
         for _, s in sorted(enumerate(items), key=lambda p: (p[1].at, p[0]), reverse=True):
@@ -582,10 +613,6 @@ class Engine:
             if pos is not None:
                 rp.pos = max(rp.pos, pos)
             self.store.save(rp)
-
-
-async def _one(text: str) -> AsyncIterator[str]:
-    yield text
 
 
 def _quiet(task: asyncio.Task) -> None:

@@ -337,8 +337,8 @@ export function reduce(s: State, a: Action): State {
         progress: null,
       };
     case "practiseLine": {
-      // a past line, straight from what the app already holds: asking the server could wait for a rebuild of the
-      // rest of the script after an off-script turn (spec 9)
+      // a past line, straight from what the app already holds, so nothing waits on the server (spec 9); its notes
+      // open when asked, as on any line
       const line = s.seen[a.idx];
       if (s.screen !== "roleplay" || s.practice || !canReplay(s.phase) || !line || a.idx === s.line?.idx) return s;
       if (line.speaker !== (a.kind === "shadow" ? "ryan" : "user")) return s;
