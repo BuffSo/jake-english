@@ -18,6 +18,7 @@ export class SoundQueue {
   private playing = false;
   // a sound plays now, not a pause between two: only a sound's progress may hold the watchdog off
   private sounding = false;
+  private lastTime = 0; // where the playing sound was last reported, to tell progress from buffering
   private idle: (() => void)[] = [];
   private watchdog: ReturnType<typeof setTimeout> | undefined;
   // screens that wait for quiet before offering a button that would cut a speaker off (spec roleplay-practice 9)
@@ -29,7 +30,14 @@ export class SoundQueue {
     this.player.addListener("playbackStatusUpdate", (status) => {
       // still playing: not stuck, however long it is. A recording runs up to 55 s, and at 30 s the watchdog passed it
       // while it played on, so its 🔊 stopped bouncing (phone check, spec play-button-feedback 1)
-      if (status.playing && this.sounding && !status.didJustFinish) this.arm();
+      // a sound that cannot load (Mac unreachable, missing file) reports an error and never its end: move on now, so
+      // its 🔊 does not bounce in silence (final review)
+      if (this.sounding && status.error) return this.next();
+      // progress, not a mere 「playing」 (Android says so while buffering too), holds the watchdog off
+      if (this.sounding && status.playing && !status.didJustFinish && status.currentTime > this.lastTime) {
+        this.lastTime = status.currentTime;
+        this.arm();
+      }
       if (status.didJustFinish) this.next();
     });
   }
@@ -110,6 +118,7 @@ export class SoundQueue {
     clearTimeout(this.watchdog);
     const item = this.queue.shift();
     this.sounding = item !== undefined && "src" in item;
+    this.lastTime = 0;
     this.setTag(item?.tag ?? null);
     if (!item) {
       this.setPlaying(false);

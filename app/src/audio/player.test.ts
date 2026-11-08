@@ -176,7 +176,7 @@ test("a sound that keeps playing is not passed by the watchdog", () => {
   q.enqueue("long", "rec:1");
   for (let s = 0; s < 50; s++) {
     jest.advanceTimersByTime(1000);
-    mockFinish.forEach((cb) => (cb as (st: { didJustFinish: boolean; playing: boolean }) => void)({ didJustFinish: false, playing: true }));
+    mockFinish.forEach((cb) => (cb as (st: { didJustFinish: boolean; playing: boolean; currentTime: number }) => void)({ didJustFinish: false, playing: true, currentTime: s + 1 }));
   }
   expect(q.isPlaying()).toBe(true);
   expect(q.nowTag().tag).toBe("rec:1");
@@ -193,4 +193,26 @@ test("a late playing report during a pause does not stretch the pause", () => {
   mockFinish.forEach((cb) => (cb as (st: { didJustFinish: boolean; playing: boolean }) => void)({ didJustFinish: false, playing: true }));
   jest.advanceTimersByTime(600);
   expect(mockPlayed).toEqual(["a", "b"]);
+});
+
+// final review: a sound that fails to load reports an error and never its end; its 🔊 must not bounce in silence
+type St = { didJustFinish: boolean; playing?: boolean; currentTime?: number; error?: string | null };
+const report = (st: St) => mockFinish.forEach((cb) => (cb as (s: St) => void)(st));
+
+test("an error ends the sound at once", () => {
+  const q = new SoundQueue();
+  q.enqueue("bad", "rec:1");
+  report({ didJustFinish: false, playing: false, error: "Source error" });
+  expect(q.nowTag().tag).toBeNull();
+  expect(q.isPlaying()).toBe(false);
+});
+
+test("buffering reports with no progress do not hold the watchdog off", () => {
+  const q = new SoundQueue();
+  q.enqueue("slow", "rec:1");
+  for (let s = 0; s < 30; s++) {
+    jest.advanceTimersByTime(1000);
+    report({ didJustFinish: false, playing: true, currentTime: 0, error: null });
+  }
+  expect(q.nowTag().tag).toBeNull();
 });
