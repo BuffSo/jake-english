@@ -30,7 +30,8 @@ export function KoLine({ view, entry, onReplay }: { view: KoView; entry: KoEntry
       <Tag label="통역" color={colors.sohee} />
       <Text style={styles.text}>
         {keepWords(entry.text)}
-        <Text style={styles.play}> 🔊</Text>
+        {/* a no-break space keeps 🔊 with the last word: alone on the next line it looked like a stray sign */}
+        <Text style={styles.play}>{"\u00A0🔊"}</Text>
       </Text>
     </Pressable>
   );
