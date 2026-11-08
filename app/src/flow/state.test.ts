@@ -424,6 +424,13 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     expect(left.screen).toBe("end");
     expect(leaveAction(midway("ready"))).toEqual({ type: "back" }); // outside a practice: back as before
   });
+
+  // todo practice-midway minors 2: Ryan's line just said stays the screen's line until the next one comes
+  test("Ryan's newest bubble offers shadowing while the next line loads", () => {
+    const s = reduce({ ...midway("ryan"), idx: 2, line: ryan2, history: midway("ryan").history.slice(0, 3) }, { type: "ryanDone" });
+    expect([s.phase, s.line?.idx]).toEqual(["loading", 2]);
+    expect(practiceFor(s, s.history.at(-1)!)).toBe("shadow");
+  });
 });
 
 // --- 복습하기 (spec review-practice 1, 3, 7, 9; review-screens 2: the menu became two tabs) -------------------------

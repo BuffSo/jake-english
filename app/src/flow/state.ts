@@ -190,10 +190,12 @@ function restore(rt: State): State {
   return { ...rt, ...freshTurn, phase: "loading", line: null, history: [], practiceNo: rt.practiceNo + 1 };
 }
 
-// The practice button a bubble in the roleplay gets (spec 9): Ryan's lines to follow, my lines to say again. Not the
-// line on screen (「다시 해 보기」 covers it), not a line the app has not loaded, and none inside a practice.
+// The practice button a bubble in the roleplay gets (spec 9): Ryan's lines to follow, my lines to say again. Not my
+// line on screen (「다시 해 보기」 covers it), not a line the app has not loaded, and none inside a practice. Ryan's
+// line just said is still the screen's line until the next one comes, and keeps its button (todo practice-midway 2).
 export function practiceFor(s: State, b: Pick<Bubble, "kind" | "idx">): "mine" | "shadow" | null {
-  if (s.practice || b.idx === undefined || b.idx === s.line?.idx || !s.seen[b.idx]) return null;
+  if (s.practice || b.idx === undefined || !s.seen[b.idx]) return null;
+  if (b.kind === "user" && b.idx === s.line?.idx) return null;
   if (b.kind === "ryan") return "shadow";
   if (b.kind === "user") return "mine";
   return null;
