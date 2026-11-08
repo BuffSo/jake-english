@@ -17,6 +17,9 @@ export type Interpret = {
   replay: KoFetch["replay"];
 };
 
+// the tag of Sohee's voice for one line
+export const koTag = (idx: number) => `ko:${idx}`;
+
 export function useInterpret(rpId: string, sounds: SoundQueue, allow: (auto: boolean) => boolean): Interpret {
   const [got, setGot] = useState<Record<number, KoEntry>>({});
   const id = useRef(rpId);
@@ -28,9 +31,10 @@ export function useInterpret(rpId: string, sounds: SoundQueue, allow: (auto: boo
     ko.current = createKoFetch({
       getKo: (idx) => api.getKo(id.current, idx),
       getKoAudio: (idx) => api.getKoAudio(id.current, idx),
-      play: (audio) => {
+      // tagged with her line, so its 🔊 bounces while she speaks (spec play-button-feedback 2)
+      play: (audio, idx) => {
         sounds.clear();
-        sounds.enqueue(api.audioSource(audio));
+        sounds.enqueue(api.audioSource(audio), koTag(idx));
       },
       allow: (auto) => allowNow.current(auto),
       onChange: setGot,

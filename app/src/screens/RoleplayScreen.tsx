@@ -8,6 +8,8 @@ import type { AttemptEvent, ScriptLine, ThreeLine, TryRef } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useAnswering } from "../audio/useAnswering";
 import { usePlaying } from "../audio/usePlaying";
+import { usePlayingTag } from "../audio/usePlayingTag";
+import { tapPlay } from "../audio/tapPlay";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
@@ -19,18 +21,22 @@ import { Button } from "../ui/Button";
 import { InRowButton } from "../ui/InRowButton";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
+import { PlayLabel } from "../ui/PlayIcon";
 import { keepWords } from "../ui/keepWords";
 import { Named } from "../ui/Named";
 import { lineNotes, needsNotes } from "../ui/notesView";
 import { StarButton, StarMark } from "../ui/Star";
 import { SoonEnds, StopButton } from "../ui/StopButton";
 import { ThreeLineView } from "../ui/ThreeLine";
-import { useInterpret } from "../ui/useInterpret";
+import { koTag, useInterpret } from "../ui/useInterpret";
 import { useSaved } from "../ui/useSaved";
 import { colors, top } from "../ui/theme";
 import { codeOf, ErrorText, messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
+
+// 「🔊 다시 듣기」 and the rates play the line's model under this one tag (spec play-button-feedback 2)
+const LISTEN_TAG = "listen";
 type Rate = 0.6 | 0.8 | 1;
 const RATES: Rate[] = [0.6, 0.8, 1];
 
@@ -57,6 +63,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // a start, stop or stream that began before the leave sees the number change and drops itself (spec 9).
   const epoch = useRef(0);
   const playing = usePlaying(sounds);
+  // which play button's 🔊 bounces: the one whose tag is on the sound playing (spec play-button-feedback 1)
+  const playingTag = usePlayingTag(sounds);
   // the state as of the last render, for Sohee's sound, which arrives after the tap (spec korean-translation 2)
   const now = useRef(state);
   now.current = state;
@@ -150,11 +158,18 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     toEnd();
   }, [state.history.length, state.phase, state.feedback]);
 
-  function listen(r: Rate = rate) {
-    if (!line?.audio) return;
-    setRate(r);
-    sounds.clear();
-    sounds.enqueue(api.audioSource(line.audio, r));
+  // 「🔊 다시 듣기」 and the rates under the line: the model, tagged so 「🔊 다시 듣기」 bounces. A tap on 「🔊 다시 듣기」
+  // while it plays stops it; a rate always plays at that rate (spec play-button-feedback 2, 3).
+  function listen(r: Rate = rate, again = false) {
+    const audio = line?.audio;
+    if (!audio) return;
+    const play = () => {
+      setRate(r);
+      sounds.clear();
+      sounds.enqueue(api.audioSource(audio, r), LISTEN_TAG);
+    };
+    if (again) tapPlay(sounds, LISTEN_TAG, play);
+    else play();
   }
 
   // Leaving (back): sounds stop, a recording in progress is deleted without being sent, and a
@@ -175,25 +190,36 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
 
   // A sound asked for from a bubble (🔊, or a tap on a bubble that plays): stops what plays and plays it, only while
   // my turn waits and not over Ryan's answer (`mayListen`, spec three-line-listen 5)
-  function playFromBubble(src: ReturnType<typeof api.audioSource>) {
+  // `tag`: the button asking, whose 🔊 bounces while it plays; a tap on it then stops it (spec play-button-feedback 3)
+  function playFromBubble(src: ReturnType<typeof api.audioSource>, tag: string) {
     if (!mayListen(now.current.phase, answeringNow.current)) return;
-    sounds.clear();
-    sounds.enqueue(src);
+    tapPlay(sounds, tag, () => {
+      sounds.clear();
+      sounds.enqueue(src, tag);
+    });
   }
 
-  const playRec = (r: TryRef) => playFromBubble(api.recordingSource(r.rp_id, r.idx, r.n));
+  const recTag = (r: TryRef) => `rec:${r.rp_id}:${r.idx}:${r.n}`;
+  const playRec = (r: TryRef) => playFromBubble(api.recordingSource(r.rp_id, r.idx, r.n), recTag(r));
 
-  // 「🔊 듣기」 on a past bubble: Ryan's voice or my line's model, at the rate last picked below (spec three-line-listen 3)
-  function listenButton(idx: number) {
+  // 「🔊 듣기」 on a past bubble: Ryan's voice or my line's model, at the rate last picked below (spec three-line-listen 3).
+  // `tag` is the bubble's, so two bubbles of one line bounce apart.
+  function listenButton(idx: number, tag: string) {
     const audio = lineAt(idx)?.audio;
     if (!audio) return null;
     return (
-      <InRowButton label="🔊 듣기" onPress={() => playFromBubble(api.audioSource(audio, rate))} dim={!listenOk} textStyle={styles.link} />
+      <InRowButton
+        label="듣기"
+        playing={playingTag === tag}
+        onPress={() => playFromBubble(api.audioSource(audio, rate), tag)}
+        dim={!listenOk}
+        textStyle={styles.link}
+      />
     );
   }
 
   function replayJake() {
-    if (state.jake) playFromBubble(api.audioSource(state.jake.audio));
+    if (state.jake) playFromBubble(api.audioSource(state.jake.audio), "jake");
   }
 
   // `toSay`: the line to say asked for them on its own, and a failure leaves it plain; a tap on a past bubble's
@@ -309,12 +335,24 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // render (todo 20261106_10 3).
   function koLine(idx: number) {
     const line = lineAt(idx);
-    return <KoLine view={koViewAt(idx)} entry={interp.entry(idx, line)} onReplay={() => interp.replay(idx, line, here())} />;
+    return (
+      <KoLine
+        view={koViewAt(idx)}
+        entry={interp.entry(idx, line)}
+        onReplay={() => replayKo(idx, line)}
+        playing={playingTag === koTag(idx)}
+      />
+    );
+  }
+
+  // a tap on Sohee's line: her voice again, or stops it while it plays (spec play-button-feedback 3)
+  function replayKo(idx: number, line: ScriptLine | undefined) {
+    tapPlay(sounds, koTag(idx), () => interp.replay(idx, line, here()));
   }
 
   // the Ryan line before a practised line of mine, to know what it answers (spec 4)
-  function playBefore(audio: string | null) {
-    if (audio) playFromBubble(api.audioSource(audio));
+  function playBefore(audio: string | null, tag: string) {
+    if (audio) playFromBubble(api.audioSource(audio), tag);
   }
 
   // a start right after 「취소」 or 「건너뛰기」 is the second tap of a double tap, on the button the redraw put there
@@ -469,7 +507,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           // one flow of buttons, 「따라 말하기 ›」 pushed right on whichever row it lands: with 「🔊 듣기」 in front, a
           // nested group took a whole row on a 360dp phone and left it alone on a third (spec three-line-listen 2A)
           <View style={styles.links}>
-            {folds && listenButton(idx)}
+            {folds && listenButton(idx, `bubble:${row}`)}
             <Pressable onPress={() => toggleThree(idx)} hitSlop={8}>
               <Text style={styles.link}>{open[idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
             </Pressable>
@@ -516,14 +554,20 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             <View style={styles.heardRow}>
               <Text style={[styles.heardLine, styles.shrink]}>{keepWords(`들린 말: ${b.text}`)}</Text>
               {opened && b.rec && (
-                <InRowButton label="🔊 내 녹음" onPress={() => b.rec && playRec(b.rec)} dim={!listenOk} textStyle={styles.link} />
+                <InRowButton
+                  label="내 녹음"
+                  playing={playingTag === recTag(b.rec)}
+                  onPress={() => b.rec && playRec(b.rec)}
+                  dim={!listenOk}
+                  textStyle={styles.link}
+                />
               )}
             </View>
           )}
           {opened && idx !== undefined && koLine(idx)}
           {opened && idx !== undefined && (
             <View style={[styles.linkGroup, styles.gap]}>
-              {listenButton(idx)}
+              {listenButton(idx, `bubble:${row}`)}
               <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
               {practiceFor(state, b) === "mine" && (
                 <PractiseLink label="이 줄 다시 ›" disabled={!canPractise} onPress={() => practise("mine", idx)} inRow />
@@ -598,7 +642,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           <Named part="jake">
             <Pressable onPress={replayJake} style={[styles.bubble, styles.ryan]}>
               <Text style={styles.plainText}>{keepWords(state.jake.text)}</Text>
-              <Text style={styles.hint}>🔊 눌러서 다시 듣기</Text>
+              <PlayLabel on={playingTag === "jake"} label="눌러서 다시 듣기" style={styles.hint} />
             </Pressable>
           </Named>
         )}
@@ -624,11 +668,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {state.phase === "ryan" && line && ryanBubble({ idx: line.idx, text: line.text })}
         {myTurn && before?.speaker === "ryan" && (
           <Named part="ryan">
-            <Pressable onPress={() => playBefore(before.audio)} style={[styles.bubble, styles.ryan]}>
+            <Pressable onPress={() => playBefore(before.audio, "before")} style={[styles.bubble, styles.ryan]}>
               <Text style={styles.beforeText}>{before.text}</Text>
               {koLine(before.idx)}
               <View style={styles.linkGroup}>
-                <Text style={styles.hint}>🔊 눌러서 듣기</Text>
+                <PlayLabel on={playingTag === "before"} label="눌러서 듣기" style={styles.hint} />
                 <View style={styles.linkRow}>
                   <KoButton view={koViewAt(before.idx)} onPress={() => toggleKo(before.idx)} />
                 </View>
@@ -644,11 +688,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {myTurn && savedBefore && state.beforeOpen && (
           <Named part={savedBefore.speaker === "ryan" ? "ryan" : "mine"}>
             <Pressable
-              onPress={() => playBefore(savedBefore.audio)}
+              onPress={() => playBefore(savedBefore.audio, "savedBefore")}
               style={[styles.bubble, savedBefore.speaker === "ryan" ? styles.ryan : styles.user]}
             >
               <Text style={styles.beforeText}>{savedBefore.text}</Text>
-              <Text style={styles.hint}>🔊 눌러서 듣기</Text>
+              <PlayLabel on={playingTag === "savedBefore"} label="눌러서 듣기" style={styles.hint} />
             </Pressable>
           </Named>
         )}
@@ -665,7 +709,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                   view: koView(interp.entry(line.idx, line), state.interpreting),
                   entry: interp.entry(line.idx, line),
                   onToggle: () => toggleSayKo(line.idx),
-                  onReplay: () => interp.replay(line.idx, line, here()),
+                  onReplay: () => replayKo(line.idx, line),
+                  playing: playingTag === koTag(line.idx),
                 }}
                 star={{ saved: saved.has(line.text), busy: saved.pending(line.text), onPress: () => saved.toggle(rp.id, line.idx, line.text) }}
               />
@@ -678,7 +723,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             <Text style={[styles.heard, styles.shrink]}>{keepWords(`들린 말: ${state.heard}`)}</Text>
             {state.heardRec && (
               <InRowButton
-                label="🔊 내 녹음"
+                label="내 녹음"
+                playing={playingTag === recTag(state.heardRec)}
                 onPress={() => state.heardRec && playRec(state.heardRec)}
                 dim={!listenOk}
                 textStyle={styles.link}
@@ -705,7 +751,14 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           {myTurn && state.phase !== "error" && (
             <>
               <View style={styles.row}>
-                <Button label="🔊 다시 듣기" onPress={() => listen()} kind="secondary" small disabled={busy || state.phase === "recording"} />
+                <Button
+                  label="다시 듣기"
+                  playing={playingTag === LISTEN_TAG}
+                  onPress={() => listen(rate, true)}
+                  kind="secondary"
+                  small
+                  disabled={busy || state.phase === "recording"}
+                />
                 {RATES.map((r) => (
                   <Button
                     key={r}
