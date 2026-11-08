@@ -12,14 +12,17 @@ export function notesView(three: ThreeLine | "loading" | null, open: boolean): N
 }
 
 // The line to say comes before its notes (spec dont-wait-for-line-notes 2): the notes it came with, else the ones
-// fetched for it ("loading" while on their way), else none.
+// fetched for it ("loading" while on their way), else none when they could not be fetched (`failed`). Not asked for
+// yet counts as on the way: the screen asks as soon as the line is up, so the button is there from the first frame
+// instead of a frame later, pushing 「통역」 and ☆ aside (todo line-notes minors 3).
 type Fetched = ThreeLine | "loading" | undefined;
 
-export function lineNotes(line: ScriptLine, fetched: Fetched): ThreeLine | "loading" | null {
-  return line.three ?? fetched ?? null;
+export function lineNotes(line: ScriptLine, fetched: Fetched, failed: boolean): ThreeLine | "loading" | null {
+  return line.three ?? fetched ?? (failed ? null : "loading");
 }
 
-// Fetch the notes when the line came without them and they were not asked for yet.
-export function needsNotes(line: ScriptLine, fetched: Fetched): boolean {
-  return !line.three && fetched === undefined;
+// Fetch the notes when the line came without them, they were not asked for yet and asking did not fail: a failed
+// line is not asked again on each 「다시 해 보기」, which made the button blink while Claude was down.
+export function needsNotes(line: ScriptLine, fetched: Fetched, failed: boolean): boolean {
+  return !line.three && fetched === undefined && !failed;
 }

@@ -1,6 +1,6 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Roleplay, ScriptLine } from "../api/types";
-import { askFirst, canReplay, initial, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
+import { askFirst, canReplay, initial, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -410,6 +410,32 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     const first = reduce(midway("ready"), { type: "practiseLine", kind: "mine", idx: 1 });
     const second = reduce(reduce(first, { type: "back" }), { type: "practiseLine", kind: "mine", idx: 1 });
     expect(modelKey(second)).not.toBe(modelKey(first));
+  });
+
+  // todo practice-midway minors 1: both taps run on the state of one render, so the second still sees the practice
+  test("back tapped twice before a render leaves only the practice", () => {
+    const inside = reduce(midway("ready"), { type: "practiseLine", kind: "mine", idx: 1 });
+    const once = reduce(inside, leaveAction(inside));
+    expect(reduce(once, leaveAction(inside))).toEqual(once);
+    expect([once.screen, once.practice, once.idx]).toEqual(["roleplay", null, 3]);
+    const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
+    const left = reduce(fromEnd, leaveAction(fromEnd));
+    expect(reduce(left, leaveAction(fromEnd))).toEqual(left);
+    expect(left.screen).toBe("end");
+    expect(leaveAction(midway("ready"))).toEqual({ type: "back" }); // outside a practice: back as before
+  });
+
+  // todo practice-midway minors 2: Ryan's line just said stays the screen's line until the next one comes
+  test("Ryan's newest bubble offers shadowing while the next line loads", () => {
+    const s = reduce({ ...midway("ryan"), idx: 2, line: ryan2, history: midway("ryan").history.slice(0, 3) }, { type: "ryanDone" });
+    expect([s.phase, s.line?.idx]).toEqual(["loading", 2]);
+    expect(practiceFor(s, s.history.at(-1)!)).toBe("shadow");
+  });
+
+  // todo practice-midway minors 3: the spec plays a line's model once; trying it again does not play it again (user)
+  test("trying the line again keeps its model key", () => {
+    const turn = midway("evaluated", { heard: "Just one, thanks.", feedback: "좋아요." });
+    expect(modelKey(reduce(turn, { type: "again" }))).toBe(modelKey(turn));
   });
 });
 

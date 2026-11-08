@@ -70,6 +70,7 @@ export type State = {
 export type Action =
   | { type: "home" }
   | { type: "back" }
+  | { type: "endPractice" }
   | { type: "chooseRoleplay" }
   | { type: "created"; roleplay: Roleplay; jake?: Said | null; from?: SituationStart }
   | { type: "lineLoaded"; line: ScriptLine; progress?: Progress }
@@ -189,10 +190,12 @@ function restore(rt: State): State {
   return { ...rt, ...freshTurn, phase: "loading", line: null, history: [], practiceNo: rt.practiceNo + 1 };
 }
 
-// The practice button a bubble in the roleplay gets (spec 9): Ryan's lines to follow, my lines to say again. Not the
-// line on screen (「다시 해 보기」 covers it), not a line the app has not loaded, and none inside a practice.
+// The practice button a bubble in the roleplay gets (spec 9): Ryan's lines to follow, my lines to say again. Not my
+// line on screen (「다시 해 보기」 covers it), not a line the app has not loaded, and none inside a practice. Ryan's
+// line just said is still the screen's line until the next one comes, and keeps its button (todo practice-midway 2).
 export function practiceFor(s: State, b: Pick<Bubble, "kind" | "idx">): "mine" | "shadow" | null {
-  if (s.practice || b.idx === undefined || b.idx === s.line?.idx || !s.seen[b.idx]) return null;
+  if (s.practice || b.idx === undefined || !s.seen[b.idx]) return null;
+  if (b.kind === "user" && b.idx === s.line?.idx) return null;
   if (b.kind === "ryan") return "shadow";
   if (b.kind === "user") return "mine";
   return null;
@@ -212,10 +215,19 @@ export function leavesScreen(s: State): boolean {
 }
 
 // What the screen remembers to play a line's model once. Inside a practice it carries the practice number: the
-// screen stays mounted for a practice from the roleplay, and the same line practised again must play it again.
+// screen stays mounted for a practice from the roleplay, and the same line practised again must play it again. In the
+// roleplay a line keeps one key, so 「다시 해 보기」 does not play the model again (spec roleplay-practice; the user
+// kept it, 2026-11-08): 「🔊 다시 듣기」 plays it.
 export function modelKey(s: State): string | null {
   if (!s.line) return null;
-  return s.practice ? `${s.line.idx}:${s.mode}:${s.practiceNo}` : `${s.line.idx}:${s.mode}`;
+  return s.practice ? `${s.line.idx}:${s.mode}:${s.practiceNo}` : `${s.line.idx}`;
+}
+
+// What leaving the roleplay screen sends. From a practice it is `endPractice`, which does nothing outside one: two
+// taps on 「뒤로」 before the screen draws again both see the practice, and a second `back` would leave the restored
+// roleplay without asking (todo practice-midway 1).
+export function leaveAction(s: State): Action {
+  return s.practice ? { type: "endPractice" } : { type: "back" };
 }
 
 // What was said in this turn, as conversation bubbles (what the learner said, Ryan's feedback).
@@ -242,6 +254,8 @@ export function reduce(s: State, a: Action): State {
       if (s.screen === "roleplay" || s.screen === "end")
         return { ...initial, screen: "situation", situationFrom: s.situationFrom };
       return s;
+    case "endPractice":
+      return s.screen === "roleplay" && s.practice ? leavePractice(s) : s;
     case "chooseRoleplay":
       return { ...initial, screen: "situation" };
     case "created":

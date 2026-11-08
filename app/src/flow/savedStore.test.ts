@@ -39,6 +39,19 @@ test("pendingKeys: a second tap on the same sentence waits for the first", async
   expect(store.pending("Sure.")).toBe(false);
 });
 
+// todo review-screens minors follow-up 1: `remove` checks `busy` itself since it no longer goes through `toggle`
+test("pendingKeys: a second 「빼기」 on the same sentence waits for the first", async () => {
+  const { store, set, release } = setup([item("Sure.", "sure")]);
+  await store.refresh();
+  const first = store.remove("aaaaaaaaaaaa", 1, "Sure.");
+  expect(store.pending("Sure.")).toBe(true);
+  await store.remove("aaaaaaaaaaaa", 1, "Sure.");
+  expect(set).toHaveBeenCalledTimes(1);
+  release();
+  await first;
+  expect(store.pending("Sure.")).toBe(false);
+});
+
 test("a saved sentence shows as saved, by its sentence key", async () => {
   const { store, release } = setup();
   const done = store.toggle("aaaaaaaaaaaa", 1, "Sure.");
