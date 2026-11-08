@@ -357,7 +357,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
 
   // A past line to practise on its own and come back (spec 9): only while my turn waits and nothing is playing,
-  // since leaving would cut Ryan's feedback, his reply or the model off.
+  // since leaving would cut Ryan's feedback, teacher Ryan's answer or the model off.
   const canPractise = !state.practice && canReplay(state.phase) && !playing;
   function practise(kind: "mine" | "shadow", idx: number) {
     if (canPractise) dispatch({ type: "practiseLine", kind, idx });

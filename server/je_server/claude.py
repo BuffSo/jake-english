@@ -49,7 +49,7 @@ QUOTES = "\"'“”‘’「」『』"
 DOUBLE_QUOTES = str.maketrans("", "", "\"“”")
 
 
-# Calls made while the learner waits in a turn (feedback, off-script reply). The app gives up after 30s without a
+# Calls made while the learner waits in a turn (feedback, teacher Ryan's answer). The app gives up after 30s without a
 # stream event, so these must fail sooner and let Ryan say "지금은 대답할 수 없어요" (final review, 2026-11-05).
 LIVE_OPTIONS: dict[str, Any] = {"timeout": 12.0, "max_retries": 1}
 

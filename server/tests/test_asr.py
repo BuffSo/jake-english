@@ -83,3 +83,19 @@ async def test_transcribe_auto_without_language_is_empty_name(tmp_path):
     wav.write_bytes(b"RIFF")
     w = whisper_with(lambda r: httpx.Response(200, json={"text": "Hello"}))
     assert await w.transcribe_auto(wav) == ("Hello", "")
+
+
+def _refused(request: httpx.Request):
+    raise httpx.ConnectError("whisper-server is down", request=request)
+
+
+@pytest.mark.parametrize("handler", [lambda r: httpx.Response(500, text="error"),
+                                     lambda r: httpx.Response(200, text="oops"), _refused],
+                         ids=["status", "not-json", "connection"])
+async def test_whisper_failures_are_whisper_errors(tmp_path, handler):
+    from je_server.asr import WhisperError
+
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    with pytest.raises(WhisperError):
+        await whisper_with(handler).transcribe_auto(wav)
