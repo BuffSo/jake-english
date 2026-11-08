@@ -1,6 +1,6 @@
 # 2026-11-08 카드가 덜 기다리게 하는 일하는 방식
 
-- PR: (PR을 연 뒤 채움)
+- PR: #58
 - 문서: PRD, 스펙, 계획, ADR 없음. 할 일 `docs/todo/20261108_35_todo_agents_md_card_speedups.md`.
 
 ## 한 일
