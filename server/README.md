@@ -54,6 +54,8 @@ uv run pytest
 |---|---|---|
 | `try_recordings.py` | 녹음 파일을 앱처럼 서버에 보낸다. 역할극 복사본에 보내고 끝나면 지운다(`docs/guide/DEVENV_폰없이_녹음_시험하기_20261108.md`) | 녹음마다 Claude 한 번 |
 | `check_ryan_wording.py` | 지어낸 대사로 라이언의 말을 실제 모델에 받아 어긴 규칙을 표시한다(`docs/guide/PRONUNCIATION_따라말하기_짚기_20261106.md` 「라이언의 말을 고칠 때」) | 한 번에 몇 센트 |
+| `check_jake_recommend.py` | 지어낸 최근 상황과 함께 제이크 추천을 실제 모델로 받아 끝말과 이름표를 본다(`--model`로 모델을 바꾼다, `docs/guide/PROMPT_정해진_말투를_섞기_20261108.md`) | Sonnet 스물한 번에 6.5센트쯤 |
+| `compare_quick_models.py` | 짧은 말 세 일(소희 통역, 제이크 추천, 라이언 평가)을 같은 지어낸 입력으로 두 모델에 묻고 시간, 걸림, 값을 견준다(`docs/guide/PROMPT_일마다_모델_견주기_20261108.md`) | 기본 138번에 27센트쯤 |
 | `check_false_flags.py` | 맞게 읽은 녹음과 기록으로 헛짚기 수를 잰다 | 없음(맥 안에서만) |
 | `measure_claude.py` | 대본과 세 줄을 만드는 시간을 잰다 | 몇 센트 |
 
