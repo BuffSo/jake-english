@@ -17,7 +17,7 @@ export function HeardLine({ text, open, style, onPress, wrapStyle }: Props) {
   );
   if (!onPress) return line;
   return (
-    <Pressable onPress={onPress} hitSlop={8} style={wrapStyle}>
+    <Pressable onPress={onPress} hitSlop={8} style={wrapStyle} accessibilityRole="button" accessibilityState={{ expanded: open }}>
       {line}
     </Pressable>
   );

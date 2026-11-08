@@ -19,6 +19,7 @@ import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, mov
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { HeardLine } from "../ui/HeardLine";
+import { heardKey } from "../ui/heardView";
 import { InRowButton } from "../ui/InRowButton";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
@@ -78,7 +79,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // past bubbles show only what was said; one opens its buttons at a time (spec review-practice 8). The key is
   // "<place>:<line>", so two bubbles of one line (「다시 해 보기」) open apart.
   const [openRow, setOpenRow] = useState<string | null>(null);
-  // what was just heard, opened by a tap on it; kept by its text, so a new try's words come folded (spec
+  // what was just heard, opened by a tap on it; kept by its try (`heardKey`), so the next try comes folded (spec
   // heard-line-collapsed 2)
   const [heardOpen, setHeardOpen] = useState<string | null>(null);
   const view = useRef({ offset: 0, height: 0 }); // the conversation's scroll, to bring an opened bubble into view
@@ -728,8 +729,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           <View style={styles.heardNow}>
             <HeardLine
               text={state.heard}
-              open={heardOpen === state.heard}
-              onPress={() => state.heard && setHeardOpen(toggleRow(heardOpen, state.heard))}
+              open={heardOpen === heardKey(state.heard, state.heardRec)}
+              onPress={() => {
+                const key = state.heard ? heardKey(state.heard, state.heardRec) : null;
+                if (key) setHeardOpen((o) => toggleRow(o, key));
+              }}
               style={styles.heard}
               wrapStyle={styles.shrink}
             />

@@ -1,5 +1,5 @@
 // What was heard, drawn as one faded line until its bubble or row opens (spec heard-line-collapsed 1)
-import { heardView } from "./heardView";
+import { heardKey, heardView } from "./heardView";
 import { keepWords } from "./keepWords";
 
 test("no label, kept words", () => {
@@ -11,4 +11,13 @@ test("no label, kept words", () => {
 test("folded is one line, open has no limit", () => {
   expect(heardView("Hi there", false).lines).toBe(1);
   expect(heardView("Hi there", true).lines).toBeUndefined();
+});
+
+// what was just heard opens by a tap and comes folded on the next try, even with the same words (final review)
+test("each try has its own key, the words when the try is unknown", () => {
+  const a = heardKey("Hi there", { rp_id: "r1", idx: 3, n: 1 });
+  const b = heardKey("Hi there", { rp_id: "r1", idx: 3, n: 2 });
+  expect(a).not.toBe(b);
+  expect(heardKey("Hi there", null)).toBe("Hi there");
+  expect(heardKey("Hi there", null)).not.toBe(heardKey("Hello", null));
 });
