@@ -9,8 +9,9 @@ fixed `help` lines are skipped.
 A turn (`Talks.turn`) is my line with its try and recording, then Ryan's line: his English reply streamed sentence by
 sentence (spec 4), also when I spoke Korean (spec 3). Its fixed error lines are English (`TALK_PHRASES`). The learner may
 cut Ryan's sounds off and speak again once his line is saved (spec 2). An English turn after Sohee's full sentence on
-Ryan's reply right before it, and close to that sentence, is kept as said from it (`ScriptLine.given`, spec 9 「그 문장을
-말하면」): with the words the Mac heard differently, no evaluation then, and fixed last after the talk (spec 7).
+Ryan's latest reply, and close to that sentence, is kept as said from it (`ScriptLine.given`, spec 9 「그 문장을
+말하면」): with the words the Mac heard as close-sounding ones, no evaluation then, and fixed last after the talk
+(spec 7).
 
 Ending a talk (`Talks.end`, spec 6, 7) asks Claude for the fixes, keeps those `fixes.check` lets through as my `fix`
 lines after the talk, and makes the first one's sounds before answering. Those lines mark the talk as ended.
@@ -32,7 +33,7 @@ from pathlib import Path
 from . import audio, fixes, hints, sentences
 from .asr import WhisperError
 from .claude import ClaudeUnavailable, _points
-from .compare import FOLLOW_MIN, find_issues, similarity, words
+from .compare import FOLLOW_MIN, find_issues, similarity, sounds_close, words
 from .engine import HANGUL, MAX_SECONDS, NEAR_MIN, Engine, NotFound, _keep
 from .models import Attempt, Fix, Frame, Hint, Issue, Roleplay, Said, ScriptLine, ThreeLine
 from .phrases import SOHEE_PHRASES, TALK_OPENERS
@@ -120,18 +121,24 @@ def helped_input(helped: dict[int, fixes.Helped]) -> list[dict]:
 
 def _from_full(rp: Roleplay, heard: str) -> tuple[str | None, bool, list[Issue]]:
     """The sentence my English turn was said from, whether it followed it, and the words heard differently: Sohee's
-    full sentence on Ryan's reply right before the turn (the record's last line as the turn started), once shown, when
-    the turn is near it or follows it, by the bounds of a roleplay's line (`Engine._attempt`). Those words are kept so
-    the fixes do not take a transcription slip for my grammar (spec 9 「그 문장을 말하면」). Else, or far from it (my
-    own words), a plain turn: None, False, []."""
-    last = rp.lines[-1] if rp.lines else None
-    hint = last.hint if last is not None and last.speaker == "ryan" and last.kind == "reply" else None
+    full sentence on Ryan's latest reply, once shown, when the turn is near it or follows it, by the bounds of a
+    roleplay's line (`Engine._attempt`). His latest reply is the one I answer, also when his reply to my last turn
+    failed (Claude down): the app's 「소희 찬스」 stays on it (`lastReply`). Not when a turn of mine after it was
+    already said from that sentence. Those words are kept so the fixes do not take a transcription slip for my grammar
+    (spec 9 「그 문장을 말하면」), but only those that sound close (`compare.sounds_close`): Sohee says I may swap words
+    (「낱말을 바꿔 말해도 돼요」), so a word swapped, added or left out is mine, not a mishearing to fix as 「X가 Y처럼
+    들렸어요」 (final review). Else, or far from it (my own words), a plain turn: None, False, []."""
+    at = next((i for i in range(len(rp.lines) - 1, -1, -1)
+               if rp.lines[i].speaker == "ryan" and rp.lines[i].kind == "reply"), None)
+    hint = rp.lines[at].hint if at is not None else None
     if hint is None or not hint.full_shown:
+        return None, False, []
+    if any(line.kind == "turn" and line.given is not None for line in rp.lines[at + 1:]):
         return None, False, []
     close = similarity(hint.full, heard)
     if close < NEAR_MIN:
         return None, False, []
-    return hint.full, close >= FOLLOW_MIN, find_issues(hint.full, heard, limit=2)
+    return hint.full, close >= FOLLOW_MIN, find_issues(hint.full, heard, limit=2, keep=sounds_close)
 
 
 class TalkEnded(Exception):

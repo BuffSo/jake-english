@@ -1,6 +1,6 @@
 from je_server import sounds
 from je_server.compare import (FOLLOW_MIN, compare, find_issues, issue_ko, listed_sound, praise_candidates, similarity,
-                                sound_pairs, words)
+                                sound_pairs, sounds_close, words)
 from je_server.models import Issue
 
 
@@ -28,6 +28,24 @@ def test_count_changed_span_is_one_issue():
 def test_listed_sound_found_inside_count_changed_span():
     [i] = find_issues("Turn right here.", "Turn a light here.", limit=2)
     assert (i.target, i.heard, set(i.sound)) == ("right", "a light", {"R", "L"}) and "혀" in i.explain
+
+
+def test_sounds_close_is_a_word_heard_as_one_that_sounds_near():
+    # a free-talk turn said from Sohee's sentence keeps only these: the learner may swap words (final review)
+    [listed] = find_issues("Turn right here.", "Turn a light here.", limit=2)
+    assert sounds_close(listed)  # a listed sound, even inside a span of other counts
+    assert sounds_close(Issue(target="went", heard="want"))  # one sound changed, not on the list
+    assert not sounds_close(Issue(target="coworkers", heard="friends"))  # another word
+    assert not sounds_close(Issue(target="yes", heard="not really"))
+    assert not sounds_close(Issue(target="on", heard="")) and not sounds_close(Issue(target="", heard="and"))
+    assert not sounds_close(Issue(target="went", heard="wnet"))  # not in the dictionary: no sound to compare
+
+
+def test_find_issues_keeps_only_what_keep_lets_through_before_the_limit():
+    target, heard = "I went to the park with my coworkers.", "I want to a park with my friends."
+    assert [(i.target, i.heard) for i in find_issues(target, heard, limit=2)] == [("went", "want"), ("the", "a")]
+    kept = find_issues(target, heard, limit=1, keep=lambda i: i.target != "went")
+    assert [(i.target, i.heard) for i in kept] == [("the", "a")]
 
 
 def test_far_apart_words_in_a_span_get_no_sound():
