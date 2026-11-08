@@ -31,10 +31,12 @@ test("cue lengths: start and end 210 ms, cancel 260 ms", () => {
 
 const rmsDb = (s: Float32Array) => 20 * Math.log10(Math.sqrt(s.reduce((sum, x) => sum + x * x, 0) / s.length));
 
-// Quieter than Ryan's voice (spec record-feedback 1). At half scale the start cue's RMS was -13 dBFS against -21 to -24
-// for the speech in Ryan's lines, and its loudness over 400 ms -16 LUFS against -17 to -23: louder than every line
-// measured (todo 20261108_34 2, 2026-11-08). At a quarter it is -19 dBFS and -22 LUFS; a phone speaker also gives these
-// notes more than a voice's low end.
+// Quieter than Ryan's voice (spec record-feedback 1), judged by loudness over 400 ms (ffmpeg `ebur128`, the momentary
+// max), which weighs by ear and spreads a 0.2 s cue over its window as the ear does. At half scale the start cue was
+// -16.4 LUFS against -17.2 to -22.5 for six of Ryan's line sounds: louder than every one (todo 20261108_34 2,
+// 2026-11-08). At a quarter it is -22.4, at or under all of them. Plain RMS still puts it 2 to 5 dB over the speech in
+// those lines (-19 dBFS against -21 to -24), since it counts a short tone at full weight; the RMS bound below only pins
+// today's value so a louder cue fails here.
 test("no cue is louder than a quarter of full scale, and none is silent", () => {
   for (const cue of CUES) {
     const peak = Math.max(...Array.from(cueSamples(cue), Math.abs));

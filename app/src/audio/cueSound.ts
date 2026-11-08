@@ -1,7 +1,8 @@
 // The short sounds that say the mic started, stopped or was cancelled (spec record-feedback 1), made here as WAV
 // bytes. Sound files cannot be committed: the commit check refuses every audio file, since it cannot tell a made tone
 // from a recording of someone, and its exceptions are not widened. The values are the draft the user picked (A), at
-// half its loudness: at the draft's it was louder than Ryan's voice (todo 20261108_34 2, the numbers in the test).
+// half its amplitude (-6 dB): at the draft's it was louder than Ryan's voice (todo 20261108_34 2, the numbers in the
+// test).
 export type Cue = "start" | "end" | "cancel";
 
 export const CUE_RATE = 22050;
