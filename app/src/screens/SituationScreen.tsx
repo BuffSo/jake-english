@@ -17,6 +17,7 @@ import {
   howChoices,
   lineFor,
   OTHER_TOPIC,
+  placeholderOf,
   resumeFrom,
   resumeOnBack,
   startStep,
@@ -363,7 +364,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onResume, onBa
             style={styles.input}
             value={text}
             onChangeText={setText}
-            placeholder={topic?.placeholder_ko}
+            placeholder={placeholderOf(topic)}
             multiline
             maxLength={300}
           />

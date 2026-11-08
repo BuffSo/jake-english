@@ -1,7 +1,8 @@
 import type { Topic } from "../api/types";
-import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, resumeFrom, startStep, topicsOf, canStart, resumeOnBack } from "./situation";
+import { keepWords } from "../ui/keepWords";
+import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, placeholderOf, resumeFrom, startStep, topicsOf, canStart, resumeOnBack } from "./situation";
 
-const usa: Topic = { id: "usa", name_ko: "미국 여행", placeholder_ko: "예", picks: [{ id: "u-hotel-checkin", title_ko: "뉴욕 호텔 체크인" }] };
+const usa: Topic = { id: "usa", name_ko: "미국 여행하기", placeholder_ko: "예", picks: [{ id: "u-hotel-checkin", title_ko: "뉴욕 호텔 체크인" }] };
 const other: Topic = { id: "other", name_ko: "그 밖의 상황", placeholder_ko: "예", picks: [] };
 
 test("the list button shows only when the topic has a list", () => {
@@ -108,4 +109,13 @@ describe("asking where to resume again on the way back (resumeOnBack)", () => {
   test("leaving the screen asks nothing", () => {
     expect(resumeOnBack(null, { making: true, madeLeft: true })).toEqual({ madeLeft: true, askAgain: false });
   });
+});
+
+test("the input box example keeps Korean words whole", () => {
+  // 「예: 공원에서 외국인에게 먼저 인사하는 상황」 broke inside 「상황」 at phone width (PR #65, emulator at 360dp): the
+  // example comes from the Mac server, so the app cannot know its length (guide APP_Expo 「낱말 가운데서 줄이 바뀌는 문제」)
+  const korea: Topic = { id: "tourist", name_ko: "한국에서 영어 쓰기", placeholder_ko: "예: 공원에서 외국인에게 먼저 인사하는 상황", picks: [] };
+  expect(placeholderOf(korea)).toBe(keepWords(korea.placeholder_ko));
+  expect(placeholderOf(korea)).not.toBe(korea.placeholder_ko);
+  expect(placeholderOf(null)).toBeUndefined();
 });

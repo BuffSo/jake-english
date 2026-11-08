@@ -234,8 +234,8 @@ class Claude:
         return out
 
     async def make_script(self, situation: str, topic: Topic, first: Speaker | None = None) -> tuple[Frame, Draft]:
-        """The frame and script for a situation in a topic. `first` overrides the topic's own (외국인 관광객: Ryan);
-        with neither the situation decides (spec situation-topics 5). List picks no longer come here: their scripts
+        """The frame and script for a situation in a topic. `first` overrides the topic's own (none fixes one since
+        2026-11-08, spec korea-english-topic 3); with neither the situation decides (spec situation-topics 5). List picks no longer come here: their scripts
         are in `topics.py` (spec fixed-list-scripts)."""
         first = first or topic.first
         starts = {"ryan": "Ryan speaks first.", "user": "The learner speaks first.",

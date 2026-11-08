@@ -288,13 +288,22 @@ async def test_make_script_lets_the_situation_decide_who_starts():
 
 
 async def test_make_script_retries_when_the_first_speaker_is_wrong():
-    # 외국인 관광객: the tourist always asks first (user, 2026-11-07)
+    # a first speaker given (no topic fixes one since 2026-11-08, spec korea-english-topic 3) is checked and asked again
     fake = FakeAnthropic([lines_json("user", "ryan", "user", "ryan", "user"),
                           lines_json("ryan", "user", "ryan", "user", "ryan", "user")])
-    _, draft = await Claude(fake).make_script("관광객이 길을 묻는다.", get("tourist"))
+    _, draft = await Claude(fake).make_script("관광객이 길을 묻는다.", get("tourist"), first="ryan")
     assert len(fake.requests) == 2 and draft[0][0] == "ryan"
     assert "Ryan speaks first." in fake.requests[0]["messages"][0]["content"]
     assert "Ryan must speak first" in fake.requests[1]["messages"][0]["content"]
+
+
+async def test_korea_topic_lets_the_situation_decide_who_starts():
+    # spec korea-english-topic 3: the learner may greet first; a foreigner asking for help still starts, by the
+    # script rule (someone asking a stranger for help starts the talk)
+    fake = FakeAnthropic([lines_json("user", "ryan", "user", "ryan", "user")])
+    await Claude(fake).make_script("공원에서 처음 보는 외국인에게 먼저 인사한다.", get("tourist"))
+    content = fake.requests[0]["messages"][0]["content"]
+    assert "Whoever would naturally speak first" in content and get("tourist").roles_en in content
 
 
 def test_script_may_start_and_end_with_either():
