@@ -100,6 +100,28 @@ export function createStartCancel() {
   };
 }
 
+// Turns the mic on with `start` (inside the record gate) and says how it ended, for `doStart` to act on: "failed" (the
+// mic did not start: back to before speaking), "left" (the screen was left meanwhile: only delete the recording, as
+// leaving does), "cancelled" (a 「취소」 was kept while it started: throw it away now), or "started". Leaving wins over
+// a kept cancel, and the memory never reaches the next start (todo 26 1, final review: the decision is here so it is
+// tested, not copied into the test).
+export async function startKeepingCancel(
+  sc: ReturnType<typeof createStartCancel>,
+  start: () => Promise<void>,
+  left: () => boolean,
+): Promise<"failed" | "left" | "cancelled" | "started"> {
+  sc.begin();
+  try {
+    await start();
+  } catch {
+    sc.end();
+    return "failed";
+  }
+  const cancelled = sc.end();
+  if (left()) return "left";
+  return cancelled ? "cancelled" : "started";
+}
+
 // One answer per question: the first tap on either choice is taken, and later ones (the second tap of a double tap,
 // before the screen redraws) are ignored until the next question opens it. Unlike the gate it holds nothing while the
 // answer's work runs, so going back in the middle never leaves the next question shut. PR #18 review: a double tap on

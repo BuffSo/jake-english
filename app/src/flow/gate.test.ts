@@ -1,4 +1,4 @@
-import { createGate, createHold, createLatch, createStartCancel, runThenHold, stopThenSend, TAP_HOLD_MS, tapThenHold } from "./gate";
+import { createGate, createHold, createLatch, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, TAP_HOLD_MS, tapThenHold } from "./gate";
 
 test("a second call while the first runs is ignored", async () => {
   // PR #12 review: a double tap on 「■ 말하기 끝」 uploaded the same recording twice
@@ -156,24 +156,57 @@ describe("a cancel while the mic is starting", () => {
     expect(sc.end()).toBe(false);
   });
 
-  test("taken with the gate busy starting", async () => {
+  // the screen's `doStart` decides with `startKeepingCancel` (final review: the inline copy here tested nothing of it)
+  function mic() {
+    let on!: () => void;
+    let fail!: () => void;
+    const started = new Promise<void>((res, rej) => {
+      on = res;
+      fail = () => rej(new Error("mic"));
+    });
+    return { start: () => started, on, fail };
+  }
+
+  test("taken with the gate busy starting: cancelled once the mic is on", async () => {
     const gate = createGate();
     const sc = createStartCancel();
-    let micOn!: () => void;
-    const order: string[] = [];
-    const start = gate.run(async () => {
-      sc.begin();
-      try {
-        await new Promise<void>((r) => (micOn = r));
-        order.push("mic on");
-      } finally {
-        if (sc.end()) order.push("cancelled");
-      }
-    });
-    // the screen's cancel: kept if a start is running, else through the gate (which is busy and would drop it)
-    expect(sc.ask() || (await gate.run(async () => true)) === true).toBe(true);
-    micOn();
-    await start;
-    expect(order).toEqual(["mic on", "cancelled"]);
+    const m = mic();
+    const run = gate.run(() => startKeepingCancel(sc, m.start, () => false));
+    // the screen's cancel: kept while a start runs; through the busy gate it would be dropped
+    expect(sc.ask()).toBe(true);
+    expect(await gate.run(async () => "dropped")).toBeUndefined();
+    m.on();
+    expect(await run).toBe("cancelled");
+  });
+
+  test("a start with no cancel is started", async () => {
+    const sc = createStartCancel();
+    const m = mic();
+    const run = startKeepingCancel(sc, m.start, () => false);
+    m.on();
+    expect(await run).toBe("started");
+  });
+
+  test("left the screen while starting: only left, and nothing kept for the next start", async () => {
+    const sc = createStartCancel();
+    const m = mic();
+    const run = startKeepingCancel(sc, m.start, () => true);
+    sc.ask();
+    m.on();
+    expect(await run).toBe("left");
+    const next = mic();
+    const again = startKeepingCancel(sc, next.start, () => false);
+    next.on();
+    expect(await again).toBe("started");
+  });
+
+  test("a mic that fails is failed, and a cancel asked meanwhile is not kept", async () => {
+    const sc = createStartCancel();
+    const m = mic();
+    const run = startKeepingCancel(sc, m.start, () => false);
+    sc.ask();
+    m.fail();
+    expect(await run).toBe("failed");
+    expect(sc.ask()).toBe(false);
   });
 });

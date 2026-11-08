@@ -9,7 +9,7 @@ import type { SoundQueue } from "../audio/player";
 import { useAnswering } from "../audio/useAnswering";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
-import { createGate, createStartCancel, runThenHold, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
+import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
 import { askFirst, canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
@@ -358,19 +358,12 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     const my = epoch.current;
     sounds.clear();
     dispatch({ type: "recordStart" });
-    startCancel.begin();
-    try {
-      await rec.start(stopRecording);
-    } catch {
-      startCancel.end();
-      dispatch({ type: "recordCancel" });
-      return;
-    }
-    const cancelled = startCancel.end();
+    const how = await startKeepingCancel(startCancel, () => rec.start(stopRecording), () => !mounted.current || epoch.current !== my);
+    if (how === "failed") dispatch({ type: "recordCancel" });
     // left while the mic was starting (permission prompt)
-    if (!mounted.current || epoch.current !== my) await rec.discard();
+    else if (how === "left") await rec.discard();
     // 「취소」 tapped while the mic was starting: thrown away now that it is on, as `doCancel` does (todo 26 1)
-    else if (cancelled) {
+    else if (how === "cancelled") {
       await rec.discard();
       dispatch({ type: "recordCancel" });
       tapHold.start();
