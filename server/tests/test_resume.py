@@ -38,3 +38,30 @@ def test_skip_route(client):
     mine = next(l["idx"] for l in rp["lines"] if l["speaker"] == "user")
     assert client.post(f"/roleplays/{rp['id']}/lines/{mine}/skip").json() == {"pos": mine + 1}
     assert client.post(f"/roleplays/{rp['id']}/lines/0/skip").status_code == 404
+
+
+# --- the conversation to resume (spec 1, 2) ----------------------------------------------------------------------
+
+
+async def test_resume_after_a_followed_turn(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = engine.load(rp_id).lines[user_idx].text
+    [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
+    r = engine.resume()
+    assert r["roleplay"]["id"] == rp_id and r["at"] == user_idx + 1
+    assert [s["idx"] for s in r["said"]] == [user_idx] and r["progress"] == {"no": 2, "total": 3}
+
+
+async def test_resume_skips_an_unreadable_record(engine_with_rp):
+    engine, rp_id, _ = engine_with_rp
+    bad = engine.store.roleplays / ("f" * 12)
+    bad.mkdir()
+    (bad / "roleplay.json").write_text("{", encoding="utf-8")
+    assert engine.resume()["roleplay"]["id"] == rp_id
+
+
+def test_resume_route(client):
+    assert client.get("/resume").json() == {"resume": None}
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    r = client.get("/resume").json()["resume"]
+    assert r["roleplay"]["id"] == rp["id"] and r["at"] == 0 and r["said"] == []

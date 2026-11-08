@@ -82,3 +82,28 @@ def first_try(group_runs: list[Roleplay], rp: Roleplay, idx: int) -> dict | None
     if run_id == rp.id:
         return None
     return {"rp_id": run_id, "idx": line_idx, "n": a.n}
+
+
+# --- the conversation to resume (spec resume-roleplay 1, 2) -----------------------------------------------------
+
+
+def to_resume(rps: list[Roleplay]) -> Roleplay | None:
+    """The newest roleplay, when a line of mine is left at or after its place (`pos`). Only the newest: an older one
+    left midway is not looked for, since a new conversation was started after it (spec 1)."""
+    if not rps:
+        return None
+    rp = max(rps, key=lambda r: (r.created, r.id))
+    return rp if any(l.speaker == "user" and l.idx >= rp.pos for l in rp.lines) else None
+
+
+def said_before(rp: Roleplay, upto: int) -> list[dict]:
+    """What was heard on my lines before `upto`, for the resumed conversation's bubbles: the last try inside the
+    roleplay (asides to teacher Ryan left out, like the end screen). A line without one was skipped (spec 2)."""
+    out = []
+    for line in rp.lines[:upto]:
+        if line.speaker != "user":
+            continue
+        tries = [a for a in rp.attempts.get(line.idx, []) if a.mode in ROLEPLAY_MODES and not a.aside]
+        if tries:
+            out.append({"idx": line.idx, "heard": tries[-1].heard, "n": tries[-1].n})
+    return out

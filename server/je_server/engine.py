@@ -21,7 +21,7 @@ from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
 from .tts import VoiceError
 from .phrases import PHRASES, TIPS
-from .review import first_try, group_of, latest_run, past_items, sentence_key
+from .review import first_try, group_of, latest_run, past_items, said_before, sentence_key, to_resume
 from .store import Store
 
 log = logging.getLogger("je_server")
@@ -300,12 +300,7 @@ class Engine:
         return path
 
     def progress(self, rp_id: str, idx: int) -> dict[str, int]:
-        """「내 대사 no/total」 for the roleplay header. On Ryan's line it is the learner's next line. Records from
-        before 2026-11-07 may end with fewer learner lines after a failed rebuild, so no is kept within total."""
-        rp = self.load(rp_id)
-        total = sum(1 for l in rp.lines if l.speaker == "user")
-        before = sum(1 for l in rp.lines if l.speaker == "user" and l.idx < idx)
-        return {"no": min(before + 1, total), "total": total}
+        return progress_of(self.load(rp_id), idx)
 
     async def three(self, rp_id: str, idx: int) -> ThreeLine:
         """A line's notes: Ryan's are made when asked; the learner's are being made in the background and this
@@ -681,6 +676,15 @@ class Engine:
             raise NotFound(group)
         return {"roleplay": rp.model_dump(mode="json"), "summary": self.summary(rp.id, rps)}
 
+    def resume(self) -> dict | None:
+        """The conversation to resume and where (spec resume-roleplay 1, 2): the newest roleplay with a line of mine
+        left, from its place, with what was heard on my lines before it. Read from the records; no Claude call."""
+        rp = to_resume(self.store.all())
+        if rp is None:
+            return None
+        return {"roleplay": rp.model_dump(mode="json"), "at": rp.pos, "progress": progress_of(rp, rp.pos),
+                "said": said_before(rp, rp.pos)}
+
     def saved(self) -> list[dict]:
         """Saved sentences, newest first (spec review-practice 6). The line is found again by its sentence when the
         script was rebuilt after it was saved (records from before 2026-11-07); one that is gone is left out of the
@@ -747,6 +751,14 @@ class Engine:
             if pos is not None:
                 rp.pos = max(rp.pos, pos)
             self.store.save(rp)
+
+
+def progress_of(rp: Roleplay, idx: int) -> dict[str, int]:
+    """「내 대사 no/total」 for the roleplay header. On Ryan's line it is the learner's next line. Records from before
+    2026-11-07 may end with fewer learner lines after a failed rebuild, so no is kept within total."""
+    total = sum(1 for l in rp.lines if l.speaker == "user")
+    before = sum(1 for l in rp.lines if l.speaker == "user" and l.idx < idx)
+    return {"no": min(before + 1, total), "total": total}
 
 
 def _unsettled_dropped(line: ScriptLine) -> ScriptLine:

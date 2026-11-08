@@ -236,6 +236,11 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         except NotFound:
             raise ApiError(404, "not_found") from None
 
+    @router.get("/resume")
+    def resume() -> dict:
+        # the conversation to resume and where, or null (spec resume-roleplay 1, 2)
+        return {"resume": engine().resume()}
+
     @router.get("/saved")
     def saved() -> dict:
         return {"items": engine().saved()}
