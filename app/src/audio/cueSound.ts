@@ -1,6 +1,7 @@
 // The short sounds that say the mic started, stopped or was cancelled (spec record-feedback 1), made here as WAV
 // bytes. Sound files cannot be committed: the commit check refuses every audio file, since it cannot tell a made tone
-// from a recording of someone, and its exceptions are not widened. The values are the draft the user picked (A).
+// from a recording of someone, and its exceptions are not widened. The values are the draft the user picked (A), at
+// half its loudness: at the draft's it was louder than Ryan's voice (todo 20261108_34 2, the numbers in the test).
 export type Cue = "start" | "end" | "cancel";
 
 export const CUE_RATE = 22050;
@@ -9,19 +10,19 @@ type Note = { hz: number; ms: number; decay: number; gain: number };
 type Part = Note | { gapMs: number };
 
 const UP: Part[] = [
-  { hz: 659, ms: 80, decay: 8, gain: 0.5 },
+  { hz: 659, ms: 80, decay: 8, gain: 0.25 },
   { gapMs: 20 },
-  { hz: 880, ms: 110, decay: 10, gain: 0.5 },
+  { hz: 880, ms: 110, decay: 10, gain: 0.25 },
 ];
 const DOWN: Part[] = [
-  { hz: 880, ms: 80, decay: 8, gain: 0.5 },
+  { hz: 880, ms: 80, decay: 8, gain: 0.25 },
   { gapMs: 20 },
-  { hz: 659, ms: 110, decay: 10, gain: 0.5 },
+  { hz: 659, ms: 110, decay: 10, gain: 0.25 },
 ];
 const PARTS: Record<Cue, Part[]> = {
   start: UP, // two notes going up
   end: DOWN, // the same two going down
-  cancel: [{ hz: 392, ms: 260, decay: 9, gain: 0.45 }], // one low note
+  cancel: [{ hz: 392, ms: 260, decay: 9, gain: 0.225 }], // one low note
 };
 
 const ATTACK_MS = 4; // no click at the start of a note
