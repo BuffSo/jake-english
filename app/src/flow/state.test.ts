@@ -877,7 +877,7 @@ describe("first-turn hint and the silent cancel (spec record-feedback 3, 4)", ()
     expect(reduce(ready, { type: "micFailed" })).toBe(ready);
   });
 
-  test("the notice after no speech is not an error, the mic failing is", () => {
+  test("the notice after no speech is not drawn as an error, a failure is", () => {
     expect(messageIsError(reduce(at("recording"), { type: "noSpeech" }))).toBe(false);
     expect(messageIsError(at("error", { message: "x" }))).toBe(true);
   });

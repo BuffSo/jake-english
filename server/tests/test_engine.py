@@ -452,6 +452,7 @@ def test_two_first_screens_at_once_take_the_tip_once(engine, monkeypatch):
         t.start()
     for t in threads:
         t.join()
+    assert len(got) == 2  # a thread that raised would leave one answer and pass the count below
     assert sum(said is not None for said in got) == 1
     assert engine.store.load_tip() == ("2026-11-08", 1)
 
