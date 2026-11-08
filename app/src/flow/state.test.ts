@@ -1,6 +1,6 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Roleplay, ScriptLine } from "../api/types";
-import { askFirst, canReplay, initial, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
+import { askFirst, canReplay, initial, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -410,6 +410,19 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     const first = reduce(midway("ready"), { type: "practiseLine", kind: "mine", idx: 1 });
     const second = reduce(reduce(first, { type: "back" }), { type: "practiseLine", kind: "mine", idx: 1 });
     expect(modelKey(second)).not.toBe(modelKey(first));
+  });
+
+  // todo practice-midway minors 1: both taps run on the state of one render, so the second still sees the practice
+  test("back tapped twice before a render leaves only the practice", () => {
+    const inside = reduce(midway("ready"), { type: "practiseLine", kind: "mine", idx: 1 });
+    const once = reduce(inside, leaveAction(inside));
+    expect(reduce(once, leaveAction(inside))).toEqual(once);
+    expect([once.screen, once.practice, once.idx]).toEqual(["roleplay", null, 3]);
+    const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
+    const left = reduce(fromEnd, leaveAction(fromEnd));
+    expect(reduce(left, leaveAction(fromEnd))).toEqual(left);
+    expect(left.screen).toBe("end");
+    expect(leaveAction(midway("ready"))).toEqual({ type: "back" }); // outside a practice: back as before
   });
 });
 

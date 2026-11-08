@@ -70,6 +70,7 @@ export type State = {
 export type Action =
   | { type: "home" }
   | { type: "back" }
+  | { type: "endPractice" }
   | { type: "chooseRoleplay" }
   | { type: "created"; roleplay: Roleplay; jake?: Said | null; from?: SituationStart }
   | { type: "lineLoaded"; line: ScriptLine; progress?: Progress }
@@ -218,6 +219,13 @@ export function modelKey(s: State): string | null {
   return s.practice ? `${s.line.idx}:${s.mode}:${s.practiceNo}` : `${s.line.idx}:${s.mode}`;
 }
 
+// What leaving the roleplay screen sends. From a practice it is `endPractice`, which does nothing outside one: two
+// taps on 「뒤로」 before the screen draws again both see the practice, and a second `back` would leave the restored
+// roleplay without asking (todo practice-midway 1).
+export function leaveAction(s: State): Action {
+  return s.practice ? { type: "endPractice" } : { type: "back" };
+}
+
 // What was said in this turn, as conversation bubbles (what the learner said, Ryan's feedback).
 function exchange(s: State): Bubble[] {
   return [
@@ -242,6 +250,8 @@ export function reduce(s: State, a: Action): State {
       if (s.screen === "roleplay" || s.screen === "end")
         return { ...initial, screen: "situation", situationFrom: s.situationFrom };
       return s;
+    case "endPractice":
+      return s.screen === "roleplay" && s.practice ? leavePractice(s) : s;
     case "chooseRoleplay":
       return { ...initial, screen: "situation" };
     case "created":

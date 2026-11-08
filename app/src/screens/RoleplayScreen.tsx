@@ -12,7 +12,7 @@ import { useRecorder } from "../audio/useRecorder";
 import { createGate, stopThenSend } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
-import { askFirst, canReplay, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
+import { askFirst, canReplay, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { InRowButton } from "../ui/InRowButton";
@@ -161,7 +161,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (leavesScreen(state)) mounted.current = false;
     sounds.clear();
     await rec.discard();
-    dispatch({ type: "back" });
+    dispatch(leaveAction(state));
   }
 
   function askLeave() {
