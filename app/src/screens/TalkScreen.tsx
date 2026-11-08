@@ -528,7 +528,9 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
     );
   }
 
-  if (s.phase === "fixes" && rp && s.end) return <TalkFixScreen rp={rp} end={s.end} sounds={sounds} onHome={onHome} />;
+  // her face on the 「소희 찬스 N번 썼어요」 line, as on her button; none from an older server
+  if (s.phase === "fixes" && rp && s.end)
+    return <TalkFixScreen rp={rp} end={s.end} sounds={sounds} soheeFace={sohee?.face} onHome={onHome} />;
 
   const last = s.bubbles[s.bubbles.length - 1];
   const nowIdx = last?.kind === "ryan" ? last.idx : null;
