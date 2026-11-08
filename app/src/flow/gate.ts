@@ -30,24 +30,40 @@ export async function stopThenSend<T>(
   if (stopped !== undefined) await send(stopped);
 }
 
-// How long the gate stays shut after a cancel or a skip (spec record-cancel-skip 5)
+// How long taps are turned away after a cancel or a skip (spec record-cancel-skip 5)
 export const TAP_HOLD_MS = 400;
 
-// Runs `fn` inside the gate; when it did something, the gate stays shut until `wait` ends. After 「취소」 the screen
-// redraws 「건너뛰기」 where it was, and after 「건너뛰기」 in a practice the next line puts 「건너뛰기」 there again:
-// the second tap of a double tap must find the gate shut, not skip a line (spec record-cancel-skip 5). Starting the
-// mic goes through the same gate, so a tap on 「🎤 말하기」 right after a skip starts nothing for the line left.
+// A short time when taps that start or skip are turned away. Not the gate's: the roleplay screen is keyed by its
+// roleplay, and a saved-sentence practice that moves to another conversation's sentence mounts a new screen with a
+// new gate, which would let the second tap of a double tap through (final review).
+export function createHold(now: () => number = Date.now) {
+  let until = 0;
+  return {
+    get on() {
+      return now() < until;
+    },
+    start() {
+      until = now() + TAP_HOLD_MS;
+    },
+  };
+}
+
+// The one hold every roleplay screen shares
+export const tapHold = createHold();
+
+// Runs `fn` inside the gate unless taps are held; when it did something, holds the next taps a moment. After 「취소」
+// the screen redraws 「건너뛰기」 where it was, and after 「건너뛰기」 in a practice the next line puts 「건너뛰기」 there
+// again: the second tap of a double tap must not skip a line (spec record-cancel-skip 5). Starting the mic checks the
+// same hold, so a tap on 「🎤 말하기」 right after a skip starts nothing for the line left.
 export async function runThenHold(
   gate: ReturnType<typeof createGate>,
+  hold: ReturnType<typeof createHold>,
   fn: () => Promise<boolean>,
-  wait: () => Promise<void>,
 ): Promise<boolean> {
-  const done = await gate.run(async () => {
-    const did = await fn();
-    if (did) await wait();
-    return did;
-  });
-  return done === true;
+  if (hold.on) return false;
+  const did = await gate.run(fn);
+  if (did) hold.start();
+  return did === true;
 }
 
 // One answer per question: the first tap on either choice is taken, and later ones (the second tap of a double tap,

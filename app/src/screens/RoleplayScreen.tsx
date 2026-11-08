@@ -9,7 +9,7 @@ import type { SoundQueue } from "../audio/player";
 import { useAnswering } from "../audio/useAnswering";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
-import { createGate, runThenHold, stopThenSend, TAP_HOLD_MS } from "../flow/gate";
+import { createGate, runThenHold, stopThenSend, tapHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
 import { askFirst, canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
@@ -324,13 +324,13 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (audio) playFromBubble(api.audioSource(audio));
   }
 
-  const startRecording = () => gate.run(doStart);
+  // a start right after 「취소」 or 「건너뛰기」 is the second tap of a double tap, on the button the redraw put there
+  const startRecording = () => (tapHold.on ? undefined : gate.run(doStart));
   const stopRecording = () => stopThenSend(gate, stopRec, sendRec);
-  // 「취소」 and 「건너뛰기」 go through the same gate and keep it shut a moment: the second tap of a double tap finds
-  // it shut, not the button the redraw puts in the same place (spec record-cancel-skip 5)
-  const hold = () => new Promise<void>((r) => setTimeout(r, TAP_HOLD_MS));
-  const cancelRecording = () => runThenHold(gate, doCancel, hold);
-  const skipLine = () => runThenHold(gate, doSkip, hold);
+  // 「취소」 and 「건너뛰기」 go through the same gate and then hold taps a moment, on this screen and the next one
+  // (spec record-cancel-skip 5)
+  const cancelRecording = () => runThenHold(gate, tapHold, doCancel);
+  const skipLine = () => runThenHold(gate, tapHold, doSkip);
 
   // 「취소」: the recording is stopped and deleted on the phone, never sent; back to before speaking, in the same mode
   // (spec record-cancel-skip 1). Nothing to cancel when a stop or the auto-stop got there first.
