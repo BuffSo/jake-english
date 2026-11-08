@@ -7,7 +7,7 @@ import pytest
 
 from fakes import (FakeAnthropic, connection_error, refusal_response, script_json, three_json,
                    three_json_with_wrong_stress)
-from je_server import prompts
+from je_server import fixes, prompts
 from je_server.claude import JAKE_ENDINGS, LIVE_OPTIONS, WRITERS, Claude, ClaudeUnavailable, pick_ending
 from je_server.threeline import check
 from je_server.topics import get
@@ -916,6 +916,8 @@ def test_fix_prompt_words_helped_turns_by_the_macs_points_only():
     rules = prompts.FIX_SYSTEM
     assert "도움 받은 차례" in rules and "문법" in rules
     assert "처럼 들렸어요" in rules and "들리지 않았어요" in rules and "말했어요" in rules
+    # the helped ones come apart from Claude's own picks, but `fixes.check` keeps three in all, own ones first (PR review)
+    assert "세지 않아요" not in rules and "모두 합쳐 세 가지까지만" in rules and fixes.MAX_FIXES == 3
 
 
 def test_fix_prompt_completes_fragments_and_keeps_misheard_words():
