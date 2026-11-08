@@ -23,8 +23,8 @@ export type ScriptLine = {
   parts: Said[] | null; // Ryan's answer sentence by sentence with the sound of each
   heard_upto: number | null; // sentences heard when cut off; null when heard to the end
   fix: Fix | null;
-  // the Mac's own record of Sohee chance on Ryan's reply (spec free-talk-design 9), absent from an older server. It
-  // holds the full sentence before 「전체 문장 보기」, so the app reads a hint through the hint routes only, never here
+  // the Mac's record of Sohee chance on Ryan's reply (spec free-talk-design 9), absent from an older server and sent
+  // without its full sentence before 「전체 문장 보기」. The app reads a hint through the hint routes only, never here
   hint?: unknown;
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };

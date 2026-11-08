@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from . import topics
+from .hints import hide_unshown  # every answer with lines goes through it (spec free-talk-design 9)
 from .auth import RequestGuard, token_checker
 from .claude import ClaudeUnavailable
 from .config import Settings
@@ -233,14 +234,14 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
                 rp = await engine().create_pick(body.topic, body.pick)
             else:
                 rp = await engine().create(body.situation.strip(), body.topic)
-            return rp.model_dump(mode="json")
+            return hide_unshown(rp.model_dump(mode="json"))
         except ClaudeUnavailable:
             raise claude_down() from None
 
     @router.get("/roleplays/{rp_id}")
     def roleplay(rp_id: str = PathParam(pattern=ID)) -> dict:
         try:
-            return engine().load(rp_id).model_dump(mode="json")
+            return hide_unshown(engine().load(rp_id).model_dump(mode="json"))
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -251,14 +252,14 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.get("/groups/{group}/latest")
     def latest(group: str = PathParam(pattern=ID)) -> dict:
         try:
-            return engine().latest(group)
+            return hide_unshown(engine().latest(group))
         except NotFound:
             raise ApiError(404, "not_found") from None
 
     @router.get("/resume")
     def resume() -> dict:
         # the conversation to resume and where, or null (spec resume-roleplay 1, 2)
-        return {"resume": engine().resume()}
+        return {"resume": hide_unshown(engine().resume())}
 
     @router.get("/saved")
     def saved() -> dict:
@@ -274,7 +275,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.post("/roleplays/{rp_id}/copy")
     async def copy(rp_id: str = PathParam(pattern=ID)) -> dict:
         try:
-            return (await engine().copy(rp_id)).model_dump(mode="json")
+            return hide_unshown((await engine().copy(rp_id)).model_dump(mode="json"))
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -282,7 +283,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     async def line(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
         try:
             line = await engine().line(rp_id, idx)  # waits for the model sound only (LINE_WAIT); notes come later
-            return {**line.model_dump(mode="json"), "progress": engine().progress(rp_id, idx)}
+            return hide_unshown({**line.model_dump(mode="json"), "progress": engine().progress(rp_id, idx)})
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -348,7 +349,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.get("/roleplays/{rp_id}/summary")
     def summary(rp_id: str = PathParam(pattern=ID)) -> dict:
         try:
-            return engine().summary(rp_id)
+            return hide_unshown(engine().summary(rp_id))
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -357,7 +358,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
 
     @router.post("/talks")
     async def create_talk() -> dict:
-        return (await talks().create()).model_dump(mode="json")  # a VoiceError is kept inside `create`
+        return hide_unshown((await talks().create()).model_dump(mode="json"))  # a VoiceError is kept in `create`
 
     @router.post("/talks/{rp_id}/turns")
     async def talk_turn(request: Request, rp_id: str = PathParam(pattern=ID),
@@ -385,7 +386,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.post("/talks/{rp_id}/end")
     async def end_talk(rp_id: str = PathParam(pattern=ID), heard: int | None = Query(None, ge=0, le=50)) -> dict:
         try:
-            return await talks().end(rp_id, heard)
+            return hide_unshown(await talks().end(rp_id, heard))
         except NotFound:
             raise ApiError(404, "not_found") from None
         except TalkBusy:

@@ -631,3 +631,22 @@ def test_end_route_counts_sohee_chances(client, fake_claude, speech_bytes):
     client.post(f"{base}/full")
     j = client.post(f"/talks/{base.split('/')[2]}/end").json()
     assert j["sohee"] == 2 and j["items"] == []
+
+
+def test_record_routes_leave_out_the_full_sentence_until_it_is_shown(client, engine, fake_claude, speech_bytes):
+    # spec free-talk-design 9: the app gets the full sentence only from 「전체 문장 보기」 on; the record keeps it
+    base = hint_base(client, speech_bytes)
+    rp_id = base.split("/")[2]
+    client.post(base)
+    h = fake_claude.hint_value
+    routes = (f"/roleplays/{rp_id}", f"/roleplays/{rp_id}/lines/2", f"/roleplays/{rp_id}/summary")
+    for path in routes:
+        r = client.get(path)
+        assert r.status_code == 200 and h.full not in r.text
+    hint = client.get(f"/roleplays/{rp_id}/lines/2").json()["hint"]
+    assert hint["starters"] == h.starters and hint["full_shown"] is False and "full" not in hint
+    assert engine.load(rp_id).lines[2].hint.full == h.full
+    client.post(f"{base}/full")
+    for path in routes:
+        assert h.full in client.get(path).text
+    assert client.get(f"/roleplays/{rp_id}/lines/2").json()["hint"]["full"] == h.full

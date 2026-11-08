@@ -5,6 +5,7 @@ first (2026-11-09 user)."""
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from .models import Hint, Roleplay, ScriptLine
 
@@ -18,6 +19,7 @@ DOTS = "…"
 QUOTES_ANYWHERE = str.maketrans("", "", "\"“”「」『』")
 QUOTES_AT_ENDS = "'‘’"
 _TRAILING_DOTS = re.compile(r"\s*(?:\.\.\.|…)$")
+UNSHOWN = ("full", "full_three")  # what a hint's answer to the app leaves out until 「전체 문장 보기」
 
 
 def _tidy(text: str) -> str:
@@ -84,4 +86,19 @@ def conversation(rp: Roleplay, upto: int) -> list[dict]:
             continue
         if said:
             out.append({"말한 사람": who, "말": said})
+    return out
+
+
+def hide_unshown(data: Any) -> Any:
+    """An answer to the app (JSON, as dumped) without the full sentence of a hint not shown yet, nor its notes: the app
+    gets it only from 「전체 문장 보기」 on (spec 9). Every route that sends lines passes its answer through this; the
+    record itself keeps the sentence (`Store.save` writes the model). `data` is not changed."""
+    if isinstance(data, list):
+        return [hide_unshown(v) for v in data]
+    if not isinstance(data, dict):
+        return data
+    out = {k: hide_unshown(v) for k, v in data.items()}
+    hint = out.get("hint")
+    if isinstance(hint, dict) and not hint.get("full_shown"):
+        out["hint"] = {k: v for k, v in hint.items() if k not in UNSHOWN}
     return out

@@ -117,3 +117,17 @@ def test_conversation_leaves_out_fixes_and_a_reply_cut_before_a_word():
     )
     assert [c["말"] for c in hints.conversation(rp, 5)] == ["Hi! What did you do today?", "I go park.", "It was fun.",
                                                            "Great!"]
+
+
+def test_hide_unshown_drops_the_full_sentence_until_it_is_shown():
+    unshown = {"meaning_ko": MEANING, "starters": STARTERS, "full": FULL, "audio": None, "full_shown": False,
+               "full_three": None}
+    shown = {**unshown, "full_shown": True}
+    answer_ = {"roleplay": {"lines": [{"idx": 0, "hint": unshown}, {"idx": 1, "hint": None},
+                                      {"idx": 2, "hint": shown}]},
+               "summary": {"lines": [{"line": {"idx": 0, "hint": unshown}}]}}
+    got = hints.hide_unshown(answer_)
+    kept = {k: v for k, v in unshown.items() if k not in ("full", "full_three")}
+    assert got["roleplay"]["lines"] == [{"idx": 0, "hint": kept}, {"idx": 1, "hint": None}, {"idx": 2, "hint": shown}]
+    assert got["summary"]["lines"][0]["line"]["hint"] == kept
+    assert answer_["roleplay"]["lines"][0]["hint"]["full"] == FULL  # the dump given is not changed
