@@ -58,8 +58,9 @@ def _ryan_text(line: ScriptLine) -> str:
 def messages(rp: Roleplay) -> list[dict]:
     """What Claude is given for Ryan's next answer: the start, Ryan's replies (assistant) and my turns (user). A Korean
     turn is marked `TALK_KOREAN`; a turn said from Sohee's full sentence is what was heard, then `TALK_HELPED`. When
-    my last line is an English turn and it is an even-numbered one (the 2nd, 4th ...; Korean turns do not count, helped
-    ones do), the server allows Ryan to echo the right form: `TALK_ECHO` ends that last message only. Old records'
+    my last line is an English turn and its number is a multiple of three (the 3rd, 6th ...; Korean turns do not count,
+    helped ones do), the server allows Ryan to echo the right form: `TALK_ECHO` ends that last message only (with the
+    cue Ryan recast nearly every mistake, so this gives about a third of them, spec 4 「되받기」). Old records'
     `help` lines and the fixes are left out. The same role twice in a row is joined by a line break (when Claude could
     not answer, my next turn follows my last)."""
     out: list[dict] = [{"role": "user", "content": TALK_START}]
@@ -76,7 +77,7 @@ def messages(rp: Roleplay) -> list[dict]:
             out[-1]["content"] += "\n" + text
         else:
             out.append({"role": role, "content": text})
-    if rp.lines and rp.lines[-1].kind == "turn" and sum(l.kind == "turn" for l in rp.lines) % 2 == 0:
+    if rp.lines and rp.lines[-1].kind == "turn" and sum(l.kind == "turn" for l in rp.lines) % 3 == 0:
         out[-1]["content"] += "\n" + TALK_ECHO
     return out
 

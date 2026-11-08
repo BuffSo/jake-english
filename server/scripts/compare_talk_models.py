@@ -92,7 +92,7 @@ MODELS = {"sonnet": WRITERS["sonnet"], "haiku": QUICKS["haiku"]}
 
 
 def messages(turns: list[str], echo: bool = False) -> list[dict]:
-    """As `talk.messages` builds them; `echo` adds TALK_ECHO to the last message, as the server does on every second
+    """As `talk.messages` builds them; `echo` adds TALK_ECHO to the last message, as the server does on every third
     English turn."""
     out = [{"role": "user", "content": TALK_START}]
     for i, t in enumerate(turns):

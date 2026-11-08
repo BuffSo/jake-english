@@ -94,17 +94,22 @@ def test_messages_leave_fixes_and_old_help_lines_out():
     assert [m["content"] for m in messages(rp)] == [TALK_START, "Hi!", TALK_KOREAN + "안녕\nI walked.", "Nice!"]
 
 
-def test_messages_allow_echo_on_every_second_english_turn():
-    one = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go park."))
-    assert messages(one)[-1]["content"] == "I go park."
-    two = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go park."), ("ryan", "reply", "Fun!"),
-                ("user", "turn", "My dog like it."))
-    msgs = messages(two)
-    assert msgs[-1]["content"] == "My dog like it.\n" + TALK_ECHO
-    assert TALK_ECHO not in repr(msgs[:-1])
-    three = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a"), ("ryan", "reply", "b"), ("user", "turn", "c"),
-                  ("ryan", "reply", "d"), ("user", "turn", "e"))
-    assert TALK_ECHO not in messages(three)[-1]["content"]
+def _turns(n: int):
+    """A talk of Ryan's opener and then `n` of my English turns, each answered but the last."""
+    lines = [("ryan", "reply", "Hi!")]
+    for i in range(n):
+        lines += [("user", "turn", f"I go park {i}.")] + ([("ryan", "reply", f"Fun {i}!")] if i < n - 1 else [])
+    return _talk(*lines)
+
+
+def test_messages_allow_echo_on_every_third_english_turn():
+    # with the cue Sonnet recast every mistake turn (8/8), so every third turn gives about a third (spec 4 「되받기」)
+    for n in (1, 2, 4, 5, 7):
+        assert TALK_ECHO not in repr(messages(_turns(n))), n
+    for n in (3, 6):
+        msgs = messages(_turns(n))
+        assert msgs[-1]["content"] == f"I go park {n - 1}.\n" + TALK_ECHO, n
+        assert TALK_ECHO not in repr(msgs[:-1]), n
 
 
 def test_fix_input_still_skips_old_help_lines_and_korean_turns():
@@ -117,10 +122,10 @@ def test_fix_input_still_skips_old_help_lines_and_korean_turns():
 
 def test_korean_turns_do_not_count_for_the_echo_and_carry_none():
     rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a b"), ("ryan", "reply", "x"), ("user", "ask", "뭐요?"),
-               ("ryan", "reply", "y"), ("user", "turn", "c d"))
-    assert messages(rp)[-1]["content"] == "c d\n" + TALK_ECHO  # my 2nd English turn
+               ("ryan", "reply", "y"), ("user", "turn", "c d"), ("ryan", "reply", "z"), ("user", "turn", "e f"))
+    assert messages(rp)[-1]["content"] == "e f\n" + TALK_ECHO  # my 3rd English turn
     rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a b"), ("ryan", "reply", "x"), ("user", "turn", "c d"),
-               ("ryan", "reply", "y"), ("user", "ask", "뭐요?"))
+               ("ryan", "reply", "y"), ("user", "turn", "e f"), ("ryan", "reply", "z"), ("user", "ask", "뭐요?"))
     assert messages(rp)[-1]["content"] == TALK_KOREAN + "뭐요?"
 
 
@@ -135,8 +140,8 @@ def test_messages_join_two_learner_turns_in_a_row():
     rp.lines = [rp.lines[0], rp.lines[3], rp.lines[5]]
     msgs = messages(rp)
     assert [m["role"] for m in msgs] == ["user", "assistant", "user"]
-    assert msgs[2]["content"] == ("I walked to the park with my dog.\nYesterday I go to the market and buy two apple."
-                                  "\n" + TALK_ECHO)  # my 2nd English turn
+    # my 2nd English turn: no echo cue (it comes on the 3rd)
+    assert msgs[2]["content"] == "I walked to the park with my dog.\nYesterday I go to the market and buy two apple."
 
 
 # --- a turn ---------------------------------------------------------------------------------------
@@ -247,7 +252,7 @@ async def test_claude_down_mid_reply_keeps_my_turn_only(talks, engine, speech_by
     assert ev[0]["idx"] == 2 and ev[-1] == {"type": "done", "idx": 3}
     sent = fake_claude.talk_calls[1]
     assert [m["role"] for m in sent] == ["user", "assistant", "user"]
-    assert sent[-1]["content"] == first + "\n" + "I went to the park." + "\n" + TALK_ECHO  # my 2nd English turn
+    assert sent[-1]["content"] == first + "\n" + "I went to the park."  # my 2nd English turn: no echo cue
 
 
 async def test_claude_down_mid_reply_frees_the_talk_at_the_error(talks, engine, speech_bytes, fake_claude,
@@ -847,8 +852,8 @@ async def test_turn_after_the_full_sentence_is_compared_with_it(talks, engine, s
     assert (line.kind, line.text, line.given) == ("turn", heard, full)
     assert attempt.issues == find_issues(full, heard, 2)
     assert attempt.followed == (similarity(full, heard) >= FOLLOW_MIN)
-    # Claude is told the turn was helped; it is still my 2nd English turn for the echo
-    assert fake_claude.talk_calls[-1][-1]["content"] == heard + "\n" + TALK_HELPED + "\n" + TALK_ECHO
+    # Claude is told the turn was helped (my 2nd English turn: no echo cue yet)
+    assert fake_claude.talk_calls[-1][-1]["content"] == heard + "\n" + TALK_HELPED
 
 
 async def test_far_from_the_given_sentence_is_a_plain_turn(talks, engine, speech_bytes, fake_whisper, fake_claude):
@@ -912,10 +917,10 @@ def test_messages_tell_claude_the_turn_was_helped():
     _helped(rp, 1, "I went to the park.")
     assert messages(rp)[-1] == {"role": "user", "content": "I want to the park.\n" + TALK_HELPED}
     # a helped turn is still kind "turn": it counts for the echo, and the echo comes after the note
-    two = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a b"), ("ryan", "reply", "x"),
-                ("user", "turn", "I want to the park."))
-    _helped(two, 3, "I went to the park.")
-    msgs = messages(two)
+    three = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a b"), ("ryan", "reply", "x"), ("user", "turn", "c d"),
+                  ("ryan", "reply", "y"), ("user", "turn", "I want to the park."))
+    _helped(three, 5, "I went to the park.")
+    msgs = messages(three)
     assert msgs[-1]["content"] == "I want to the park.\n" + TALK_HELPED + "\n" + TALK_ECHO
     assert msgs[2]["content"] == "a b"
 

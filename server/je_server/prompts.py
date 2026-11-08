@@ -279,8 +279,9 @@ Rules:
 TALK_START = "(The learner opened free talk.)"
 TALK_CUT = "(Ryan was cut off here. The learner did not hear the rest.)"
 TALK_CUT_SILENT = "(Ryan was cut off before he said anything.)"
-# TALK_KOREAN marks a turn the learner said in Korean; TALK_ECHO is added by the server to every second English turn
-# (the model may then use the right form in its reply, never otherwise).
+# TALK_KOREAN marks a turn the learner said in Korean; TALK_ECHO is added by the server to every third English turn
+# (the model may then use the right form in its reply, never otherwise; with it Sonnet recast every mistake turn, so
+# every second turn gave about half of them, 2026-11-09).
 TALK_KOREAN = "(in Korean) "
 TALK_ECHO = "(echo ok)"
 # TALK_HELPED follows a turn said from the full sentence of Sohee chance (spec free-talk-design 9 「그 문장을 말하면」):
