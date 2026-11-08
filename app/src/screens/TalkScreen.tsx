@@ -3,8 +3,9 @@
 // what shows; this opens the talk, plays the sounds, records (`useMic`) and sends.
 //
 // Cutting Ryan off (spec 2): his sounds play under `talk:<key>`, and the keys whose sound has started are kept, so the
-// tap that cuts him says how many of his sentences I heard (`heardCount`). `turnRef` grows with every recording, with
-// the reducer's `turn`: the answer to an older turn, its sounds and its 「sounds ended」 are dropped.
+// tap that cuts him says how many of his sentences I heard (`heardCount`). The reducer's `turn` grows with every
+// recording and with 「대화 끝내기」, and the stream's events are checked against it through `now` (`isCurrent`): the
+// answer to an older turn, its sounds and its 「sounds ended」 are dropped before a sound is queued.
 //
 // The bubbles are the roleplay's, copied from `RoleplayScreen`, which this PR does not touch: its `styles` (bubble,
 // ryan, user, feedback, ryanOpen, userOpen, ryanText, plainText, links, link, hint, micHint, count and the frame) and
@@ -28,6 +29,7 @@ import {
   cutOf,
   englishTurns,
   heardCount,
+  isCurrent,
   lineSounds,
   mayListenTalk,
   talkInitial,
@@ -74,8 +76,6 @@ export function TalkScreen({ sounds, onHome }: Props) {
   const rp = s.roleplay;
   // false once I leave (back, or ending a talk with nothing said) and on unmount: what arrives late is dropped
   const mounted = useRef(true);
-  // the number of the recording on its way, grown with the reducer's `turn` at every `recordStart`
-  const turnRef = useRef(0);
   // Ryan's sound keys whose sound has started since the last cut (`heardCount`)
   const started = useRef<Set<string>>(new Set());
   // one opening and one end at a time: a double tap on 「대화 끝내기」 asks Claude for the fixes once (spec Review Focus 2)
@@ -101,9 +101,7 @@ export function TalkScreen({ sounds, onHome }: Props) {
     canStart: () => mounted.current && canSpeak(now.current),
     // 「🎤 말하기」 while Ryan speaks cuts him off: his sound stops at once and how much I heard goes with the turn
     beforeStart: () => {
-      const heard = cutRyan();
-      turnRef.current += 1;
-      act({ type: "recordStart", heard });
+      act({ type: "recordStart", heard: cutRyan() });
     },
     onCancelled: () => act({ type: "recordCancel" }),
     onNoSpeech: () => act({ type: "noSpeech" }),
@@ -131,12 +129,12 @@ export function TalkScreen({ sounds, onHome }: Props) {
 
   // Ryan's turn ends when his sounds have played and all of his answer is in (`done`). `done` may come after the last
   // sound ended: `onIdle` then calls at once (the reducer drops an early `ryanDone`). A cut-off answer's call finds a
-  // newer recording and does nothing; `sounds.clear()` at the cut drops it too.
+  // newer turn and does nothing; `sounds.clear()` at the cut drops it too.
   useEffect(() => {
     if (s.phase !== "ryan" || !s.done) return;
     const turn = s.turn;
     sounds.onIdle(() => {
-      if (mounted.current && turnRef.current === turn) act({ type: "ryanDone" });
+      if (mounted.current && isCurrent(now.current, turn)) act({ type: "ryanDone" });
     });
   }, [s.phase, s.done, s.turn, sounds]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -175,12 +173,13 @@ export function TalkScreen({ sounds, onHome }: Props) {
   }
 
   // Sends my turn and plays Ryan's answer as it streams in, from his first sentence (spec 2, 4). Only the turn on
-  // screen plays: a turn I cut off or left behind (`live`, back) is dropped here, and by the reducer.
+  // screen plays: a turn I cut off, ended or left behind (`isCurrent`, `live`, back) is dropped here, before its sound
+  // is queued, and by the reducer.
   async function send(uri: string, live: () => boolean) {
     const t = now.current;
     const id = t.roleplay?.id;
-    const turn = turnRef.current;
-    const current = () => live() && mounted.current && turnRef.current === turn;
+    const turn = t.turn; // this recording's: `recordStart` grew it
+    const current = () => live() && mounted.current && isCurrent(now.current, turn);
     if (!id || !current()) return;
     const onEvent = (e: TalkEvent) => {
       if (!current()) return;
@@ -196,9 +195,11 @@ export function TalkScreen({ sounds, onHome }: Props) {
     }
   }
 
-  // 「대화 끝내기」 (spec 6): Ryan stops and the Mac picks the fixes. With no English turn there is nothing to fix, so
-  // home at once. Not after 「취소」 for a moment: this button is drawn where 「취소」 was, and the second tap of its double
-  // tap must not end the talk (spec record-cancel-skip 5).
+  // 「대화 끝내기」 (spec 6): Ryan stops for good and the Mac picks the fixes. `endStart` moves past the turn as
+  // 「🎤 말하기」 does, so the later sentences of a reply I ended in are dropped in `send` while the fixes are made; how
+  // many I heard goes with the end. With no English turn there is nothing to fix, so home at once. Not after 「취소」
+  // for a moment: this button is drawn where 「취소」 was, and the second tap of its double tap must not end the talk
+  // (spec record-cancel-skip 5).
   const endTalk = () => {
     if (tapHold.on) return;
     void endGate.run(async () => {

@@ -3,9 +3,10 @@
 //
 // Spec 2: Ryan asks the first question and the first turn is mine. The mic may cut Ryan off once his text is complete
 // (phase `ryan`): `recordStart` carries how many of his sentences had started, kept on his bubble (`heard`) so the
-// Mac is told what I did not hear, and a cancelled recording leaves it cut. `turn` grows with every recording, so a
-// stream I left behind (a cut-off answer's late sounds, a late reply after 「뒤로」) is dropped by `isCurrent`.
-// Spec 6: 「대화 끝내기」 works from my turn or while Ryan speaks (`canEnd`), takes the same cut, and shows the fixes.
+// Mac is told what I did not hear, and a cancelled recording leaves it cut. `turn` grows with every recording and with
+// 「대화 끝내기」, so a stream I left behind (a cut-off answer's late sounds, a late reply after 「뒤로」) is dropped by
+// `isCurrent`. Spec 6: 「대화 끝내기」 works from my turn or while Ryan speaks (`canEnd`), takes the same cut, moves past
+// the turn as the mic does (Ryan's later sentences must not play while the fixes are made), and shows the fixes.
 // 「영어 차례가 없으면 첫 화면」: with no English turn there is nothing to review, so the screen decides by
 // `englishTurns` and goes back instead of asking the Mac for fixes.
 import type { Roleplay, Said, ScriptLine, TalkEnd, TalkEvent, TryRef } from "../api/types";
@@ -23,7 +24,7 @@ export type TalkState = {
   phase: TalkPhase;
   roleplay: Roleplay | null;
   bubbles: TalkBubble[];
-  turn: number; // grows with every recording; events carry the number of the turn they belong to
+  turn: number; // grows with every recording and with the end; events carry the number of the turn they belong to
   heardIn: boolean; // my words came back in this turn
   pending: string; // Ryan's text so far, before his line is whole
   done: boolean; // everything Ryan has to say is in
@@ -184,7 +185,8 @@ export function talkReduce(s: TalkState, a: TalkAction): TalkState {
       return { ...s, phase: "ready", pending: "", message: a.message, failure: true };
     case "endStart":
       if (!canEnd(s)) return s;
-      return { ...s, phase: "ending", bubbles: withCut(s, a.heard), message: null };
+      // past the turn on screen, as `recordStart` is: the reply's later sounds still on their way are not played
+      return { ...s, phase: "ending", bubbles: withCut(s, a.heard), turn: s.turn + 1, message: null };
     case "ended":
       return s.phase === "ending" ? { ...s, phase: "fixes", end: a.end } : s;
   }

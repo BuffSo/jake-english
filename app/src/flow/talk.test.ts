@@ -228,6 +228,25 @@ test("ending only from my turn or while Ryan speaks", () => {
   }
 });
 
+test("ending moves past the turn Ryan is answering: its late sounds and events are dropped", () => {
+  // 「대화 끝내기」 while Ryan speaks: the reply's stream is still open and its later sentences' sounds come in while
+  // the fixes are made (spec 6 「라이언 소리를 멈추고」). The screen plays a sound only for the current turn (`isCurrent`)
+  const s0 = answered();
+  const s = talkReduce(s0, { type: "endStart", heard: 1 });
+  expect(s.turn).toBe(s0.turn + 1);
+  expect(isCurrent(s, s0.turn)).toBe(false);
+  expect(cutOf(s)).toBe(1); // the cut still goes with the end
+  for (const e of [{ type: "audio", key: key("e") }, { type: "done", idx: 2 }] as TalkEvent[]) {
+    expect(talkReduce(s, { type: "event", turn: s0.turn, e })).toBe(s);
+  }
+  expect(talkReduce(s, { type: "failed", turn: s0.turn, message: "x" })).toBe(s);
+  // from my turn too, as 「🎤 말하기」 does; a second end does not move it again
+  const r = ready();
+  const fromReady = talkReduce(r, { type: "endStart", heard: null });
+  expect(fromReady.turn).toBe(r.turn + 1);
+  expect(talkReduce(fromReady, { type: "endStart", heard: null }).turn).toBe(fromReady.turn);
+});
+
 const end: TalkEnd = { items: [], say: null };
 
 test("ended shows the fixes", () => {
