@@ -16,6 +16,13 @@ superpowers 플러그인은 이 프로젝트에만 설치했다(`.claude/setting
 - 오르카 설정 「일반 → 소스 → Claude Code」를 「표시」로 바꿨다(2026-11-05). 기본은 숨김이라, Claude Code가 만든 `.claude/worktrees/*`가 오르카 사이드바에 보이지 않았다.
 - 오르카를 쓸 수 없을 때만 Claude Code 도구(EnterWorktree, `--worktree`)로 만든다. 그러면 `.worktreeinclude`에 적은 `docs/private/`와 `.env`가 복사된다(Claude Code 2.1.318에서 시험해 확인). 복사본이라 고칠 때는 원래 폴더의 파일을 고친다(`AGENTS.md` 「worktree와 비공개 파일」).
 
+## 카드와 main 세션 사이의 메시지 (2026-11-08 결정)
+
+`AGENTS.md` 「카드의 질문과 머지는 main 세션을 거친다」의 메시지는 `SendMessage`로 보낸다. 카드가 main 세션에 보낼 때도, main 세션이 카드에 답과 승인을 전할 때도 같다.
+
+- 받는 이름은 `ListAgents`가 보여 주는 이름을 그대로 쓴다. 이름은 대개 세션을 연 폴더 이름 뒤에 짧은 글자가 붙은 것이고(main 세션은 `jake-english-…`), 끝 글자는 세션마다 다르다. 카드는 넘길 글에 적힌 main 세션 이름으로 보낸다. 자기 이름은 `ListAgents` 맨 위에 나온다.
+- 같은 이름의 줄이 둘 이상이면 이름 뒤에 한 칸 띄우고 그 줄의 `[ref]`를 붙여 보낸다(예: `jake-english-66 [8fa5bd]`).
+
 ## 커밋 가드 훅 (2026-11-04 결정)
 
 `.claude/settings.json`의 PreToolUse 훅(`scripts/hooks/guard-git.mjs`)이 `git commit`과 `git push`를 실행하기 직전에 본다. git 훅이 한 겹이라면 이것이 두 번째 겹이다(`AGENTS.md` 「커밋 전 자동 검사」).
