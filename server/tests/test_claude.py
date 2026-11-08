@@ -607,6 +607,22 @@ async def test_recommend_keeps_words_that_only_look_like_labels(caplog, answer):
     assert "label" not in caplog.text
 
 
+async def test_every_message_label_is_one_the_server_drops():
+    # todo 28 2: MESSAGE_LABELS is copied by hand from the message; a label renamed there would stop being dropped
+    import re
+
+    from je_server.claude import MESSAGE_LABELS
+
+    usa = get("usa")
+    assert usa.picks  # the topic's list goes along too
+    fake = FakeAnthropic([json.dumps({"request_ko": "공항에서 짐을 찾는 상황을 추천해요."})])
+    await Claude(fake).recommend(["카페에서 주문하는 상황"], ["호텔에서 체크인하는 상황"], usa, "상황을 추천해요.")
+    content = fake.requests[0]["messages"][0]["content"]
+    # a line with a label and its value on it; a heading over a list (「최근 상황:」) has nothing after its colon
+    labels = re.findall(r"^([^\s:-][^:\n]*):[ \t]*\S", content, re.M)
+    assert labels and set(labels) <= set(MESSAGE_LABELS)
+
+
 def test_recommend_system_shows_no_ending_of_its_own():
     # second real run: the system's example 「…묻는 상황을 추천해요.」 was followed by the given ending (doubled)
     from je_server import prompts

@@ -35,7 +35,7 @@ def test_every_topic_sends_made_up_recent_situations():
     # ten made-up ones per topic as the server would (store.recent_situations keeps ten)
     from je_server.topics import TOPICS
 
-    assert all(len(cj.RECENT[t.id]) >= 6 for t in TOPICS)
+    assert all(len(cj.RECENT[t.id]) == 10 for t in TOPICS)
 
 
 def test_the_model_is_the_recommend_setting_unless_chosen():
