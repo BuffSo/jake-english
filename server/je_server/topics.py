@@ -30,6 +30,9 @@ class Pick:
     first: Speaker
     frame: Frame
     script: tuple[tuple[Speaker, str], ...]  # (speaker, English line) in order
+    # Sohee's Korean for each line, in the same order: a pick does not ask Claude for it (todo 13). A line without it
+    # is interpreted when tapped, like any other script's.
+    ko: tuple[str, ...] = ()
 
 
 def _pick(id: str, title_ko: str, situation: str, first: Speaker, roles: tuple[str, str, str, str],

@@ -7,6 +7,7 @@ import pytest
 from je_server import topics
 from je_server.models import Attempt
 from je_server.threeline import plain
+from je_server.tts import audio_key
 from je_server.topics import pick
 
 SNEAKER = ("usa", "u-sneaker-size")  # the learner speaks first
@@ -143,3 +144,177 @@ async def test_copy_of_a_pick_gone_from_the_list(engine, monkeypatch):
     again = await engine.copy(first.id)
     assert again.lines == engine.store.load(first.id).lines
     assert (again.origin, again.pick) == (first.id, "u-sneaker-size")
+
+
+# --- Sohee's Korean in the repository and her sound made ahead (todo 13, plan sohee-prepared) ---------------------
+
+KO = tuple(f"테스트 한국어 {i}" for i in range(len(pick(*SNEAKER).script)))
+
+
+def with_korean(monkeypatch, ko=KO):
+    """The pick with Sohee's Korean for its lines, made up for the test; `ko=()`: a pick without it."""
+    p = dataclasses.replace(pick(*SNEAKER), ko=ko)
+    monkeypatch.setattr(topics, "pick", lambda t, i: p)
+    return p
+
+
+def sohee_calls(fake_voice):
+    return [(i, c) for i, c in enumerate(fake_voice.calls) if c[1] == "sohee"]
+
+
+async def test_pick_lines_carry_the_repository_korean(engine, fake_claude, monkeypatch):
+    p = with_korean(monkeypatch)
+    rp = await engine.create_pick(*SNEAKER)
+    assert [l.ko for l in rp.lines] == list(p.ko)
+    assert [await engine.ko(rp.id, l.idx) for l in rp.lines] == list(p.ko)
+    assert fake_claude.interpret_calls == []
+
+
+async def test_first_pick_makes_sohee_sounds_after_the_lines_are_ready(engine, fake_voice, monkeypatch):
+    from je_server.engine import SOHEE_RANK
+
+    with_korean(monkeypatch)
+    rp = await engine.create_pick(*SNEAKER)
+    await engine.sohees[rp.id]
+    saved = engine.store.load(rp.id)
+    assert [l.ko_audio for l in saved.lines] == [audio_key("sohee", "korean", k) for k in KO]
+    sohee = sohee_calls(fake_voice)
+    model = [i for i, c in enumerate(fake_voice.calls) if c[1:3] == ("ryan", "english")]
+    assert [c for _, c in sohee] == [(k, "sohee", "korean", False) for k in KO]
+    assert len(model) == len(KO) and min(i for i, _ in sohee) > max(model)  # the model sounds go first
+    assert all(k in fake_voice.checked for k in KO)  # heard back: a lost 「~요」 changes the meaning
+    assert [fake_voice.ranks[i] for i, _ in sohee] == [SOHEE_RANK + l.idx for l in rp.lines]
+
+
+async def test_sohee_waits_for_the_learner_notes(engine, fake_claude, fake_voice, monkeypatch):
+    with_korean(monkeypatch)
+    fake_claude.annotate_gate = asyncio.Event()
+    rp = await engine.create_pick(*SNEAKER)
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert sohee_calls(fake_voice) == []
+    fake_claude.annotate_gate.set()
+    await engine.sohees[rp.id]
+    assert len(sohee_calls(fake_voice)) == len(KO)
+
+
+async def test_sohee_waits_for_the_model_sounds(engine, fake_voice, monkeypatch):
+    with_korean(monkeypatch)
+    gate = asyncio.Event()
+    say = fake_voice.say
+
+    async def held(text, voice, lang, urgent, rank=0, check=False):
+        if (voice, lang) == ("ryan", "english"):
+            await gate.wait()
+        return await say(text, voice, lang, urgent, rank, check)
+
+    monkeypatch.setattr(fake_voice, "say", held)
+    rp = await engine.create_pick(*SNEAKER)
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert sohee_calls(fake_voice) == []
+    gate.set()
+    await engine.sohees[rp.id]
+    assert len(sohee_calls(fake_voice)) == len(KO)
+
+
+async def test_sohee_sound_already_on_the_mac_comes_with_the_line(engine, fake_voice, monkeypatch):
+    with_korean(monkeypatch)
+    first = await engine.create_pick(*SNEAKER)
+    await engine.sohees[first.id]
+    n = len(sohee_calls(fake_voice))
+    second = await engine.create_pick(*SNEAKER)
+    assert [l.ko_audio for l in second.lines] == [audio_key("sohee", "korean", k) for k in KO]
+    assert second.id not in engine.sohees and len(sohee_calls(fake_voice)) == n
+
+
+def held_attempt(engine, fake_whisper, monkeypatch, speech_bytes, rp):
+    """An attempt at the run's first line held inside its transcription until `release` is set."""
+    entered, release = asyncio.Event(), asyncio.Event()
+    hear = fake_whisper.transcribe
+
+    async def held(wav, lang):
+        entered.set()
+        await release.wait()
+        return await hear(wav, lang)
+
+    monkeypatch.setattr(fake_whisper, "transcribe", held)
+
+    async def run():
+        return [e async for e in engine.attempt(rp.id, 0, speech_bytes, "turn")]
+
+    return asyncio.create_task(run()), entered, release
+
+
+async def test_sohee_waits_while_a_recording_is_answered(engine, fake_claude, fake_voice, fake_whisper, monkeypatch,
+                                                         speech_bytes):
+    # a sound being made holds the worker: Ryan's answer to the recording would wait behind it
+    with_korean(monkeypatch)
+    fake_claude.annotate_gate = asyncio.Event()
+    rp = await engine.create_pick(*SNEAKER)
+    job = engine.sohees[rp.id]
+    task, entered, release = held_attempt(engine, fake_whisper, monkeypatch, speech_bytes, rp)
+    await asyncio.wait_for(entered.wait(), 5)
+    fake_claude.annotate_gate.set()
+    for _ in range(20):
+        await asyncio.sleep(0)
+    assert sohee_calls(fake_voice) == []
+    release.set()
+    await task
+    await asyncio.wait_for(job, 5)
+    assert len(sohee_calls(fake_voice)) == len(KO)
+
+
+async def test_sohee_does_not_wait_forever(engine, fake_claude, fake_voice, fake_whisper, monkeypatch, speech_bytes):
+    from je_server import engine as engine_module
+
+    monkeypatch.setattr(engine_module, "QUIET_WAIT", 0.01)
+    with_korean(monkeypatch)
+    fake_claude.annotate_gate = asyncio.Event()  # her turn comes only once the answer has begun
+    rp = await engine.create_pick(*SNEAKER)
+    job = engine.sohees[rp.id]
+    task, entered, _ = held_attempt(engine, fake_whisper, monkeypatch, speech_bytes, rp)
+    await asyncio.wait_for(entered.wait(), 5)
+    fake_claude.annotate_gate.set()
+    await asyncio.wait_for(job, 5)  # an answer that never ends does not stop her for good
+    assert len(sohee_calls(fake_voice)) == len(KO)
+    task.cancel()
+
+
+async def test_a_failed_sohee_sound_leaves_the_text_and_the_rest(engine, fake_voice, monkeypatch):
+    with_korean(monkeypatch)
+    fake_voice.fail_text = KO[1]
+    rp = await engine.create_pick(*SNEAKER)
+    await engine.sohees[rp.id]
+    saved = engine.store.load(rp.id).lines
+    assert saved[1].ko == KO[1] and saved[1].ko_audio is None
+    assert all(l.ko_audio for l in saved if l.idx != 1)
+    fake_voice.fail_text = None
+    assert await engine.ko_audio(rp.id, 1) == audio_key("sohee", "korean", KO[1])  # a tap makes it again
+
+
+async def test_repository_korean_wins_over_an_earlier_runs(engine, monkeypatch):
+    # runs from before the Korean was written down have Sohee's Korean made by Claude, and its sound
+    with_korean(monkeypatch, ko=())
+    first = await engine.create_pick(*SNEAKER)
+    await ready(engine, first)
+    await engine.ko(first.id, 1)
+    old = await engine.ko_audio(first.id, 1)
+    with_korean(monkeypatch)
+    second = await engine.create_pick(*SNEAKER)
+    assert second.lines[1].ko == KO[1] and second.lines[1].ko_audio is None  # her old sound is not lent with it
+    await engine.sohees[second.id]
+    assert old != audio_key("sohee", "korean", KO[1])
+    assert engine.store.load(second.id).lines[1].ko_audio == audio_key("sohee", "korean", KO[1])
+
+
+async def test_sohee_asked_first_is_not_made_twice(engine, fake_claude, fake_voice, monkeypatch):
+    with_korean(monkeypatch)
+    fake_claude.annotate_gate = asyncio.Event()  # her turn in the background waits for the notes
+    rp = await engine.create_pick(*SNEAKER)
+    key = await engine.ko_audio(rp.id, 1)  # the learner tapped 「통역」 first
+    fake_claude.annotate_gate.set()
+    await engine.sohees[rp.id]
+    assert [c for _, c in sohee_calls(fake_voice)].count((KO[1], "sohee", "korean", True)) == 1
+    assert all(c[0] != KO[1] for _, c in sohee_calls(fake_voice) if not c[3])
+    assert engine.store.load(rp.id).lines[1].ko_audio == key

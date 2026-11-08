@@ -31,6 +31,10 @@ NEAR_MIN = 0.3  # below FOLLOW_MIN but at least this close to the line: a try at
 # the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer
 ASIDES_KEPT = 3
 HANGUL = re.compile(r"[가-힣]")
+# Sohee's sounds made ahead for a pick (todo 13) come after every model sound waiting, which go by line number
+SOHEE_RANK = 1000
+# the longest one of them waits for a recording's answer, so a request that never closes cannot stop them for good
+QUIET_WAIT = 60
 
 
 class NotFound(Exception):
@@ -50,6 +54,10 @@ class Engine:
         # notes being made, one call per line: Ryan's when asked, the learner's in the background from the start
         self.threes: dict[tuple[str, int], asyncio.Task] = {}
         self.kos: dict[tuple[str, int], asyncio.Task] = {}  # Sohee's Korean asked for, one call per line
+        self.sohees: dict[str, asyncio.Task] = {}  # Sohee's sounds made ahead, one task per run of a list pick
+        self.answers_running = 0  # recordings being answered now; Sohee's sounds made ahead wait for none
+        self.quiet = asyncio.Event()
+        self.quiet.set()
         self.saved_lock = asyncio.Lock()  # the saved-sentence file is read and written one change at a time
 
     # --- fixed phrases ------------------------------------------------------------------------
@@ -115,13 +123,49 @@ class Engine:
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=p.situation, frame=p.frame.model_copy(), topic=topic_id, pick=pick_id,
                       origin=group_of(runs[0]) if runs else None,
-                      lines=[self._prepared(runs, ScriptLine(idx=i, speaker=s, text=t))
+                      lines=[self._with_ko(self._prepared(runs, ScriptLine(idx=i, speaker=s, text=t)),
+                                           p.ko[i] if i < len(p.ko) else "")
                              for i, (s, t) in enumerate(p.script)])
         self.store.save(rp)
         for line in rp.lines:
             if not self.prepared(line):
                 self.schedule(rp.id, line.idx)
+        if any(l.ko and l.ko_audio is None for l in rp.lines):
+            task = asyncio.create_task(self._sohee_later(rp.id))
+            task.add_done_callback(_quiet)
+            task.add_done_callback(lambda _: self.sohees.pop(rp.id, None))
+            self.sohees[rp.id] = task
         return rp
+
+    def _with_ko(self, line: ScriptLine, ko: str) -> ScriptLine:
+        """The line with Sohee's Korean written in the repository, which wins over what an earlier run had Claude
+        make; her sound comes with it when the Mac has made it before (todo 13). Without it, the line as it is."""
+        if not ko:
+            return line
+        key = audio_key("sohee", "korean", ko)
+        return line.model_copy(update={"ko": ko, "ko_audio": key if self.voice.path(key).is_file() else None})
+
+    async def _sohee_later(self, rp_id: str) -> None:
+        """Sohee's sounds for the run's lines that have her Korean, made ahead so a tap on 「통역」 plays at once
+        (todo 13). After the run's model sounds and the learner's notes, so the first line is not held back; one at a
+        time and not while a recording is being answered, since a sound being made holds the voice worker and Ryan's
+        answer would wait behind it. A sound the learner asked for first is not made again."""
+        mine = [t for (r, _), t in [*self.tasks.items(), *self.threes.items()] if r == rp_id]
+        if mine:
+            await asyncio.wait(mine)  # not gather: a cancelled wait must not cancel the line's own tasks
+        for idx in range(len(self.load(rp_id).lines)):
+            _, line = self.get_line(rp_id, idx)
+            if not line.ko or (line.ko_audio is not None and self.voice.path(line.ko_audio).is_file()):
+                continue
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(self.quiet.wait(), QUIET_WAIT)
+            try:
+                key = await self.voice.say(line.ko, "sohee", "korean", urgent=False, rank=SOHEE_RANK + idx,
+                                           check=True)
+            except VoiceError:
+                log.info("sohee sound failed: %s/%d", rp_id, idx)  # a tap on her line tries again
+                continue
+            await self.update_line(rp_id, idx, line.text, ko_audio=key)
 
     @staticmethod
     def _prepared(runs: list[Roleplay], line: ScriptLine) -> ScriptLine:
@@ -329,7 +373,25 @@ class Engine:
 
     async def attempt(self, rp_id: str, idx: int, body: bytes, mode: Mode) -> AsyncIterator[dict]:
         """A followed line gets the Mac's feedback; anything else, in every mode, gets teacher Ryan's Korean answer
-        and the same line again: the script never changes (spec offscript-aside)."""
+        and the same line again: the script never changes (spec offscript-aside). Sohee's sounds made ahead wait
+        while it runs."""
+        with self._answering():
+            async with contextlib.aclosing(self._attempt(rp_id, idx, body, mode)) as events:
+                async for ev in events:
+                    yield ev
+
+    @contextlib.contextmanager
+    def _answering(self):
+        self.answers_running += 1
+        self.quiet.clear()
+        try:
+            yield
+        finally:
+            self.answers_running -= 1
+            if not self.answers_running:
+                self.quiet.set()
+
+    async def _attempt(self, rp_id: str, idx: int, body: bytes, mode: Mode) -> AsyncIterator[dict]:
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
         line = self.target_line(rp_id, idx, mode)
