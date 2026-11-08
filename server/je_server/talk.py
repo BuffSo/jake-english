@@ -127,6 +127,8 @@ class Talks:
         self.ending: dict[str, asyncio.Task] = {}
         # hints being made, one task per Ryan line: a second 「소희 찬스」 waits for the same Claude call
         self.hinting: dict[tuple[str, int], asyncio.Task] = {}
+        # a hint's full sentence's notes being made, one task per line, like `Engine.threes`
+        self.hint_threes: dict[tuple[str, int], asyncio.Task] = {}
 
     async def create(self) -> Roleplay:
         """A new free talk that starts with Ryan's next first question. The turn is taken and kept in one go, so two
@@ -496,10 +498,18 @@ class Talks:
         return await self.engine.voice.say(text, "ryan", "english", urgent=True)
 
     async def hint_three(self, rp_id: str, idx: int) -> ThreeLine:
-        """The full sentence's notes (「읽는 법 보기」), made when first asked and kept, once it was shown."""
-        rp, hint = self._hint(rp_id, idx, full=True)
+        """The full sentence's notes (「읽는 법 보기」), made when first asked and kept, once it was shown. Two asks at
+        once share one Claude call."""
+        _, hint = self._hint(rp_id, idx, full=True)
         if hint.full_three is not None:
             return hint.full_three
+        task = self.hint_threes.get((rp_id, idx))
+        if task is None or task.done():
+            task = _keep(self.hint_threes, (rp_id, idx), asyncio.create_task(self._make_hint_three(rp_id, idx)))
+        return await asyncio.shield(task)
+
+    async def _make_hint_three(self, rp_id: str, idx: int) -> ThreeLine:
+        rp, hint = self._hint(rp_id, idx, full=True)
         async with self.engine.sem:
             three = await self.engine.claude.annotate(hint.full, self.engine.context(rp, idx))
         await self._keep_hint(rp_id, idx, full_three=three)

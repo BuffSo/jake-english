@@ -799,3 +799,16 @@ async def test_end_with_fixes_counts_sohee_chances_too(talks, speech_bytes, fake
     body = await talks.end(rp_id)
     assert body["items"] and body["sohee"] == 2
     assert (await talks.end(rp_id))["sohee"] == 2  # asked again, from the record
+
+
+async def test_two_hint_notes_at_once_ask_claude_once(talks, speech_bytes, fake_claude):
+    rp_id = await replied(talks, speech_bytes)
+    hint = await talks.hint(rp_id, 2)
+    await talks.show_full(rp_id, 2)
+    fake_claude.annotate_gate = asyncio.Event()
+    both = asyncio.gather(talks.hint_three(rp_id, 2), talks.hint_three(rp_id, 2))
+    await until(lambda: [c for c in fake_claude.calls if c[0] == "annotate" and c[1][0] == hint.full])
+    fake_claude.annotate_gate.set()
+    a, b = await both
+    assert a == b and len([c for c in fake_claude.calls if c[0] == "annotate" and c[1][0] == hint.full]) == 1
+    await until(lambda: not talks.hint_threes)
