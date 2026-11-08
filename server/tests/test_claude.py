@@ -397,6 +397,8 @@ def test_aside_prompt_hides_how_the_recording_was_sorted():
 
     p = prompts.ASIDE_SYSTEM
     assert "짚을 곳이 없어요" in p and "대사와 상관없는 말로 들렸어요" in p
+    # live run of the old prompt: 「대사와 상관없는 혼잣말로 들렸어요」; the new one still said 「혼잣말을 하신 것 같네요」
+    assert "혼잣말로 들렸어요" in p and "갈래 이름" in p
     assert "앱에 바라는 것" in p and "약속하지 않아요" in p
 
 

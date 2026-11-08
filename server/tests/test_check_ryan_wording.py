@@ -30,6 +30,8 @@ def test_aside_flags_the_sorting_and_a_missing_retry():
     # phone test 2026-11-08: teacher Ryan told the learner how the server had sorted the recording, and stopped there
     case = next(c for c in cw.ASIDE if c.name == "off app wish")
     bad = "대사와 상관없는 말로 들려서 따로 짚을 곳이 없어요."
-    assert {"names '짚을'", "names '상관없는 말'", "does not ask to try again"} <= set(cw.flags(case, bad, aside=True))
+    assert {"names '짚을'", "names '상관없는'", "does not ask to try again"} <= set(cw.flags(case, bad, aside=True))
+    # the prompt before this fix, live: the sort's own words, which the check first missed
+    assert "names '혼잣말'" in cw.flags(case, "대사와 상관없는 혼잣말로 들렸어요. 한 번 더 해 볼까요?", aside=True)
     good = "그렇군요, 그런 게 있으면 편하겠어요. 지금은 대사를 말해야 다음으로 넘어가요. 다시 해 볼까요?"
     assert cw.flags(case, good, aside=True) == []

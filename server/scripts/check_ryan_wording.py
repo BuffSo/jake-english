@@ -4,7 +4,7 @@ Feedback after a followed line (`Claude.feedback`, the quick model) and teacher 
 writer model) are asked for each case below, `--runs` times, through the server's own `Claude` class. Each answer
 is printed with the rules it broke:
 - a given sound tip left out, or the materials named ("짚을 것", "설명", that there is no tip), or how the recording
-  was sorted ("상관없는 말"); teacher Ryan not ending with a try at the same line
+  was sorted ("상관없는", "혼잣말"); teacher Ryan not ending with a try at the same line
 - the practice called 「역할극」 instead of 「대화」, double quotes (in the model's own answer: the server drops them)
 - a particle after an English word that does not fit how the word ends in Hangul (room이, where가)
 - a pointed word missing, the whole transcript quoted, or the wrong ending (next line / conversation done)
@@ -49,9 +49,10 @@ BATCHIM = {"line": True, "lime": True, "market": True, "marker": False, "room": 
            "far": False, "fall": True, "in": True, "chicken": True, "check": True}
 PARTICLE = re.compile(r"([A-Za-z][A-Za-z']*)(이|가|은|는|을|를|과|와)(?![가-힣])")
 WITH_BATCHIM, WITHOUT = set("이은을과"), set("가는를와")
-# 「짚을」 and 「상관없는 말」: teacher Ryan said how the server sorted a Korean wish about the app (phone, 2026-11-08)
+# 「짚을」, 「상관없는」, 「혼잣말」: teacher Ryan said how the server sorted a recording, in the words of his prompt
+# (phone 2026-11-08: 「대사와 상관없는 말로 들려서 따로 짚을 곳이 없어요」; live: 「…상관없는 혼잣말로 들렸어요」)
 NAMES = ("짚을", "후보", "소리 내는 법", "설명", "자료", "받은", "역할극", "따로 말", "말하지 않을게",
-         "라고 말했", "라고 하셨", "말했는데", "상관없는 말", "대사와 다른 말")
+         "라고 말했", "라고 하셨", "말했는데", "상관없는", "혼잣말", "대사와 다른 말")
 QUOTES = "\"“”"
 
 
