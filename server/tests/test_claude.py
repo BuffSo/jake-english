@@ -450,6 +450,17 @@ def test_aside_prompt_answers_about_an_earlier_point():
     assert "앞서 선생님에게 한 말" not in p
 
 
+def test_aside_prompt_covers_a_try_without_points():
+    # todo 40 2: a try at the line heard as Korean came with no points; between 「only the points given」 and 「never
+    # say there are none」 teacher Ryan read his rules out (「「짚을 것」이 비어 있으니 …」)
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert "받은 짚을 것이 없으면" in p and "대사와 조금 다르게 들렸어요" in p
+    rules = p[p.index("규칙:"):]
+    assert rules.splitlines()[1].startswith("- 답에는 학습자에게 하는 말만 써요")
+
+
 def test_aside_prompt_points_to_skip():
     # spec record-cancel-skip 6: the line can be skipped now, so Ryan says how instead of 「대사를 말해야 넘어가요」
     from je_server import prompts
