@@ -31,10 +31,11 @@ export function KoLine(props: { view: KoView; entry: KoEntry | undefined; onRepl
   return (
     <Pressable onPress={onReplay} style={styles.line}>
       <Tag label="통역" color={colors.sohee} />
-      <Text style={styles.text}>{keepWords(entry.text)}</Text>
-      {/* drawn beside the words, at their last line, so it can bounce: Android cannot move a glyph inside a Text. It
-          used to sit in the text after a no-break space, so it never stood alone on a line (spec play-button-feedback 2) */}
+      {/* before the words, like 「🔊 듣기」: Android cannot move a glyph inside a Text, and beside a wrapped text it sat
+          at the far right of the bubble, away from the words. It used to sit in the text after a no-break space so it
+          never stood alone on a line (spec play-button-feedback 2) */}
       <PlayIcon on={!!playing} style={styles.play} />
+      <Text style={styles.text}>{keepWords(entry.text)}</Text>
     </Pressable>
   );
 }
@@ -45,5 +46,5 @@ const styles = StyleSheet.create({
   line: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 6 },
   // her own color too, not the pronunciation line's (spec korean-translation 2, final review)
   text: { flexShrink: 1, fontSize: 16, color: colors.soheeText, lineHeight: 23 },
-  play: { fontSize: 13, color: colors.sohee, alignSelf: "flex-end", marginBottom: 3 },
+  play: { fontSize: 13, color: colors.sohee, marginTop: 4 },
 });
