@@ -30,6 +30,8 @@ NEAR_MIN = 0.3  # below FOLLOW_MIN but at least this close to the line: a try at
 # the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer
 ASIDES_KEPT = 3
 HANGUL = re.compile(r"[가-힣]")
+ENDS = (".", "?", "!")  # the marks SentenceBuffer cuts a sentence at
+CLOSERS = "」』)]\"'”’"  # closing brackets and quotes a sentence end may sit inside
 # Sohee's sounds made ahead for a pick (todo 13) come after every model sound waiting, which go by line number
 SOHEE_RANK = 1000
 # the longest one of them waits for a recording's answer, so a request that never closes cannot stop them for good
@@ -513,16 +515,20 @@ class Engine:
         error or an empty box, so the learner can try the line again (spec offscript-aside 3)."""
         fixed = self.said("retry_offscript").text
         sent = ""
-        held = ""  # trailing spaces wait for the next piece, so a cut piece can take its period right after the text
+        # trailing spaces wait for the next piece, so a cut piece can take its period right after the text; after a
+        # sentence end they go at once, so SentenceBuffer cuts that sentence for the voice without waiting (todo
+        # teacher-answer-cut 3)
+        held = ""
         try:
             async for delta in text:
                 body = delta.rstrip()
-                if body:
-                    yield held + body
-                    sent += held + body
-                    held = delta[len(body):]
-                else:
+                if not body:
                     held += delta
+                    continue
+                out = held + (delta if body.endswith(ENDS) else body)
+                held = "" if body.endswith(ENDS) else delta[len(body):]
+                yield out
+                sent += out
         except ClaudeUnavailable:
             log.info("aside answer unavailable")
         else:
@@ -532,9 +538,11 @@ class Engine:
         if not sent:
             yield fixed
             return
-        # a cut sentence ends before the fixed phrase, at the marks SentenceBuffer cuts at, so both read and voice
-        # it as two sentences
-        yield ("" if sent.endswith((".", "?", "!")) else ".") + " " + fixed
+        # a cut sentence ends before the fixed phrase, at the marks SentenceBuffer cuts at, so both read and voice it
+        # as two sentences. A piece that already ends one, 「…」 or a mark inside a closing bracket or quote included,
+        # takes no other period (todo teacher-answer-cut 2).
+        ended = sent.rstrip().rstrip(CLOSERS).endswith((*ENDS, "…"))
+        yield ("" if ended else ".") + ("" if sent != sent.rstrip() else " ") + fixed
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
                     timings: dict[str, float], t0: float) -> AsyncIterator[dict]:

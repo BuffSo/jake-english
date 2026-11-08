@@ -167,6 +167,34 @@ async def test_aside_cut_midsentence_ends_it_before_the_fixed_phrase(engine_with
     assert spoken[-2:] == [cut, fixed]
 
 
+@pytest.mark.parametrize(("pieces", "cut"), [(["음, 그건…"], "음, 그건…"),
+                                            (["라이언이 「좋아요.」"], "라이언이 「좋아요.」")])
+async def test_a_cut_piece_already_ending_a_sentence_gets_no_extra_period(engine_with_rp, speech_bytes, fake_whisper,
+                                                                         fake_claude, pieces, cut):
+    # todo teacher-answer-cut 2: 「…」 ends a sentence, and so does 「.」 inside a closing bracket or quote: the fixed
+    # phrase follows without 「….」 or 「.」.」
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Wait, let me try that again."
+    fake_claude.aside_pieces = pieces + ["다음 조각"]  # the last piece never comes
+    fake_claude.aside_fail_after = len(pieces)
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert said(ev) == f"{cut} {engine.said('retry_offscript').text}"
+
+
+async def test_a_piece_ending_its_sentence_is_sent_with_its_space(engine_with_rp, speech_bytes, fake_whisper,
+                                                                  fake_claude):
+    # todo teacher-answer-cut 3: the space after 「.」 was held for the next piece, so the sentence's voice waited for
+    # it; now it goes at once, and a cut after it still leaves one space before the fixed phrase
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Wait, let me try that again."
+    fake_claude.aside_pieces = ["괜찮아요. ", "그런데"]
+    fake_claude.aside_fail_after = 1
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    texts = [e["delta"] for e in ev if e["type"] == "text"]
+    assert texts[0] == "괜찮아요. "
+    assert said(ev) == f"괜찮아요. {engine.said('retry_offscript').text}"
+
+
 async def test_both_transcripts_empty_is_no_speech(engine_with_rp, speech_bytes, fake_whisper):
     engine, rp_id, user_idx = engine_with_rp
     fake_whisper.text = ""
@@ -245,6 +273,7 @@ async def test_auto_transcription_failing_goes_on_in_english(engine_with_rp, spe
     ev = await run(engine, rp_id, user_idx, speech_bytes)
     assert ev[0] == {"type": "heard", "text": "Wait, let me try that again.", "followed": False, "n": 1}
     assert fake_claude.aside_calls[-1]["heard_ko"] is None and said(ev) and ev[-1]["type"] == "done"
+    assert fake_whisper.langs == ["en", "auto"]  # the second transcription was asked for and its failure passed over
 
 
 async def test_auto_transcription_failing_keeps_the_macs_points(engine_with_rp, speech_bytes, fake_whisper,
