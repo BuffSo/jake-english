@@ -2,7 +2,7 @@
 // on the phone it cut off the top of his head (2026-11-05, user). So each picture is drawn at its own ratio inside
 // a clipping box and placed by hand: from the top for the portrait, on the face for the circle. Jake's front
 // picture has the same size and goes in the same circle (2026-11-06).
-import { Image, StyleSheet, View, type ImageSourcePropType } from "react-native";
+import { Image, StyleSheet, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 
 import { FACE_BOX, type Face } from "./faces";
 import { colors } from "./theme";
@@ -12,10 +12,11 @@ const H = 1024;
 
 type Source = ImageSourcePropType;
 
-// From the top of the head to the chest, as wide as the screen allows
-export function RyanPortrait({ source }: { source: Source }) {
+// From the top of the head to the chest, as wide as the screen allows. `style`: the screen's own place for it, such
+// as a margin, or letting it shrink (the first screen).
+export function RyanPortrait({ source, style }: { source: Source; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={styles.portrait}>
+    <View style={[styles.portrait, style]}>
       <Image source={source} style={styles.fullWidth} />
     </View>
   );

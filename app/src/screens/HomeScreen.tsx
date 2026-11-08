@@ -64,12 +64,8 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onTalk, onReview
 
   return (
     <View style={styles.wrap}>
-      {home && (
-        <View style={styles.face}>
-          {/* the front picture stays after Ryan has spoken (2026-11-05 user; it used to turn to the listening one) */}
-          <RyanPortrait source={api.imageSource(home.images.front)} />
-        </View>
-      )}
+      {/* the front picture stays after Ryan has spoken (2026-11-05 user; it used to turn to the listening one) */}
+      {home && <RyanPortrait source={api.imageSource(home.images.front)} style={styles.face} />}
       {home && (
         <>
           {homeLines(home, returning).map((l) => (
@@ -121,7 +117,12 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onTalk, onReview
 const styles = StyleSheet.create({
   // from the top: centring left a wide gap above the picture (2026-11-05, user)
   wrap: { flex: 1, paddingTop: top, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: colors.bg },
-  face: { marginBottom: 16 },
+  // The picture gives way to the three cards (spec free-talk-design 1). At full width it is 400 high on a 360dp
+  // phone, and the lines and cards under it ran past the bottom: on the phone 「복습하기」 showed only its name, under
+  // the gesture bar (2026-11-08). Only the picture shrinks (`flexShrink`; the lines and cards keep their size), and
+  // it keeps its 4:5 shape, so it gets narrower and stays in the middle, framed as before. Where all fits it is as
+  // wide as before. `minHeight`: Ryan stays in sight on a very short screen.
+  face: { marginBottom: 16, flexShrink: 1, minHeight: 120, alignSelf: "center" },
   say: { marginBottom: 8 },
   choices: { marginTop: 14 },
   gap: { height: 12 },
