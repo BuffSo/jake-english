@@ -28,3 +28,21 @@ def test_every_quick_model_has_a_price():
     from je_server.claude import QUICKS
 
     assert {m["model"] for m in QUICKS.values()} <= set(cj.PRICE)
+
+
+def test_every_topic_sends_made_up_recent_situations():
+    # todo 21: the label echo came on the real server, which sends the topic's recent situations; the check sends
+    # ten made-up ones per topic as the server would (store.recent_situations keeps ten)
+    from je_server.topics import TOPICS
+
+    assert all(len(cj.RECENT[t.id]) >= 6 for t in TOPICS)
+
+
+def test_the_model_is_the_recommend_setting_unless_chosen():
+    from types import SimpleNamespace
+
+    from je_server.claude import QUICKS
+
+    s = SimpleNamespace(claude_recommend="sonnet")
+    assert cj.make_claude(object(), s, None).recommender is QUICKS["sonnet"]
+    assert cj.make_claude(object(), s, "haiku").recommender is QUICKS["haiku"]
