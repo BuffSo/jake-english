@@ -113,3 +113,15 @@ def test_a_wav_without_a_textgrid_is_left_out(tmp_path):
     tone(tmp_path / "corpus" / "learner" / "lost.wav")
     out = run_features(tmp_path)
     assert list(out["files"]) == ["tone"]
+
+
+def test_a_file_that_cannot_be_measured_is_listed_failed_and_the_rest_go_on(tmp_path):
+    """One bad TextGrid (here without its phones tier) used to stop the script, so its whole chunk failed every run
+    (todo 20261108_41 1)."""
+    (tmp_path / "out" / "learner").mkdir(parents=True)
+    (tmp_path / "corpus" / "learner").mkdir(parents=True)
+    tone(tmp_path / "corpus" / "learner" / "bad.wav")
+    words_only = TEXTGRID.replace("size = 2", "size = 1").split("    item [2]:")[0]
+    (tmp_path / "out" / "learner" / "bad.TextGrid").write_text(words_only)
+    out = run_features(tmp_path)
+    assert list(out["files"]) == ["tone"] and out["failed"] == ["bad"]
