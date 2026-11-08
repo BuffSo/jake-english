@@ -11,7 +11,16 @@ export type Phase = "loading" | "ryan" | "ready" | "recording" | "evaluating" | 
 // a learner bubble keeps the script line next to what was heard (spec roleplay-practice 2), its line number for
 // 「이 줄 다시」 (9), and the recording of that turn for 「🔊 내 녹음」 (spec three-line-listen 3). Its `text` is ""
 // for a line skipped without a recording: the script only (spec record-cancel-skip 3).
-export type Bubble = { kind: "ryan" | "user" | "feedback"; text: string; idx?: number; script?: string; rec?: TryRef };
+// `skipped`: my line passed with 「건너뛰기」, no recording; its text is empty and only the script shows (spec
+// record-cancel-skip 3)
+export type Bubble = {
+  kind: "ryan" | "user" | "feedback";
+  text: string;
+  idx?: number;
+  script?: string;
+  rec?: TryRef;
+  skipped?: true;
+};
 // Practice: the learner's lines again (mine) or Ryan's lines to follow (shadow), in order. From the end screen it
 // goes back to the end; from a past bubble in the roleplay (one line) it goes back to the roleplay (spec 9).
 // 「이 줄 다시」 is mine with one line. From the saved list (spec review-practice 7) each line may belong to another
@@ -367,7 +376,7 @@ export function reduce(s: State, a: Action): State {
       // the line stays in the conversation as its script, unless a try at it is there already (spec 3); teacher
       // Ryan's answer is not kept, as after 「다시 해 보기」
       const said = s.history.some((b) => b.kind === "user" && b.idx === line.idx);
-      const skipped: Bubble = { kind: "user", text: "", script: line.text, idx: line.idx };
+      const skipped: Bubble = { kind: "user", text: "", script: line.text, idx: line.idx, skipped: true };
       return {
         ...s,
         ...freshTurn,

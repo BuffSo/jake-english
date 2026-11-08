@@ -32,3 +32,14 @@ def test_recommendation_flags():
     assert "odd start" in cq.rec_flags(odd, odd, E, [])
     assert "repeats a listed situation" in cq.rec_flags(KEPT, KEPT, E, ["카페에서 주문하는 상황"])
     assert "MISSED ending" in cq.rec_flags("카페에서 주문하는 연습을 해 봐요.", "카페에서 주문하는 연습을 해 봐요.", E, [])
+
+
+def test_a_repeat_with_another_ending_is_flagged():
+    # todo 28 1: a listed situation said again with another of Jake's endings slipped through
+    seen = ["명동에서 환전소를 묻는 상황을 골라 봤어요."]
+    said = "명동에서 환전소를 묻는 상황을 추천해요."
+    assert "repeats a listed situation" in cq.rec_flags(said, said, E, seen)
+    # a recent situation kept without an ending (typed by the learner) still matches
+    assert "repeats a listed situation" in cq.rec_flags(KEPT, KEPT, E, ["카페에서 주문하는 상황"])
+    # an ending alone has no situation to repeat
+    assert "repeats a listed situation" not in cq.rec_flags(KEPT, KEPT, E, ["상황을 추천해요."])

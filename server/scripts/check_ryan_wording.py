@@ -3,7 +3,7 @@
 Feedback after a followed line (`Claude.feedback`, the quick model) and teacher Ryan's answer (`Claude.aside`, the
 writer model) are asked for each case below, `--runs` times, through the server's own `Claude` class. Each answer
 is printed with the rules it broke:
-- a given sound tip left out, or the materials named ("짚을 것", "설명", that there is no tip), or how the recording
+- a given sound tip left out or said only in half, or the materials named ("짚을 것", "설명", that there is no tip), or how the recording
   was sorted ("상관없는", "혼잣말"); teacher Ryan not ending with a try at the same line
 - the practice called 「역할극」 instead of 「대화」, double quotes (in the model's own answer: the server drops them)
 - a particle after an English word that does not fit how the word ends in Hangul (room이, where가)
@@ -39,7 +39,9 @@ from je_server.models import Frame, Issue  # noqa: E402
 PRICE = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}
 RL = "L은 혀끝이 윗잇몸에 닿지만, R은 혀가 어디에도 닿지 않게 하고 입술을 살짝 동그랗게 모아요."
 FP = "P는 두 입술을 붙였다가 터뜨리지만, F는 윗니를 아랫입술에 살짝 대고 그 틈으로 바람을 길게 내보내요."
-TIP_MARK = {RL: "닿", FP: "아랫입술"}  # a word the reworded tip keeps
+# A word from each half of a tip that the other half does not have: a tip said whole keeps both (todo 20: teacher
+# Ryan said only the R half, and the old mark 「닿」, in both halves, let it through)
+TIP_HALVES = {RL: ("윗잇몸", "동그랗게"), FP: ("터뜨리", "아랫입술")}
 
 # Does the word, written in Hangul, end in a final consonant (받침)? line 라인, room 룸: yes; seventy 세븐티, red 레드: no
 BATCHIM = {"line": True, "lime": True, "market": True, "marker": False, "room": True, "loom": True, "station": True, "then": True, "on": True,
@@ -124,8 +126,12 @@ def flags(case: Case, text: str, aside: bool, raw: str = "") -> list[str]:
     text = " ".join(text.split())
     out = []
     for i in case.issues:
-        if i.explain and TIP_MARK[i.explain] not in text:
-            out.append(f"tip dropped ({i.target})")
+        if i.explain:
+            said = [w in text for w in TIP_HALVES[i.explain]]
+            if not any(said):
+                out.append(f"tip dropped ({i.target})")
+            elif not all(said):
+                out.append(f"tip cut ({i.target})")
         if i.target and i.target not in text:
             out.append(f"word not pointed ({i.target})")
         if i.heard and i.heard not in text:

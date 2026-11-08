@@ -412,6 +412,16 @@ def test_aside_prompt_hides_how_the_recording_was_sorted():
     assert "앱에 바라는 것" in p and "약속하지 않아요" in p
 
 
+def test_aside_prompt_keeps_a_given_tip_whole():
+    # todo 20, live 2026-11-08: given the R and L tip, teacher Ryan said only the R half five times in five, in his
+    # own words; given F and P he once named the material (「소리 내는 법은 …」)
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert "처음부터 끝까지 그대로 말해요" in p and "한쪽 소리만" in p
+    assert '"짚을 것", "소리 내는 법", "받아쓰기"' in p
+
+
 def test_aside_prompt_points_to_skip():
     # spec record-cancel-skip 6: the line can be skipped now, so Ryan says how instead of 「대사를 말해야 넘어가요」
     from je_server import prompts
@@ -614,6 +624,22 @@ async def test_recommend_keeps_words_that_only_look_like_labels(caplog, answer):
     with caplog.at_level(logging.INFO, logger="je_server"):
         assert await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.") == answer
     assert "label" not in caplog.text
+
+
+async def test_every_message_label_is_one_the_server_drops():
+    # todo 28 2: MESSAGE_LABELS is copied by hand from the message; a label renamed there would stop being dropped
+    import re
+
+    from je_server.claude import MESSAGE_LABELS
+
+    usa = get("usa")
+    assert usa.picks  # the topic's list goes along too
+    fake = FakeAnthropic([json.dumps({"request_ko": "공항에서 짐을 찾는 상황을 추천해요."})])
+    await Claude(fake).recommend(["카페에서 주문하는 상황"], ["호텔에서 체크인하는 상황"], usa, "상황을 추천해요.")
+    content = fake.requests[0]["messages"][0]["content"]
+    # a line with a label and its value on it; a heading over a list (「최근 상황:」) has nothing after its colon
+    labels = re.findall(r"^([^\s:-][^:\n]*):[ \t]*\S", content, re.M)
+    assert labels and set(labels) <= set(MESSAGE_LABELS)
 
 
 def test_recommend_system_shows_no_ending_of_its_own():

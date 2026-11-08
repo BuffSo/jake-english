@@ -205,14 +205,10 @@ class Engine:
         record and its tries stay as they are. A list pick plays its script as it is now in the repository; one
         taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
-        if old.pick is not None and old.topic is not None:
-            try:
-                topics.pick(old.topic, old.pick)
-            except KeyError:
-                pass  # taken off the list: copied below
-            else:
-                # outside the try: a KeyError from inside is a bug, not a pick taken off the list (todo 08 1)
-                return await self.create_pick(old.topic, old.pick)
+        # outside any try: a KeyError from inside create_pick is a bug, not a pick taken off the list (todo 08 1);
+        # taken off the list, it is copied below
+        if old.topic is not None and old.pick is not None and topics.listed(old.topic, old.pick) is not None:
+            return await self.create_pick(old.topic, old.pick)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=old.situation, frame=old.frame,
                       lines=[self._current_sounds(_unsettled_dropped(l.model_copy(deep=True))) for l in old.lines],

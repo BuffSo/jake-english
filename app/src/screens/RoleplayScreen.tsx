@@ -9,7 +9,7 @@ import type { SoundQueue } from "../audio/player";
 import { useAnswering } from "../audio/useAnswering";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
-import { createGate, runThenHold, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
+import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
 import { askFirst, canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
@@ -46,6 +46,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const shadow = state.mode === "shadow";
   // one start or stop at a time; the recording is sent and the answer read outside it (`stopThenSend`)
   const gate = useRef(createGate()).current;
+  // a 「취소」 tapped while the mic is still starting, kept for when it is on (todo 26 1)
+  const startCancel = useRef(createStartCancel()).current;
   // false once this screen goes away: set by leave() at once when it leaves the screen (`leavesScreen`), and on
   // unmount. Back from a line practised mid-roleplay keeps the screen, so it stays true there; `epoch` covers that.
   const mounted = useRef(true);
@@ -328,8 +330,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const startRecording = () => (tapHold.on ? undefined : gate.run(doStart));
   const stopRecording = () => stopThenSend(gate, stopRec, sendRec);
   // 「취소」 and 「건너뛰기」 go through the same gate and then hold taps a moment, on this screen and the next one
-  // (spec record-cancel-skip 5)
-  const cancelRecording = () => runThenHold(gate, tapHold, doCancel);
+  // (spec record-cancel-skip 5). While the mic starts the gate is busy: the cancel is kept and done when it is on.
+  const cancelRecording = () => (startCancel.ask() ? undefined : runThenHold(gate, tapHold, doCancel));
   const skipLine = () => runThenHold(gate, tapHold, doSkip);
 
   // 「취소」: the recording is stopped and deleted on the phone, never sent; back to before speaking, in the same mode
@@ -356,12 +358,15 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     const my = epoch.current;
     sounds.clear();
     dispatch({ type: "recordStart" });
-    try {
-      await rec.start(stopRecording);
-      // left while the mic was starting (permission prompt)
-      if (!mounted.current || epoch.current !== my) await rec.discard();
-    } catch {
+    const how = await startKeepingCancel(startCancel, () => rec.start(stopRecording), () => !mounted.current || epoch.current !== my);
+    if (how === "failed") dispatch({ type: "recordCancel" });
+    // left while the mic was starting (permission prompt)
+    else if (how === "left") await rec.discard();
+    // 「취소」 tapped while the mic was starting: thrown away now that it is on, as `doCancel` does (todo 26 1)
+    else if (how === "cancelled") {
+      await rec.discard();
       dispatch({ type: "recordCancel" });
+      tapHold.start();
     }
   }
 
@@ -494,7 +499,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             {star?.saved && !opened && <StarMark />}
           </Text>
           {/* a line skipped without a recording has its script only (spec record-cancel-skip 3) */}
-          {b.text !== "" && (
+          {!b.skipped && (
             <View style={styles.heardRow}>
               <Text style={[styles.heardLine, styles.shrink]}>{keepWords(`들린 말: ${b.text}`)}</Text>
               {opened && b.rec && (
