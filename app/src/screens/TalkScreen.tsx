@@ -32,6 +32,7 @@ import {
   isCurrent,
   lineSounds,
   mayListenTalk,
+  ryanSpeaking,
   talkInitial,
   talkMessageIsError,
   talkReduce,
@@ -47,6 +48,7 @@ import { KoButton, KoLine } from "../ui/Interpret";
 import { keepWords } from "../ui/keepWords";
 import { Named } from "../ui/Named";
 import { PlayLabel } from "../ui/PlayIcon";
+import { SpeakingBars } from "../ui/SpeakingBars";
 import { SoonEnds, StopButton } from "../ui/StopButton";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { koTag, useInterpret } from "../ui/useInterpret";
@@ -87,6 +89,8 @@ export function TalkScreen({ sounds, onHome }: Props) {
   // past bubbles show only what was said; one opens its buttons on a tap, by line (spec 2, review-practice 8)
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [threes, setThrees] = useState<Record<number, ThreeLine | "loading">>({});
+  // which Ryan bubbles show their English words: closed for a new bubble, opened per bubble with 「자막 보기」
+  const [subOpen, setSubOpen] = useState<Record<number, boolean>>({});
   const [notesOpen, setNotesOpen] = useState<Record<number, boolean>>({});
   // which Ryan lines show Sohee's line; the ref is set at the tap, before the render, since a sound already made plays
   // at once (as on the roleplay screen)
@@ -184,6 +188,7 @@ export function TalkScreen({ sounds, onHome }: Props) {
     const onEvent = (e: TalkEvent) => {
       if (!current()) return;
       if (e.type === "audio") sounds.enqueue(api.audioSource(e.key), talkTag(e.key));
+      // Ryan's English voice plays; the words on screen are the app's Korean (`talkErrorText`)
       if (e.type === "error" && e.say?.audio) sounds.enqueue(api.audioSource(e.say.audio));
       act({ type: "event", turn, e });
     };
@@ -307,27 +312,40 @@ export function TalkScreen({ sounds, onHome }: Props) {
     setOpenRow(next);
   }
 
+  // 「자막 보기」 / 「자막 접기」 on one bubble; the reading notes fold with the words, and a past bubble's own row
+  // closing leaves its subtitles as they are
+  function toggleSub(idx: number) {
+    setSubOpen((o) => ({ ...o, [idx]: !o[idx] }));
+  }
+
   // Ryan's English line, the sentences I did not hear when I cut in weak (spec 2). The line he says now has its buttons
   // out; a past one opens them on a tap. The buttons are the roleplay's, in its order.
   function ryanBubble(b: Of<"ryan">, isNow: boolean) {
-    const opened = isNow || openRow === String(b.idx);
+    const speaking = isNow && ryanSpeaking(s, b.idx);
+    // the buttons: out on his current line once he has finished, on a tap for a past one; none while he speaks
+    const opened = !speaking && (isNow || openRow === String(b.idx));
+    const subs = subOpen[b.idx] === true;
     const three = threes[b.idx];
     const body = (
       <>
-        <Text style={styles.ryanText}>
-          {b.parts.length === 0
-            ? b.text
-            : b.parts.map((p, i) => (
-                <Text key={i} style={b.heard !== null && i >= b.heard ? styles.unheard : undefined}>
-                  {i > 0 ? " " : ""}
-                  {p.text}
-                </Text>
-              ))}
-        </Text>
-        {opened && notesOpen[b.idx] && three === "loading" && (
+        {subs && !speaking ? (
+          <Text style={styles.ryanText}>
+            {b.parts.length === 0
+              ? b.text
+              : b.parts.map((p, i) => (
+                  <Text key={i} style={b.heard !== null && i >= b.heard ? styles.unheard : undefined}>
+                    {i > 0 ? " " : ""}
+                    {p.text}
+                  </Text>
+                ))}
+          </Text>
+        ) : (
+          <HiddenWords moving={speaking && s.phase !== "waiting"} />
+        )}
+        {opened && subs && notesOpen[b.idx] && three === "loading" && (
           <Text style={common.sub}>{keepWords("세 줄을 만들고 있어요…")}</Text>
         )}
-        {opened && notesOpen[b.idx] && three && three !== "loading" && <ThreeLineView three={three} />}
+        {opened && subs && notesOpen[b.idx] && three && three !== "loading" && <ThreeLineView three={three} />}
         {opened && (
           <KoLine
             view={koViewAt(b.idx)}
@@ -339,15 +357,20 @@ export function TalkScreen({ sounds, onHome }: Props) {
         {opened && (
           <View style={styles.links}>
             <InRowButton
-              label="듣기"
+              label={isNow ? "다시 듣기" : "듣기"}
               playing={playingTag === bubbleTag(b.idx)}
               onPress={() => playLine(b)}
               dim={!listenOk}
               textStyle={styles.link}
             />
-            <Pressable onPress={() => toggleNotes(b.idx)} hitSlop={8}>
-              <Text style={styles.link}>{notesOpen[b.idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
+            <Pressable onPress={() => toggleSub(b.idx)} hitSlop={8}>
+              <Text style={styles.link}>{subs ? "자막 접기" : "자막 보기 ›"}</Text>
             </Pressable>
+            {subs && (
+              <Pressable onPress={() => toggleNotes(b.idx)} hitSlop={8}>
+                <Text style={styles.link}>{notesOpen[b.idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
+              </Pressable>
+            )}
             <KoButton view={koViewAt(b.idx)} onPress={() => toggleKo(b.idx)} />
           </View>
         )}
@@ -425,11 +448,11 @@ export function TalkScreen({ sounds, onHome }: Props) {
         {s.phase === "waiting" && s.pending === "" && (
           <Waiting who="ryan" text={keepWords("라이언이 듣고 있어요")} onShow={toEnd} />
         )}
-        {/* Ryan's answer as it is written, before it is his line: no buttons yet */}
+        {/* Ryan's answer as it is written, before it is his line: the moving bars only, no words and no buttons */}
         {s.pending !== "" && (
           <Named part="ryan">
             <View style={[styles.bubble, styles.ryan]}>
-              <Text style={styles.ryanText}>{s.pending}</Text>
+              <HiddenWords moving />
             </View>
           </Named>
         )}
@@ -467,7 +490,18 @@ export function TalkScreen({ sounds, onHome }: Props) {
   );
 }
 
+// the bubble with its words hidden: the bars and a gray note (spec free-talk-design 9)
+function HiddenWords({ moving }: { moving: boolean }) {
+  return (
+    <View style={styles.hidden}>
+      <SpeakingBars moving={moving} />
+      <Text style={[styles.hint, { marginTop: 0 }]}>{keepWords(moving ? "라이언이 말하는 중" : "자막 숨김")}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  hidden: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 28 },
   wrap: { flex: 1, backgroundColor: colors.bg, paddingTop: top },
   header: { paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#E9ECEF" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
