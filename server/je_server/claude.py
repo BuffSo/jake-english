@@ -67,41 +67,59 @@ JAKE_ENDINGS: tuple[tuple[str, int], ...] = (
 
 
 def pick_ending(turned_down: Sequence[str], rng: random.Random | None = None) -> str:
-    """One of JAKE_ENDINGS by weight, but not the ending of the last suggestion just turned down (the app sends the
-    latest last), so 「다른 걸로요」 again and again does not hear the same ending twice in a row."""
-    last = turned_down[-1].strip() if turned_down else ""
-    left = [(e, w) for e, w in JAKE_ENDINGS if not last.endswith(e)]
+    """One of JAKE_ENDINGS by weight, but not the one heard at the end of the last suggestion just turned down (the
+    app sends the latest last), so 「다른 걸로요」 again and again does not hear the same ending twice in a row."""
+    heard = heard_ending(turned_down[-1]) if turned_down else None
+    left = [(e, w) for e, w in JAKE_ENDINGS if e != heard]
     return (rng or random).choices([e for e, _ in left], weights=[w for _, w in left])[0]
 
 
-def _ending_at_end(ending: str) -> re.Pattern[str]:
-    """The ending at the end of a sentence, with or without its spaces."""
-    return re.compile(r"\s*" + r"\s*".join(re.escape(c) for c in ending if not c.isspace()) + r"\s*$")
+# How long the tail after the last 상황 may be and still be an ending, in letters without spaces and end marks: the
+# longest ending the server has known, the old 「으로 연습해 보면 어때요」, is 10. 「…상황에서 주문하는 연습을 해 볼까요?」
+# (13) has 상황 near the front only, and its tail is the situation itself.
+ENDING_TAIL_MAX = 10
+END_MARKS = ".?!~…"
+SITUATION = "상황"
 
 
-# Endings a suggestion may come back with: Jake's three and the one from before them. Real Haiku (2026-11-08) wrote
-# 「추천해요」 for 「골라 봤어요」 4 times in 21, after turned-down sentences ending so, and once lost a space in one;
-# in a second run it put 「…상황을 추천해요.」 before the given ending 4 times in 21.
-KNOWN_ENDINGS = tuple(_ending_at_end(e) for e in (*(e for e, _ in JAKE_ENDINGS), "상황으로 연습해 보면 어때요?"))
+def _letters(tail: str) -> str:
+    return "".join(c for c in tail if not c.isspace() and c not in END_MARKS)
 
 
-def _known_at_end(text: str) -> re.Match[str] | None:
-    for known in KNOWN_ENDINGS:
-        if m := known.search(text):
-            return m
-    return None
-
-
-def swap_ending(text: str, ending: str) -> str | None:
-    """`text` with every known ending at its end (KNOWN_ENDINGS, one or more) taken off and `ending` put on once, or
-    None when it does not end in one or nothing comes before it. The clause before 상황 fits every ending, so only
-    the ending changes."""
-    stem = text
-    while m := _known_at_end(stem):
-        stem = stem[:m.start()]
-    if stem == text or not stem.strip():
+def _ending_start(text: str) -> int | None:
+    """Where the ending at the end of `text` starts: its last 상황, when what follows is short and ends in 요. Not only
+    Jake's three: after the merge (2026-11-08) Haiku mixed two into 「…상황을 연습해 볼까요?」, and real runs have lost
+    a space or the end mark."""
+    at = text.rfind(SITUATION)
+    if at < 0:
         return None
-    return f"{stem.strip()} {ending}"
+    letters = _letters(text[at + len(SITUATION):])
+    return at if letters.endswith("요") and len(letters) <= ENDING_TAIL_MAX else None
+
+
+def strip_endings(text: str) -> str | None:
+    """The situation before the ending at the end of `text`, with every ending there taken off (Haiku has doubled
+    them) and a 상황 left at its end too (「…묻는 상황 상황을 골라 봤어요.」). None when `text` does not end in an
+    ending, empty when nothing comes before it. The clause before 상황 fits every ending, so the server can put the
+    given one on."""
+    at = _ending_start(text)
+    if at is None:
+        return None
+    stem = text[:at]
+    while (at := _ending_start(stem)) is not None:
+        stem = stem[:at]
+    return re.sub(rf"(?:[\s,]*{SITUATION})*[\s,]*$", "", stem).strip()
+
+
+def heard_ending(text: str) -> str | None:
+    """The one of JAKE_ENDINGS a learner hears at the end of `text`: the one whose last word ends the ending there,
+    spaces and end marks aside, so a mixed 「…상황을 연습해 볼까요?」 is heard as 「…상황으로 연습해 볼까요?」. None for
+    any other ending (the old 「…어때요?」)."""
+    at = _ending_start(text)
+    if at is None:
+        return None
+    letters = _letters(text[at:])
+    return next((e for e, _ in JAKE_ENDINGS if letters.endswith(_letters(e.split()[-1]))), None)
 
 
 class ClaudeUnavailable(Exception):
@@ -269,10 +287,13 @@ class Claude:
         text = (data or {}).get("request_ko", "").strip() if isinstance(data, dict) else ""
         if not text:
             raise ClaudeUnavailable("empty recommendation")
-        # no second call: put the given ending on in place of known ones, say anything else as it came
-        if (swapped := swap_ending(text, ending)) is None:
+        # no second call: put the given ending on in place of the one there, say anything else as it came
+        stem = strip_endings(text)
+        if stem is None:
             log.warning("recommendation did not keep the given ending")
-        elif swapped != text:
+        elif not stem:
+            log.warning("recommendation has no situation before its ending")
+        elif (swapped := f"{stem} {ending}") != text:
             log.info("recommendation ending swapped")
             text = swapped
         return text

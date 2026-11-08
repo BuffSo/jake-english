@@ -435,6 +435,19 @@ def test_pick_ending_skips_the_last_turned_down_ending():
         assert ending not in got and len(got) == 2
 
 
+@pytest.mark.parametrize("down, heard", [
+    ("카페에서 주문하는 상황을 추천해요", "상황을 추천해요."),
+    ("카페에서 주문하는 상황을 추천해요!", "상황을 추천해요."),
+    ("카페에서 주문하는 상황을추천해요.", "상황을 추천해요."),
+    # a mixed ending ends in 「볼까요」 as the third one does: the learner hears that one
+    ("호텔에서 수건을 더 달라고 하는 상황을 연습해 볼까요?", "상황으로 연습해 볼까요?"),
+])
+def test_pick_ending_knows_an_ending_without_its_mark(down, heard):
+    rng = random.Random(11)
+    got = {pick_ending([down], rng) for _ in range(300)}
+    assert heard not in got and len(got) == 2
+
+
 def test_pick_ending_any_after_an_old_form():
     # an app or a record from before 2026-11-08 sends the old 「…어때요?」 sentence: it matches no ending
     rng = random.Random(5)
@@ -456,10 +469,10 @@ async def test_recommend_passes_the_ending():
 async def test_recommend_keeps_an_answer_with_an_unknown_ending(caplog):
     # no second call for a missed ending: an ending the server does not know is said as it came, and the log notes
     # it without the sentence
-    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황이에요."})])
+    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 연습을 해 봐요."})])
     with caplog.at_level(logging.WARNING, logger="je_server"):
         text = await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.")
-    assert text == "카페에서 주문하는 상황이에요." and len(fake.requests) == 1
+    assert text == "카페에서 주문하는 연습을 해 봐요." and len(fake.requests) == 1
     assert "ending" in caplog.text and "카페" not in caplog.text
 
 
@@ -474,6 +487,17 @@ async def test_recommend_keeps_an_answer_with_an_unknown_ending(caplog):
     ("공항에서 짐을 찾는 상황을 추천해요. 상황으로 연습해 볼까요?", "상황으로 연습해 볼까요?",
      "공항에서 짐을 찾는 상황으로 연습해 볼까요?"),
     ("공항에서 짐을 찾는 상황을 추천해요. 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
+    # after the merge (2026-11-08) an ending mixed of two came back and was said as it came, so 「볼까요」 was heard
+    # twice in a row: the short tail after the last 상황 is the ending, whatever it is
+    ("호텔에서 수건을 더 달라고 하는 상황을 연습해 볼까요?", "상황을 골라 봤어요.",
+     "호텔에서 수건을 더 달라고 하는 상황을 골라 봤어요."),
+    ("카페에서 주문하는 상황이에요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+    # no end mark, or another one
+    ("카페에서 주문하는 상황을 추천해요", "상황을 골라 봤어요.", "카페에서 주문하는 상황을 골라 봤어요."),
+    ("카페에서 주문하는 상황을 추천해요!", "상황으로 연습해 볼까요?", "카페에서 주문하는 상황으로 연습해 볼까요?"),
+    # the example's 상황 kept before the ending: taken off, even when the ending is the given one
+    ("공항에서 짐을 찾는 상황 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
+    ("공항에서 짐을 찾는 상황, 상황을 추천해요.", "상황을 추천해요.", "공항에서 짐을 찾는 상황을 추천해요."),
 ])
 async def test_recommend_swaps_a_known_ending_for_the_given_one(caplog, answer, ending, said):
     # the clause before 상황 fits every ending, so the server swaps only the ending: still one call
@@ -491,10 +515,21 @@ async def test_recommend_logs_nothing_when_the_ending_is_kept(caplog):
     assert text == "공항에서 짐을 찾는 상황을 추천해요." and "ending" not in caplog.text
 
 
-async def test_recommend_keeps_an_answer_that_is_only_an_ending():
-    # nothing before the ending: no situation to keep, so the answer goes as it came
+async def test_recommend_keeps_an_answer_that_is_only_an_ending(caplog):
+    # nothing before the ending: no situation to keep, so the answer goes as it came, and the log says so
     fake = FakeAnthropic([json.dumps({"request_ko": "상황을 추천해요."})])
-    assert await Claude(fake).recommend([], [], OTHER, "상황을 골라 봤어요.") == "상황을 추천해요."
+    with caplog.at_level(logging.WARNING, logger="je_server"):
+        assert await Claude(fake).recommend([], [], OTHER, "상황을 골라 봤어요.") == "상황을 추천해요."
+    assert "no situation" in caplog.text and "did not keep" not in caplog.text
+
+
+async def test_recommend_keeps_a_long_tail_after_situation(caplog):
+    # 상황 only near the front: what follows it is longer than any ending, so the sentence is said as it came
+    s = "카페 상황에서 주문하는 연습을 해 볼까요?"
+    fake = FakeAnthropic([json.dumps({"request_ko": s})])
+    with caplog.at_level(logging.WARNING, logger="je_server"):
+        assert await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.") == s
+    assert "did not keep" in caplog.text
 
 
 def test_recommend_system_shows_no_ending_of_its_own():
