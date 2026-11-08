@@ -315,15 +315,16 @@ class Claude:
 
     # --- Sohee chance ---------------------------------------------------------------------------
 
-    async def hint(self, conversation: list[dict]) -> Hint:
-        """Sohee's hint for Ryan's last line in `conversation` (`hints.conversation`, spec free-talk-design 9). The
-        learner waits for it, so it fails fast; asked once more when the Mac's checks drop the answer (a full sentence
-        that does not start with an opener, too many words)."""
+    async def hint(self, conversation: list[dict], ryan: str = "") -> Hint:
+        """Sohee's hint for Ryan's last line in `conversation` (`hints.conversation`, spec free-talk-design 9); `ryan`
+        is that line, for the check on openers that repeat it. The learner waits for it, so it fails fast; asked once
+        more when the Mac's checks drop the answer (a full sentence that does not start with an opener, too many
+        words, fewer than two openers that do not repeat him)."""
         body = json.dumps({"대화": conversation}, ensure_ascii=False)
         t0 = time.perf_counter()
         for tries in range(1, HINT_TRIES + 1):
             hint = hints.check(await self._json(self.hinter, prompts.HINT_SYSTEM, body, prompts.HINT_SCHEMA, 400,
-                                                live=True))
+                                                live=True), ryan)
             if hint is not None:
                 log.info("hint: %d tries, %.1fs", tries, time.perf_counter() - t0)
                 return hint

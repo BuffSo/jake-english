@@ -493,7 +493,7 @@ class Talks:
     async def _make_hint(self, rp_id: str, idx: int) -> Hint:
         t0 = time.perf_counter()
         rp, line = self._reply(rp_id, idx)
-        hint = await self.engine.claude.hint(hints.conversation(rp, idx))
+        hint = await self.engine.claude.hint(hints.conversation(rp, idx), line.text)
         await self.engine.update_line(rp_id, idx, line.text, hint=hint)
         # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
         log.info("hint %s/%d starters=%d total=%.2f", rp_id, idx, len(hint.starters), time.perf_counter() - t0)

@@ -19,6 +19,11 @@ DOTS = "…"
 QUOTES_ANYWHERE = str.maketrans("", "", "\"“”「」『』")
 QUOTES_AT_ENDS = "'‘’"
 _TRAILING_DOTS = re.compile(r"\s*(?:\.\.\.|…)$")
+_WORD = re.compile(r"[a-z0-9']+")
+# an opener of this many words or more found word for word in Ryan's line says his words back, not an answer (spec 9
+# 「첫마디가 라이언의 말을 그대로 되풀이하거나」); shorter ones (「I usually…」 to 「What do you usually do?」) are how
+# an answer starts
+REPEAT_WORDS = 3
 UNSHOWN = ("full", "full_three")  # what a hint's answer to the app leaves out until 「전체 문장 보기」
 
 
@@ -32,6 +37,18 @@ def _fold(text: str) -> str:
     return text.replace("’", "'").lower()
 
 
+def _words(text: str) -> list[str]:
+    return _WORD.findall(_fold(text))
+
+
+def _repeats(starter: str, ryan: list[str]) -> bool:
+    """Whether the opener (with its …) is `REPEAT_WORDS` or more words found in a row in Ryan's line, case and
+    punctuation aside."""
+    said = _words(starter[: -len(DOTS)])
+    n = len(said)
+    return n >= REPEAT_WORDS and any(ryan[i:i + n] == said for i in range(len(ryan) - n + 1))
+
+
 def _starter(text: str) -> str | None:
     """An opener with its dots as one …, or None when it breaks a rule."""
     s = _TRAILING_DOTS.sub(DOTS, _tidy(text))
@@ -40,9 +57,10 @@ def _starter(text: str) -> str | None:
     return s if STARTER_WORDS[0] <= len(s[: -len(DOTS)].split()) <= STARTER_WORDS[1] else None
 
 
-def check(data: object) -> Hint | None:
+def check(data: object, ryan: str = "") -> Hint | None:
     """The hint in Claude's answer (prompts.HINT_SCHEMA), tidied, or None when it breaks a rule: then it is asked
-    again (`Claude.hint`)."""
+    again (`Claude.hint`). `ryan`: his line the hint is for; an opener that repeats it is dropped (`_repeats`), and
+    fewer than two left is a rule broken."""
     if not isinstance(data, dict):
         return None
     meaning, raw, full = data.get("meaning_ko"), data.get("starters"), data.get("full")
@@ -53,14 +71,19 @@ def check(data: object) -> Hint | None:
     starters = [_starter(s) for s in raw[: STARTERS[1]]]
     if len(starters) < STARTERS[0] or None in starters:
         return None
+    heard = _words(ryan)
+    starters = [s for s in starters if not _repeats(s, heard)]
+    if len(starters) < STARTERS[0]:
+        return None
     meaning, full = _tidy(meaning), _tidy(full)
     if not HANGUL.search(meaning) or len(meaning) > MEANING_MAX:
         return None
     if HANGUL.search(full) or len(full.split()) > FULL_WORDS:
         return None
-    # the opener without its … and a comma before it (「Not really,…」 → 「Not really. I was busy.」)
+    # the opener without its … and a comma before it (「Not really,…」 → 「Not really. I was busy.」), as whole words:
+    # 「Yes, I…」 does not start 「Yes, it was fun.」 (final review)
     stems = [_fold(s[: -len(DOTS)].rstrip().rstrip(",").rstrip()) for s in starters]
-    if not any(_fold(full).startswith(stem) for stem in stems):
+    if not any(re.match(re.escape(stem) + r"(?![a-z0-9'])", _fold(full)) for stem in stems):
         return None
     return Hint(meaning_ko=meaning, starters=starters, full=full)
 

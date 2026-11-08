@@ -58,13 +58,14 @@ def conversation(turns: list[str]) -> list[dict]:
     return [{"말한 사람": "라이언" if i % 2 == 0 else "학습자", "말": t} for i, t in enumerate(turns)]
 
 
-def flags(data: dict | None) -> list[str]:
-    """The rules a hint broke: no JSON, `hints.check` dropping it, a full sentence that starts with none of the
-    openers (counted apart from the check, which drops it for other reasons too)."""
+def flags(data: dict | None, ryan: str = "") -> list[str]:
+    """The rules a hint broke: no JSON, `hints.check` dropping it (given Ryan's line `ryan`, as the server does), a
+    full sentence that starts with none of the openers (counted apart from the check, which drops it for other reasons
+    too)."""
     if not isinstance(data, dict):
         return ["no json"]
     out = []
-    if hints.check(data) is None:
+    if hints.check(data, ryan) is None:
         out.append("check")
     stems = [str(s).replace("…", "").strip().rstrip(",").strip().lower() for s in data.get("starters", [])]
     full = str(data.get("full", "")).lower()
@@ -104,7 +105,7 @@ async def main() -> None:
             order = list(MODELS) if (c + run) % 2 == 0 else list(reversed(MODELS))
             for m in order:
                 r = await ask(client, MODELS[m], turns)
-                f = flags(r["data"])
+                f = flags(r["data"], turns[-1])
                 s = stats[m]
                 s["t"].append(r["time"])
                 s["cost"] += r["cost"]

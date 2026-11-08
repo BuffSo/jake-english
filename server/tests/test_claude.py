@@ -873,6 +873,18 @@ async def test_hint_asks_again_once_when_the_first_is_bad():
     assert len(fake.requests) == 2
 
 
+async def test_hint_asks_again_when_openers_repeat_ryans_line():
+    from je_server.models import Hint
+
+    ryan = HINT_TALK[-1]["말"]
+    # 「usually do on weekends」 is his words back: one opener left (spec 9), so it is asked again
+    bad = {**GOOD_HINT, "starters": ["Usually do on weekends…", "I usually…"]}
+    fake = FakeAnthropic([json.dumps(bad), json.dumps(GOOD_HINT)])
+    assert await Claude(fake).hint(HINT_TALK, ryan) == Hint(**GOOD_HINT) and len(fake.requests) == 2
+    fake = FakeAnthropic([json.dumps(bad)])
+    assert await Claude(fake).hint(HINT_TALK) == Hint(**bad)  # no Ryan line given: nothing to compare with
+
+
 async def test_hint_log_has_tries_and_time_only(caplog):
     caplog.set_level(logging.INFO, logger="je_server")
     await Claude(FakeAnthropic([json.dumps(GOOD_HINT)])).hint(HINT_TALK)

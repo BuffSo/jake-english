@@ -626,6 +626,8 @@ async def test_hint_is_made_once_and_kept_on_the_line(talks, engine, speech_byte
     assert hint == fake_claude.hint_value
     assert engine.load(rp_id).lines[2].hint == hint
     assert fake_claude.hint_calls == [hints.conversation(engine.load(rp_id), 2)]
+    # his line, for the Mac's check on openers that repeat it (spec 9)
+    assert fake_claude.hint_ryans == [engine.load(rp_id).lines[2].text]
     assert await talks.hint(rp_id, 2) == hint and len(fake_claude.hint_calls) == 1
     assert (await talks.hint(rp_id, 0)) == hint  # Ryan's first question takes one too
     assert fake_claude.hint_calls[1] == hints.conversation(engine.load(rp_id), 0)

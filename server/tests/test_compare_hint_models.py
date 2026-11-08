@@ -33,6 +33,12 @@ def test_rule_break_the_check_catches_is_flagged():
     assert ch.flags(bad) == ["check"]
 
 
+def test_check_is_given_ryans_line():
+    # an opener that repeats his words, then one left: the server's check drops it (spec 9)
+    h = {**GOOD, "starters": ["Plans for this weekend…", "Not really,…"], "full": "Not really. I was busy."}
+    assert ch.flags(h) == [] and ch.flags(h, "Any plans for this weekend?") == ["check"]
+
+
 def test_opener_comma_before_dots_still_starts_the_full_sentence():
     h = {**GOOD, "starters": ["Not really,…", "Yes, I do…"], "full": "Not really. I was busy."}
     assert ch.flags(h) == []

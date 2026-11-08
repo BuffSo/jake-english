@@ -66,6 +66,37 @@ def test_check_drops_a_bad_hint(bad):
     assert hints.check(bad) is None
 
 
+@pytest.mark.parametrize("starters, bad, good", [
+    (["Yes, I…", "Not really,…"], "Yes, it was fun.", "Yes, I had fun."),  # 「Yes, I」 is not 「Yes, it」
+    (["I go…", "Not really,…"], "I got home late.", "I go home late."),
+])
+def test_check_needs_the_full_sentence_to_start_with_a_whole_opener(starters, bad, good):
+    # final review (T3 m1): the second step must match the first (spec 9)
+    assert hints.check(answer(starters=starters, full=bad)) is None
+    assert hints.check(answer(starters=starters, full=good)) is not None
+
+
+RYAN = "Do you have any plans for this weekend?"
+
+
+def test_check_drops_an_opener_that_repeats_ryans_words():
+    # spec 9: an opener of three or more words found in Ryan's line, case aside, is his words back, not an answer
+    starters = ["Plans for this weekend…", "Not really,…", "Yes, I'm going to…"]
+    got = hints.check(answer(starters=starters, full="Not really, I'll just rest."), ryan=RYAN)
+    assert got is not None and got.starters == ["Not really,…", "Yes, I'm going to…"]
+    # no Ryan line given (or a short opener): nothing dropped
+    assert hints.check(answer(starters=starters, full="Not really, I'll just rest.")).starters == starters
+    assert hints.check(answer(starters=["Any plans…", "Not really,…"], full="Not really."), ryan=RYAN) is not None
+
+
+def test_check_is_a_retry_when_repeats_leave_fewer_than_two_openers():
+    starters = ["Any plans for this…", "Not really,…"]
+    assert hints.check(answer(starters=starters, full="Not really, I'll just rest."), ryan=RYAN) is None
+    # the full sentence must start with an opener that is kept
+    starters = ["For this weekend…", "Not really,…", "Yes, I'm going to…"]
+    assert hints.check(answer(starters=starters, full="For this weekend, I will rest."), ryan=RYAN) is None
+
+
 def test_check_keeps_the_first_three_starters():
     got = hints.check(answer(starters=[*STARTERS, "저는…"]))
     assert got is not None and got.starters == STARTERS

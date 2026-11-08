@@ -175,6 +175,7 @@ class FakeClaude:
         self.fix_items: list[dict] = []  # what fixes() picks
         self.fix_gate = None  # an asyncio.Event to hold fixes until set
         self.hint_calls: list[list[dict]] = []  # the conversation each hint() was given
+        self.hint_ryans: list[str] = []  # Ryan's line each hint() was given
         self.hint_gate = None  # an asyncio.Event to hold hint until set
         self.hint_value = Hint(meaning_ko="오늘 무엇을 했는지 물어요.", starters=["I went to…", "Not much. I just…"],
                                full="I went to the park with my dog.")
@@ -262,8 +263,9 @@ FakeClaude.fixes = _fixes_method()
 
 
 def _hint_method():
-    async def hint(self, conversation):
+    async def hint(self, conversation, ryan=""):
         self.hint_calls.append(conversation)
+        self.hint_ryans.append(ryan)
         self._maybe_fail()
         if self.hint_gate is not None:
             await self.hint_gate.wait()
