@@ -168,3 +168,29 @@ describe("tags", () => {
     expect(q.nowTag()).toEqual({ tag: "rec:2", since: 2000 });
   });
 });
+
+// phone check 2026-11-08: a recording runs up to 55 s; at 30 s the watchdog passed it while it still played, so its 🔊
+// stopped bouncing and a tap on it played it again instead of stopping it
+test("a sound that keeps playing is not passed by the watchdog", () => {
+  const q = new SoundQueue();
+  q.enqueue("long", "rec:1");
+  for (let s = 0; s < 50; s++) {
+    jest.advanceTimersByTime(1000);
+    mockFinish.forEach((cb) => (cb as (st: { didJustFinish: boolean; playing: boolean }) => void)({ didJustFinish: false, playing: true }));
+  }
+  expect(q.isPlaying()).toBe(true);
+  expect(q.nowTag().tag).toBe("rec:1");
+  finish();
+  expect(q.nowTag().tag).toBeNull();
+});
+
+test("a late playing report during a pause does not stretch the pause", () => {
+  const q = new SoundQueue();
+  q.enqueue("a", "first:1");
+  q.enqueuePause(600, "first:1");
+  q.enqueue("b", "first:1");
+  finish();
+  mockFinish.forEach((cb) => (cb as (st: { didJustFinish: boolean; playing: boolean }) => void)({ didJustFinish: false, playing: true }));
+  jest.advanceTimersByTime(600);
+  expect(mockPlayed).toEqual(["a", "b"]);
+});

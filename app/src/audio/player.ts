@@ -16,6 +16,8 @@ export class SoundQueue {
   private player = createAudioPlayer(null);
   private queue: Item[] = [];
   private playing = false;
+  // a sound plays now, not a pause between two: only a sound's progress may hold the watchdog off
+  private sounding = false;
   private idle: (() => void)[] = [];
   private watchdog: ReturnType<typeof setTimeout> | undefined;
   // screens that wait for quiet before offering a button that would cut a speaker off (spec roleplay-practice 9)
@@ -25,6 +27,9 @@ export class SoundQueue {
 
   constructor() {
     this.player.addListener("playbackStatusUpdate", (status) => {
+      // still playing: not stuck, however long it is. A recording runs up to 55 s, and at 30 s the watchdog passed it
+      // while it played on, so its 🔊 stopped bouncing (phone check, spec play-button-feedback 1)
+      if (status.playing && this.sounding && !status.didJustFinish) this.arm();
       if (status.didJustFinish) this.next();
     });
   }
@@ -67,6 +72,7 @@ export class SoundQueue {
     this.idle = [];
     clearTimeout(this.watchdog);
     this.player.pause();
+    this.sounding = false;
     this.setPlaying(false);
     this.setTag(null);
   }
@@ -94,9 +100,16 @@ export class SoundQueue {
     this.listeners.forEach((cb) => cb(v));
   }
 
+  // a sound that never reports its end, nor any progress, is passed after STUCK_MS
+  private arm(): void {
+    clearTimeout(this.watchdog);
+    this.watchdog = setTimeout(() => this.next(), STUCK_MS);
+  }
+
   private next(): void {
     clearTimeout(this.watchdog);
     const item = this.queue.shift();
+    this.sounding = item !== undefined && "src" in item;
     this.setTag(item?.tag ?? null);
     if (!item) {
       this.setPlaying(false);
@@ -112,6 +125,6 @@ export class SoundQueue {
     }
     this.player.replace(item.src);
     this.player.play();
-    this.watchdog = setTimeout(() => this.next(), STUCK_MS);
+    this.arm();
   }
 }
