@@ -142,11 +142,12 @@ export function canReplay(p: Phase): boolean {
   return p === "ready" || p === "evaluated";
 }
 
-// A sound asked for from a bubble in the roleplay (🔊, a tap on a bubble or Sohee's line): while my turn waits, and
-// not over Ryan's answer, which it would cut off (spec three-line-listen 5). 「🔊 다시 듣기」 at the bottom is not
-// held back.
+// A sound asked for from a bubble in the roleplay (🔊, a tap on a bubble or Sohee's line): while my turn waits, also
+// after an evaluation failed (its recording is saved, spec three-line-listen 4), and not over Ryan's answer or his
+// error sound, which it would cut off (5). Not while recording, evaluating or in Ryan's turn, whose idle callback
+// moves the roleplay on. 「🔊 다시 듣기」 at the bottom is not held back.
 export function mayListen(p: Phase, answering: boolean): boolean {
-  return canReplay(p) && !answering;
+  return (canReplay(p) || p === "error") && !answering;
 }
 
 const freshTurn = { heard: null, heardRec: null, feedback: "", aside: false, message: null, errorFrom: null } as const;

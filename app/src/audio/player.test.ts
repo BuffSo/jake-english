@@ -52,7 +52,7 @@ test("a stopped subscription hears nothing", () => {
   expect(seen).toEqual([]);
 });
 
-// 「▶ 처음 녹음」 plays the first recording, a short pause, then this run's: many recordings end right on the last
+// 「🔊 처음 녹음」 plays the first recording, a short pause, then this run's: many recordings end right on the last
 // word, so back to back the two ran together (spec review-practice 4, todo 01)
 test("a pause holds the next sound until it has passed", () => {
   const q = new SoundQueue();

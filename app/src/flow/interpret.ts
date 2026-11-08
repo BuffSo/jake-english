@@ -29,7 +29,7 @@ export function koOpensOnTap(view: KoView): boolean {
 }
 
 // Played by herself when the line opens: in the roleplay only while my turn waits and nothing plays, so she never
-// lands in a recording or over Ryan, his feedback or the model. The end screen has no turn and plays like its ▶.
+// lands in a recording or over Ryan, his feedback or the model. The end screen has no turn and plays like its 🔊.
 export function mayAutoPlay(where: Where, phase: Phase, playing: boolean): boolean {
   return where === "end" || (canReplay(phase) && !playing);
 }

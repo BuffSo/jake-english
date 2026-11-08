@@ -724,7 +724,8 @@ describe("the recording of each turn (spec three-line-listen 3, 4, 7)", () => {
 });
 
 test("a bubble sound plays only while my turn waits and Ryan is not answering (spec three-line-listen 5)", () => {
+  // an evaluation that failed after 「들린 말」 keeps 「🔊 내 녹음」 working: the recording is saved (spec 4, final review)
   const phases: State["phase"][] = ["loading", "ryan", "ready", "recording", "evaluating", "evaluated", "error"];
-  expect(phases.filter((p) => mayListen(p, false))).toEqual(["ready", "evaluated"]);
+  expect(phases.filter((p) => mayListen(p, false))).toEqual(["ready", "evaluated", "error"]);
   expect(phases.filter((p) => mayListen(p, true))).toEqual([]);
 });

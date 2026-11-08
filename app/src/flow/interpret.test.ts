@@ -28,7 +28,7 @@ test("in the roleplay Sohee plays by herself only while my turn waits in quiet",
 });
 
 test("a tap on Sohee's line replays it while my turn waits, but not over Ryan's answer (spec three-line-listen 5)", () => {
-  expect(PHASES.filter((p) => mayReplay("roleplay", p, false))).toEqual(["ready", "evaluated"]);
+  expect(PHASES.filter((p) => mayReplay("roleplay", p, false))).toEqual(["ready", "evaluated", "error"]);
   expect(PHASES.filter((p) => mayReplay("roleplay", p, true))).toEqual([]);
 });
 
