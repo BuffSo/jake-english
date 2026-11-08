@@ -17,7 +17,7 @@ from . import topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
 from .sentences import NewSentence, SentenceBuffer
-from .threeline import blank
+from .threeline import settled
 from .tts import VoiceError
 from .phrases import PHRASES
 from .review import first_try, group_of, latest_run, past_items, sentence_key
@@ -176,11 +176,11 @@ class Engine:
 
     def _prepared(self, runs: list[Roleplay], line: ScriptLine) -> ScriptLine:
         """The line with what earlier runs (oldest first) made for the same line: same place, speaker and words.
-        Each part comes from the newest run that has it; a note with no Korean is made again, Sohee's sound comes
-        with her Korean (spec 2), and a sound made for an older key is made again (`_current_sounds`)."""
+        Each part comes from the newest run that has it; a note without Korean or a reading is made again, Sohee's
+        sound comes with her Korean (spec 2), and a sound made for an older key is made again (`_current_sounds`)."""
         same = [l for r in reversed(runs) for l in r.lines[line.idx:line.idx + 1]
                 if (l.speaker, l.text) == (line.speaker, line.text)]
-        three = next((l.three for l in same if l.three is not None and not blank(l.three)), None)
+        three = next((l.three for l in same if l.three is not None and settled(l.three)), None)
         audio = next((l.audio for l in same if l.audio is not None), None)
         ko = next((l for l in same if l.ko is not None), None)
         return self._current_sounds(line.model_copy(update={"three": three, "audio": audio, "ko": ko and ko.ko,
@@ -200,7 +200,8 @@ class Engine:
 
     async def copy(self, rp_id: str) -> Roleplay:
         """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
-        sounds are reused, so it starts at once, except sounds made for an older key (`_current_sounds`); the old
+        sounds are reused, so it starts at once, except sounds made for an older key (`_current_sounds`) and notes
+        without Korean or a reading (`threeline.settled`), made again in the background; the old
         record and its tries stay as they are. A list pick plays its
         script as it is now in the repository; one taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
@@ -214,7 +215,7 @@ class Engine:
                 return await self.create_pick(old.topic, old.pick)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=old.situation, frame=old.frame,
-                      lines=[self._current_sounds(l.model_copy(deep=True)) for l in old.lines],
+                      lines=[self._current_sounds(_unsettled_dropped(l.model_copy(deep=True))) for l in old.lines],
                       origin=old.origin or old.id,  # a copy of a copy still points at the first (ADR-0011)
                       topic=old.topic, pick=old.pick)
         self.store.save(rp)
@@ -714,6 +715,11 @@ class Engine:
             if pos is not None:
                 rp.pos = max(rp.pos, pos)
             self.store.save(rp)
+
+
+def _unsettled_dropped(line: ScriptLine) -> ScriptLine:
+    """The line without a note that is not worth reusing, so it is made again (`threeline.settled`)."""
+    return line.model_copy(update={"three": None}) if line.three is not None and not settled(line.three) else line
 
 
 def _keep(tasks: dict, key, task: asyncio.Task) -> asyncio.Task:

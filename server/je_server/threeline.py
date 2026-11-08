@@ -103,10 +103,11 @@ def plain(text: str) -> ThreeLine:
     return ThreeLine(words=[Word(syl=[Syllable(en=t, ko="", m="n")]) for t in text.split()], reading="")
 
 
-def blank(three: ThreeLine) -> bool:
-    """No Korean anywhere: what `plain` leaves. A list pick makes such a note again rather than reuse it (spec
-    fixed-list-scripts 2)."""
-    return not any(s.ko for w in three.words for s in w.syl)
+def settled(three: ThreeLine) -> bool:
+    """Korean and a reading: a note worth reusing. A list pick and a copy make one without them again (spec
+    fixed-list-scripts 2): `plain` has no Korean, and the `ref` degrade drops the reading. A note that lost only some
+    highlights (`hi`, `stress`) cannot be told from a good one and is reused."""
+    return any(s.ko for w in three.words for s in w.syl) and bool(three.reading.strip())
 
 
 def degrade(text: str, three: ThreeLine, problems: list[Problem]) -> ThreeLine:
