@@ -18,6 +18,7 @@ import {
   lineFor,
   OTHER_TOPIC,
   resumeFrom,
+  resumeOnBack,
   startStep,
   topicsOf,
   type HowChoice,
@@ -151,11 +152,11 @@ export function SituationScreen({ sounds, home, start, onCreated, onResume, onBa
     if (step === "describe") rec.discard();
     if (clearsTurnedDown(prev)) turnedDown.current = [];
     setJake(null);
-    if (making.current > 0) madeLeft.current = true;
     // the row asked when the screen opened is no longer the newest conversation once the script left behind is made:
     // hidden, and asked again after it (todo 20261108_32 1)
-    if (prev === "topic" && madeLeft.current) {
-      madeLeft.current = false;
+    const again = resumeOnBack(prev, { making: making.current > 0, madeLeft: madeLeft.current });
+    madeLeft.current = again.madeLeft;
+    if (again.askAgain) {
       setResume(null);
       askResume();
     }
