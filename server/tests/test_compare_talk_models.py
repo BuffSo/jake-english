@@ -58,3 +58,12 @@ def test_korean_cases_are_marked_in_the_last_turn():
 
 def test_flags_korean_in_a_reply():
     assert "korean" in ct.flags("좋아요! What next?", ["좋아요!", "What next?"])
+
+
+def test_a_misheard_question_back_counts_ryan_answering_for_himself():
+    assert "misheard asks back" in {name for name, _ in ct.CASES}
+    assert "misheard asks back" in ct.ANSWER_BACK
+    assert ct.answers_back("Kimbap and ramen, yum! I had a sandwich today. Do you often eat at your desk?")
+    assert ct.answers_back("Nice combo! Me, I just grabbed a salad. What do you like best?")
+    assert not ct.answers_back("Kimbap and ramen, nice combo! Do you often eat at your desk?")
+    assert not ct.answers_back("Oh, you had kimbap and ramen? Was it good?")

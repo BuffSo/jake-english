@@ -85,8 +85,9 @@ def fix_input(rp: Roleplay) -> tuple[list[dict], dict[int, str], dict[int, fixes
     """What Claude is given to pick the fixes (spec 7): Ryan's English replies and my English turns with their line
     numbers, as heard; my own English turns by line number for `fixes.check`; and my turns said from Sohee's full
     sentence by line number, apart from those (spec 7 「고르는 차례」), only those with the Mac's points: one heard as
-    the sentence has nothing to fix. My Korean turns and old records' `help` lines are left out (spec 7 「고치지 않는
-    것」)."""
+    the sentence has nothing to fix. Those helped turns are marked `"도움 받은 차례": true` in the talk (all of them,
+    with points or not), so Claude does not spend one of its own three picks on one (the Mac would drop it). My Korean
+    turns and old records' `help` lines are left out (spec 7 「고치지 않는 것」)."""
     conversation: list[dict] = []
     turns: dict[int, str] = {}
     helped: dict[int, fixes.Helped] = {}
@@ -103,7 +104,10 @@ def fix_input(rp: Roleplay) -> tuple[list[dict], dict[int, str], dict[int, fixes
                     helped[line.idx] = fixes.Helped(given=line.given, heard=line.text, issues=tries[-1].issues)
         else:
             continue
-        conversation.append({"차례": line.idx, "말한 사람": who, "말": line.text})
+        entry: dict = {"차례": line.idx, "말한 사람": who, "말": line.text}
+        if line.kind == "turn" and line.given is not None:
+            entry["도움 받은 차례"] = True  # as FIX_SYSTEM 「받는 것」 names it
+        conversation.append(entry)
     return conversation, turns, helped
 
 

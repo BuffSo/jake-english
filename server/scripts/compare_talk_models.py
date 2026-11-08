@@ -2,7 +2,8 @@
 
 Each case is asked of both models in turn, the order swapping by case, so a slow minute hits both alike
 (docs/guide/PROMPT_일마다_모델_견주기_20261108.md). Prints every reply (all inputs are made up), the rules a reply
-broke, and per model the time to the first text and the first sentence, and the cost.
+broke, and per model the time to the first text and the first sentence, the cost, the recasts on mistake turns and how
+often Ryan answered a misheard question back.
 
     uv run python scripts/compare_talk_models.py [--runs 3] [--only N]
 """
@@ -44,7 +45,14 @@ CASES: list[tuple[str, list[str]]] = [
     ("changes topic", ["What did you do today?", "I worked all day.", "That sounds tiring. Was it busy?",
                        "By the way, it is raining a lot today."]),
     ("cannot understand", ["What did you do this morning?", "Yes the uh with my, the go."]),
+    # "and you?" written as a similar-sounding nonsense word: Ryan should take it as the question back and answer
+    ("misheard asks back", ["What did you have for lunch today?", "I had kimbap and ramen at my desk. Endu?"]),
 ]
+# cases whose reply should answer for Ryan himself (the learner asked back), counted with `answers_back`
+ANSWER_BACK = {"misheard asks back"}
+# Ryan telling his own: "I had a sandwich", "I just grabbed a salad", "my lunch was"; not the learner's words back
+ANSWERED = re.compile(r"\bI('ve| just| also)? (had|ate|grabbed|got|made|tried|went for)\b|\bmy (own )?lunch\b|"
+                      r"\bme too\b", re.I)
 K = TALK_KOREAN
 # turns the learner said in Korean (marked as the server marks them); Ryan must answer in English, and answer them
 KOREAN_CASES: list[tuple[str, list[str]]] = [
@@ -92,6 +100,11 @@ def messages(turns: list[str], echo: bool = False) -> list[dict]:
 def recasts(text: str, pattern: str | None) -> bool:
     """Whether the reply used a right form of the learner's own mistaken words (`pattern`; None: no mistake)."""
     return bool(pattern) and bool(re.search(pattern, text, re.I))
+
+
+def answers_back(text: str) -> bool:
+    """Whether the reply answers the learner's question back for Ryan himself."""
+    return bool(ANSWERED.search(text))
 
 
 def flags(text: str, sentences: list[str]) -> list[str]:
@@ -153,7 +166,8 @@ async def main() -> None:
     cases = all_cases()
     cases = [cases[args.only - 1]] if args.only else cases
     stats = {m: {"first_text": [], "first_sentence": [], "cost": 0.0, "flagged": 0, "korean": 0, "n": 0,
-                 "recast": {False: [0, 0], True: [0, 0]}} for m in MODELS}  # recast[echo] = [recasts, mistake runs]
+                 "recast": {False: [0, 0], True: [0, 0]},  # recast[echo] = [recasts, mistake runs]
+                 "answered": [0, 0]} for m in MODELS}  # [answered, asked-back runs]
     for c, (name, turns, echo, pattern) in enumerate(cases):
         print(f"\n## {name}: ...{turns[-1]}")
         for run in range(args.runs):
@@ -174,6 +188,11 @@ async def main() -> None:
                     if recasts(r["text"], pattern):
                         s["recast"][echo][0] += 1
                         mark = " <recast>"
+                if name in ANSWER_BACK:
+                    s["answered"][1] += 1
+                    if answers_back(r["text"]):
+                        s["answered"][0] += 1
+                        mark = " <answered>"
                 print(f"  {m:6} {r['first_sentence']:.2f}s  {r['text']}{mark}" + (f"   [{', '.join(f)}]" if f else ""))
     print("\nmodel: first text / first sentence (median), replies flagged, Korean in a reply, cost")
     for m, s in stats.items():
@@ -183,6 +202,9 @@ async def main() -> None:
     for m, s in stats.items():
         (a, an), (b, bn) = s["recast"][False], s["recast"][True]
         print(f"  {m}: {a}/{an} / {b}/{bn}")
+    print("Ryan answered a misheard question back")
+    for m, s in stats.items():
+        print(f"  {m}: {s['answered'][0]}/{s['answered'][1]}")
 
 
 if __name__ == "__main__":

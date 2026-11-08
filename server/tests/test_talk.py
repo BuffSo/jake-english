@@ -938,6 +938,20 @@ def test_fix_input_keeps_helped_turns_apart():
     assert helped == {3: Helped(given=given, heard="I want to the park.", issues=issues)}
 
 
+def test_fix_input_marks_helped_turns_in_the_talk():
+    from je_server.models import Issue
+    from je_server.talk import fix_input
+
+    given = "I went to the park."
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I walked."), ("ryan", "reply", "Where?"),
+               ("user", "turn", "I want to the park."), ("ryan", "reply", "Nice!"), ("user", "turn", given))
+    _helped(rp, 3, given, [Issue(target="went", heard="want")])
+    _helped(rp, 5, given)  # heard as the sentence: still a helped turn, not one of my own to pick
+    conversation, _, _ = fix_input(rp)
+    # so Claude does not spend one of its own three picks on them (the Mac would drop it)
+    assert [c["차례"] for c in conversation if c.get("도움 받은 차례") is True] == [3, 5]
+    assert [c for c in conversation if c["차례"] == 1] == [{"차례": 1, "말한 사람": "학습자", "말": "I walked."}]
+
 def test_helped_input_is_what_claude_is_given_for_the_helped_turns():
     from je_server.fixes import Helped
     from je_server.models import Issue
