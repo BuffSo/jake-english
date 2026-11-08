@@ -50,6 +50,7 @@ async def test_resume_after_a_followed_turn(engine_with_rp, speech_bytes, fake_w
     r = engine.resume()
     assert r["roleplay"]["id"] == rp_id and r["at"] == user_idx + 1
     assert [s["idx"] for s in r["said"]] == [user_idx] and r["progress"] == {"no": 2, "total": 3}
+    assert r["ended"] is False
 
 
 async def test_resume_skips_an_unreadable_record(engine_with_rp):
@@ -64,4 +65,4 @@ def test_resume_route(client):
     assert client.get("/resume").json() == {"resume": None}
     rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
     r = client.get("/resume").json()["resume"]
-    assert r["roleplay"]["id"] == rp["id"] and r["at"] == 0 and r["said"] == []
+    assert r["roleplay"]["id"] == rp["id"] and r["at"] == 0 and r["said"] == [] and r["ended"] is False

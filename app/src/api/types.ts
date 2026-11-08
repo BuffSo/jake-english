@@ -97,12 +97,14 @@ export type Summary = { say: Said; lines: TranscriptLine[] };
 export type PastItem = { group: string; title_ko: string; first: string; latest: string };
 // the newest run of a script and its end-screen summary (spec review-practice 3)
 export type PastRun = { roleplay: Roleplay; summary: Summary };
-// What was heard on a line of mine before the place a resumed conversation starts: the last try inside the roleplay
-// and its recording number (spec resume-roleplay 2)
+// What was heard on a recorded line of mine in a resumed conversation: the last try inside the roleplay and its
+// recording number (spec resume-roleplay 2, resume-unrecorded 1)
 export type HeardTry = { idx: number; heard: string; n: number };
-// /resume: the newest conversation with a line of mine left, the line to start from (`at`), the header's 「내 대사」
-// there, and what was heard before it (spec resume-roleplay 1, 2)
-export type Resume = { roleplay: Roleplay; at: number; progress: Progress; said: HeardTry[] };
+// /resume: the newest conversation with a line of mine left unrecorded, the line to start from (`at`), the header's
+// 「내 대사」 there, what was heard on every recorded line of mine, and whether it went to the end, so only its
+// unrecorded lines are left (spec resume-roleplay 1, 2; resume-unrecorded 2-5). `ended` is absent on an older server,
+// read as left mid-way.
+export type Resume = { roleplay: Roleplay; at: number; progress: Progress; said: HeardTry[]; ended?: boolean };
 // a saved sentence and the line it was saved from (spec review-practice 5, 6)
 export type SavedItem = { key: string; rp_id: string; idx: number; speaker: Speaker; text: string; title_ko: string; at: string };
 export type AttemptEvent =
@@ -128,7 +130,7 @@ export const SAVED_KEYS = ["key", "rp_id", "idx", "speaker", "text", "title_ko",
 export const TOPIC_KEYS = ["id", "name_ko", "placeholder_ko", "picks"] as const;
 export const PICK_KEYS = ["id", "title_ko"] as const;
 // /resume (contract/resume.json)
-export const RESUME_KEYS = ["roleplay", "at", "progress", "said"] as const;
+export const RESUME_KEYS = ["roleplay", "at", "progress", "said", "ended"] as const;
 export const HEARD_TRY_KEYS = ["idx", "heard", "n"] as const;
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;

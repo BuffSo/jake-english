@@ -194,6 +194,7 @@
     "heard": "I'd like a cup of copy",
     "n": 1
    }
-  ]
+  ],
+  "ended": false
  }
 }
