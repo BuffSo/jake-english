@@ -11,7 +11,9 @@ Do not change a fact without checking it again: a wrong route or menu is learned
 
 Each list line also has its script and frame, written here and reviewed in the PR: a pick starts from it without
 asking Claude (spec fixed-list-scripts, ADR-0013). A script keeps only the facts of its description. When a fact
-changes, change the description, the script and `tests/test_topics.py` together.
+changes, change the description, the script and `tests/test_topics.py` together. When one answer is split over the
+learner's turns (a route with a change), its first piece says more is coming ("First, ..."): ending there, it sounds
+like the whole answer, and the other person's next question sounds like waiting for the next piece (2026-11-08 user).
 
 Each script line carries Sohee's Korean for it, made once with the quick model and read over by hand (todo 13): a
 pick's 「통역」 does not ask Claude. It says what the English says and no more; read it with the lines around it, as
@@ -81,8 +83,8 @@ TOPICS: tuple[Topic, ...] = (
                    "관광객에게 경복궁 가는 길을 알려 주기"),
                   (("ryan", "Excuse me, do you speak English? I'm trying to get to Gyeongbokgung Palace.",
                     "실례합니다, 영어 할 줄 아세요? 경복궁에 가려고 하는데요."),
-                   ("user", "Sure. Take Line 4 from here, just one stop to Chungmuro.",
-                    "그럼요. 여기서 4호선을 타고 충무로까지 한 정거장만 가세요."),
+                   ("user", "Sure. First, take Line 4 one stop to Chungmuro.",
+                    "그럼요. 먼저 4호선을 타고 충무로까지 한 정거장 가세요."),
                    ("ryan", "Chungmuro, got it. And then what?",
                     "충무로요, 알겠어요. 그다음엔 어떻게 해요?"),
                    ("user", "Change to Line 3 there, and get off at Gyeongbokgung.",

@@ -3,7 +3,8 @@
 Feedback after a followed line (`Claude.feedback`, the quick model) and teacher Ryan's answer (`Claude.aside`, the
 writer model) are asked for each case below, `--runs` times, through the server's own `Claude` class. Each answer
 is printed with the rules it broke:
-- a given sound tip left out, or the materials named ("짚을 것", "설명", that there is no tip)
+- a given sound tip left out, or the materials named ("짚을 것", "설명", that there is no tip), or how the recording
+  was sorted ("상관없는", "혼잣말"); teacher Ryan not ending with a try at the same line
 - the practice called 「역할극」 instead of 「대화」, double quotes (in the model's own answer: the server drops them)
 - a particle after an English word that does not fit how the word ends in Hangul (room이, where가)
 - a pointed word missing, the whole transcript quoted, or the wrong ending (next line / conversation done)
@@ -48,8 +49,10 @@ BATCHIM = {"line": True, "lime": True, "market": True, "marker": False, "room": 
            "far": False, "fall": True, "in": True, "chicken": True, "check": True}
 PARTICLE = re.compile(r"([A-Za-z][A-Za-z']*)(이|가|은|는|을|를|과|와)(?![가-힣])")
 WITH_BATCHIM, WITHOUT = set("이은을과"), set("가는를와")
-NAMES = ("짚을 것", "후보", "소리 내는 법", "설명", "자료", "받은", "역할극", "따로 말", "말하지 않을게",
-         "라고 말했", "라고 하셨", "말했는데")
+# 「짚을」, 「상관없는」, 「혼잣말」: teacher Ryan said how the server sorted a recording, in the words of his prompt
+# (phone 2026-11-08: 「대사와 상관없는 말로 들려서 따로 짚을 곳이 없어요」; live: 「…상관없는 혼잣말로 들렸어요」)
+NAMES = ("짚을", "후보", "소리 내는 법", "설명", "자료", "받은", "역할극", "따로 말", "말하지 않을게",
+         "라고 말했", "라고 하셨", "말했는데", "상관없는", "혼잣말", "대사와 다른 말")
 QUOTES = "\"“”"
 
 
@@ -101,6 +104,10 @@ ASIDE = [
     Case("near miss span", "My seat is twenty eight.", "My seat is plenty.", [issue("twenty eight", "plenty")]),
     Case("near miss span 2", "Can I check in now?", "Can I chicken now?", [issue("check in", "chicken")]),
     Case("korean question", "Here is your key card.", "What does key card mean?", [], heard_ko="키 카드가 무슨 뜻이에요?"),
+    # made up, not what the learner said: a wish about the app and a remark to oneself, both in Korean
+    Case("off app wish", "Here is your key card.", "I wish the app showed the meaning first.", [],
+         heard_ko="앱이 뜻을 먼저 보여 주면 좋겠어요."),
+    Case("off chat", "Here is your key card.", "Oh, I'm so sleepy today.", [], heard_ko="아 오늘 너무 졸리다."),
 ]
 
 
@@ -125,6 +132,8 @@ def flags(case: Case, text: str, aside: bool, raw: str = "") -> list[str]:
         want = BATCHIM.get(word.lower())
         if want is not None and p in (WITHOUT if want else WITH_BATCHIM):
             out.append(f"particle {word}{p}")
+    if aside and "다시" not in text and "한 번 더" not in text:
+        out.append("does not ask to try again")  # teacher Ryan always ends asking for the same line again
     if not aside:
         if case.last and "다음 대사" in text:
             out.append("offers a next line after the last")

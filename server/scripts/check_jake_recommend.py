@@ -4,7 +4,7 @@ For each topic, starts with nothing turned down and asks `--presses` times, each
 the turned-down list, as pressing 「다른 걸로요」 on the situation screen does. The ending is picked by the server's
 own `pick_ending` and the sentence comes from the server's own `Claude.recommend`. The learner's real recent
 situations are not used. Each sentence is printed with the ending it was given and whether the model kept it, the
-server swapped a known ending for it (`swap_ending`) or neither; the sentences are the model's own, so printing
+server swapped the ending there for it (`strip_endings`) or neither; the sentences are the model's own, so printing
 them is fine. Prints the tally, tokens and cost at the end.
 
 A suggestion costs about $0.0001 on Haiku (21 calls, the default, about $0.003). Tell the user how many calls and
@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import anthropic  # noqa: E402
 
-from je_server.claude import JAKE_ENDINGS, QUICKS, Claude, pick_ending  # noqa: E402
+from je_server.claude import JAKE_ENDINGS, QUICKS, Claude, heard_ending, pick_ending  # noqa: E402
 from je_server.config import load_settings  # noqa: E402
 from je_server.topics import TOPICS  # noqa: E402
 
@@ -78,8 +78,8 @@ async def main() -> None:
             kept = label(counting.raw[-1], text, ending)
             given[ending] += 1
             how[kept] += 1
-            heard_before = next((e for e, _ in JAKE_ENDINGS if turned_down and turned_down[-1].endswith(e)), None)
-            repeats += text.endswith(heard_before) if heard_before else 0
+            heard_before = heard_ending(turned_down[-1]) if turned_down else None
+            repeats += heard_before is not None and heard_ending(text) == heard_before
             print(f"{topic.id:8} {ending:16} {kept:10}  {text}")
             turned_down.append(text)
     total = sum(given.values())
