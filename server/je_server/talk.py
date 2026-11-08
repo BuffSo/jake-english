@@ -12,6 +12,10 @@ cut Ryan's sounds off and speak again once his line is saved (spec 2).
 
 Ending a talk (`Talks.end`, spec 6, 7) asks Claude for the fixes, keeps those `fixes.check` lets through as my `fix`
 lines after the talk, and makes the first one's sounds before answering. Those lines mark the talk as ended.
+
+Sohee chance (`Talks.hint` and after, spec 9) is a hint on one of Ryan's replies, made once and kept on his line: a
+Korean line Sohee says and English openers in Ryan's voice; then, once asked (「전체 문장 보기」), one full sentence with
+its sound and notes. The routes answer each step on its own, like Sohee's interpretation (`/ko`, `/ko/audio`).
 """
 from __future__ import annotations
 
@@ -23,13 +27,13 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
 
-from . import audio, fixes, sentences
+from . import audio, fixes, hints, sentences
 from .asr import WhisperError
 from .claude import ClaudeUnavailable
 from .compare import words
 from .engine import HANGUL, MAX_SECONDS, Engine, NotFound, _keep
-from .models import Attempt, Fix, Frame, Roleplay, Said, ScriptLine
-from .phrases import TALK_OPENERS
+from .models import Attempt, Fix, Frame, Hint, Roleplay, Said, ScriptLine, ThreeLine
+from .phrases import SOHEE_PHRASES, TALK_OPENERS
 from .prompts import TALK_CUT, TALK_CUT_SILENT, TALK_ECHO, TALK_KOREAN, TALK_START
 from .tts import VoiceError
 
@@ -100,6 +104,11 @@ class TalkBusy(Exception):
     """A turn of the talk is running and Ryan's line is not saved yet, or the talk is being ended."""
 
 
+class NoHint(Exception):
+    """A step of Sohee chance asked before the one it follows: the line has no hint yet, or its full sentence was not
+    shown yet (the app shows the steps in turn, spec 9)."""
+
+
 class _Unheard(Exception):
     """The recording holds no turn; `code` names the error to send (`no_speech`, `too_long`)."""
 
@@ -116,6 +125,8 @@ class Talks:
         self.finishing: dict[tuple[str, int], asyncio.Task] = {}
         # talks being ended, one task per talk: a second 「대화 끝내기」 waits for the same Claude call
         self.ending: dict[str, asyncio.Task] = {}
+        # hints being made, one task per Ryan line: a second 「소희 찬스」 waits for the same Claude call
+        self.hinting: dict[tuple[str, int], asyncio.Task] = {}
 
     async def create(self) -> Roleplay:
         """A new free talk that starts with Ryan's next first question. The turn is taken and kept in one go, so two
@@ -392,3 +403,101 @@ class Talks:
                 if a.n == n:
                     a.timings = dict(timings)
             self.engine.store.save(rp)
+
+    # --- Sohee chance (spec 9) ------------------------------------------------------------------------------------
+
+    def _reply(self, rp_id: str, idx: int) -> tuple[Roleplay, ScriptLine]:
+        """The free talk and Ryan's reply at `idx`. NotFound: no such free talk, or that line is not his reply (my turn,
+        a fix, an old record's fixed `help` line)."""
+        rp = self.engine.load(rp_id)
+        if rp.kind != "talk" or not 0 <= idx < len(rp.lines):
+            raise NotFound(f"{rp_id}/{idx}")
+        line = rp.lines[idx]
+        if line.speaker != "ryan" or line.kind != "reply":
+            raise NotFound(f"{rp_id}/{idx}")
+        return rp, line
+
+    def _hint(self, rp_id: str, idx: int, full: bool = False) -> tuple[Roleplay, Hint]:
+        """The talk and the hint on Ryan's reply at `idx`. NoHint: none yet, or `full` and its full sentence was not
+        shown yet."""
+        rp, line = self._reply(rp_id, idx)
+        if line.hint is None or (full and not line.hint.full_shown):
+            raise NoHint(f"{rp_id}/{idx}")
+        return rp, line.hint
+
+    async def hint(self, rp_id: str, idx: int) -> Hint:
+        """「소희 찬스」 on Ryan's reply at `idx`: made when first asked and kept on the line, so asked again (or the talk
+        opened again) it is not made again. Two asks at once share one Claude call. NotFound: not his reply in a free
+        talk. ClaudeUnavailable: nothing is kept and the next ask tries again."""
+        _, line = self._reply(rp_id, idx)
+        if line.hint is not None:
+            return line.hint
+        task = self.hinting.get((rp_id, idx))
+        if task is None or task.done():
+            task = _keep(self.hinting, (rp_id, idx), asyncio.create_task(self._make_hint(rp_id, idx)))
+        return await asyncio.shield(task)
+
+    async def _make_hint(self, rp_id: str, idx: int) -> Hint:
+        t0 = time.perf_counter()
+        rp, line = self._reply(rp_id, idx)
+        hint = await self.engine.claude.hint(hints.conversation(rp, idx))
+        await self.engine.update_line(rp_id, idx, line.text, hint=hint)
+        # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
+        log.info("hint %s/%d starters=%d total=%.2f", rp_id, idx, len(hint.starters), time.perf_counter() - t0)
+        return hint
+
+    async def _keep_hint(self, rp_id: str, idx: int, **changes) -> None:
+        """Changes the line's hint as it is now: its sound, 「전체 문장 보기」 and the notes may be asked at once, and
+        each keeps the others' changes."""
+        async with self.engine.lock(rp_id):
+            rp = self.engine.store.load(rp_id)
+            line = rp.lines[idx]
+            rp.lines[idx] = line.model_copy(update={"hint": line.hint.model_copy(update=changes)})
+            self.engine.store.save(rp)
+
+    async def hint_audio(self, rp_id: str, idx: int) -> str:
+        """Sohee saying the hint's Korean line and 「이렇게 시작해 보세요.」 in one sound, made when first asked and kept.
+        Urgent, since the learner waits, and heard back, like her interpretation (`Engine.ko_audio`)."""
+        _, hint = self._hint(rp_id, idx)
+        voice = self.engine.voice
+        if hint.audio is not None and voice.path(hint.audio).is_file():
+            return hint.audio
+        key = await voice.say(f"{hint.meaning_ko} {SOHEE_PHRASES['hint_start']}", "sohee", "korean", urgent=True,
+                              check=True)
+        await self._keep_hint(rp_id, idx, audio=key)
+        return key
+
+    async def show_full(self, rp_id: str, idx: int) -> dict:
+        """「전체 문장 보기」: the full sentence and Sohee's 「이렇게 말해 봐요.」 (made ahead, `Engine.warm`). Marked on
+        the line, for the count at the end; the first step's answer never has it."""
+        _, hint = self._hint(rp_id, idx)
+        if not hint.full_shown:
+            await self._keep_hint(rp_id, idx, full_shown=True)
+        phrase = SOHEE_PHRASES["hint_full"]
+        said = Said(text=phrase, audio=self.engine.voice.key("sohee", "korean", phrase))
+        return {"text": hint.full, "say": said.model_dump()}
+
+    async def hint_sound(self, rp_id: str, idx: int, n: int) -> str:
+        """Ryan's English model sound of an opener (`n` below their count) or of the full sentence (`n` their count,
+        once shown): Ryan's voice, since Sohee's would make a Korean accent the model (spec 9 「소리」). NotFound: no
+        such sound."""
+        _, hint = self._hint(rp_id, idx)
+        if n < len(hint.starters):
+            text = hint.starters[n]
+        elif n == len(hint.starters):
+            if not hint.full_shown:
+                raise NoHint(f"{rp_id}/{idx}")
+            text = hint.full
+        else:
+            raise NotFound(f"{rp_id}/{idx}/{n}")
+        return await self.engine.voice.say(text, "ryan", "english", urgent=True)
+
+    async def hint_three(self, rp_id: str, idx: int) -> ThreeLine:
+        """The full sentence's notes (「읽는 법 보기」), made when first asked and kept, once it was shown."""
+        rp, hint = self._hint(rp_id, idx, full=True)
+        if hint.full_three is not None:
+            return hint.full_three
+        async with self.engine.sem:
+            three = await self.engine.claude.annotate(hint.full, self.engine.context(rp, idx))
+        await self._keep_hint(rp_id, idx, full_three=three)
+        return three

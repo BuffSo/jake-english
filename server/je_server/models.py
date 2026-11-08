@@ -62,6 +62,18 @@ class Fix(BaseModel):
     why_audio: str | None = None  # sound key of Ryan saying why_ko in Korean
 
 
+class Hint(BaseModel):
+    """Sohee chance on one of Ryan's free-talk replies (spec free-talk-design 9), made once and kept on his line. The
+    hint routes give `full` only from 「전체 문장 보기」 on (`full_shown`), which the end of the talk also counts."""
+
+    meaning_ko: str  # what Ryan asks, in one Korean line
+    starters: list[str]  # two or three English openers ending in …
+    full: str  # one short answer that starts with a starter
+    audio: str | None = None  # sound key of Sohee saying meaning_ko and 「이렇게 시작해 보세요.」
+    full_shown: bool = False
+    full_three: ThreeLine | None = None  # the full sentence's notes, made when asked
+
+
 class ScriptLine(BaseModel):
     idx: int
     speaker: Speaker
@@ -78,6 +90,7 @@ class ScriptLine(BaseModel):
     # how many sentences of the answer were heard when I cut it off; None when heard to the end
     heard_upto: int | None = None
     fix: Fix | None = None
+    hint: Hint | None = None  # free talk only, on Ryan's reply: Sohee chance (spec free-talk-design 9)
 
 
 class Issue(BaseModel):

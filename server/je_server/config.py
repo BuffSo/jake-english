@@ -22,6 +22,7 @@ DEFAULT_WRITER = "sonnet"
 DEFAULT_QUICK = "haiku"
 DEFAULT_RECOMMEND = "sonnet"
 DEFAULT_TALK = "sonnet"  # JE_CLAUDE_TALK: Ryan in free talk, a key of claude.TALKERS
+DEFAULT_HINT = "sonnet"  # JE_CLAUDE_HINT: Sohee chance in free talk, a key of claude.QUICKS
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class Settings:
     claude_quick: str = DEFAULT_QUICK
     claude_recommend: str = DEFAULT_RECOMMEND
     claude_talk: str = DEFAULT_TALK
+    claude_hint: str = DEFAULT_HINT
 
 
 def _model_name(env: Mapping[str, str], key: str, choices: Mapping[str, object], default: str) -> str:
@@ -87,4 +89,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         claude_quick=_model_name(env, "JE_CLAUDE_QUICK", QUICKS, DEFAULT_QUICK),
         claude_recommend=_model_name(env, "JE_CLAUDE_RECOMMEND", QUICKS, DEFAULT_RECOMMEND),
         claude_talk=_model_name(env, "JE_CLAUDE_TALK", TALKERS, DEFAULT_TALK),
+        claude_hint=_model_name(env, "JE_CLAUDE_HINT", QUICKS, DEFAULT_HINT),
     )

@@ -517,3 +517,109 @@ def test_a_saved_fix_is_listed_as_free_talk(client, fake_claude, fake_whisper, s
     assert client.post("/saved", json={"rp_id": rp_id, "idx": fix_idx, "on": True}).status_code == 200
     [item] = client.get("/saved").json()["items"]
     assert item["title_ko"] == "자유 대화" and item["speaker"] == "user" and item["idx"] == fix_idx
+
+
+# --- Sohee chance routes (spec free-talk-design 9) -----------------------------------------------------------------
+
+def hint_base(client, speech_bytes) -> str:
+    """The hint routes of Ryan's reply (line 2) after my first turn."""
+    rp = client.post("/talks").json()
+    client.post(f"/talks/{rp['id']}/turns", content=speech_bytes)
+    return f"/talks/{rp['id']}/lines/2/hint"
+
+
+def test_hint_answer_leaves_out_the_full_sentence(client, fake_claude, speech_bytes):
+    base = hint_base(client, speech_bytes)
+    r = client.post(base)
+    h = fake_claude.hint_value
+    assert r.status_code == 200 and r.json() == {"meaning_ko": h.meaning_ko, "starters": h.starters}
+    assert h.full not in r.text
+    assert client.post(base).json() == r.json() and len(fake_claude.hint_calls) == 1
+
+
+def test_hint_routes_give_sohees_sound_the_full_sentence_and_ryans_sounds(client, fake_claude, fake_voice,
+                                                                          speech_bytes):
+    from je_server.phrases import SOHEE_PHRASES
+
+    base = hint_base(client, speech_bytes)
+    client.post(base)
+    h = fake_claude.hint_value
+    audio = client.get(f"{base}/audio").json()["audio"]
+    assert audio == fake_voice.key("sohee", "korean", f"{h.meaning_ko} {SOHEE_PHRASES['hint_start']}")
+    assert client.get(f"/audio/{audio}").status_code == 200
+    assert client.get(f"{base}/sounds/0").json() == {"audio": fake_voice.key("ryan", "english", h.starters[0])}
+    full = client.post(f"{base}/full").json()
+    phrase = SOHEE_PHRASES["hint_full"]
+    assert full == {"text": h.full, "say": {"text": phrase, "audio": fake_voice.key("sohee", "korean", phrase)}}
+    n = len(h.starters)
+    assert client.get(f"{base}/sounds/{n}").json() == {"audio": fake_voice.key("ryan", "english", h.full)}
+    three = client.get(f"{base}/three").json()
+    assert set(three) == {"words", "reading"}
+
+
+def test_hint_steps_out_of_order_are_409(client, fake_claude, speech_bytes):
+    base = hint_base(client, speech_bytes)
+    for r in (client.post(f"{base}/full"), client.get(f"{base}/audio"), client.get(f"{base}/sounds/0"),
+              client.get(f"{base}/three")):
+        assert r.status_code == 409 and r.json() == {"code": "no_hint", "say": None}
+    client.post(base)
+    n = len(fake_claude.hint_value.starters)
+    for r in (client.get(f"{base}/sounds/{n}"), client.get(f"{base}/three")):  # before 「전체 문장 보기」
+        assert r.status_code == 409 and r.json()["code"] == "no_hint"
+
+
+def test_hint_on_a_wrong_line_or_a_roleplay_is_404(client, fake_claude, speech_bytes):
+    base = hint_base(client, speech_bytes)
+    rp_id = base.split("/")[2]
+    assert client.post(f"/talks/{rp_id}/lines/1/hint").status_code == 404  # my turn
+    assert client.post(f"/talks/{rp_id}/lines/9/hint").status_code == 404
+    assert client.post("/talks/000000000000/lines/0/hint").status_code == 404
+    roleplay = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    assert client.post(f"/talks/{roleplay['id']}/lines/0/hint").status_code == 404
+    client.post(base)
+    client.post(f"{base}/full")
+    n = len(fake_claude.hint_value.starters)
+    assert n < 3 and client.get(f"{base}/sounds/{n + 1}").status_code == 404
+    assert fake_claude.hint_calls and len(fake_claude.hint_calls) == 1
+
+
+def test_hint_paths_are_checked(client, speech_bytes):
+    base = hint_base(client, speech_bytes)
+    rp_id = base.split("/")[2]
+    assert client.post(f"/talks/{rp_id}/lines/-1/hint").status_code == 422
+    assert client.get(f"{base}/sounds/4").status_code == 422
+    assert client.get(f"{base}/sounds/-1").status_code == 422
+    assert client.post("/talks/..%2Fx/lines/0/hint").status_code in (404, 422)
+
+
+def test_hint_when_claude_is_down_is_503(client, fake_claude, speech_bytes):
+    base = hint_base(client, speech_bytes)
+    fake_claude.fail_next = True
+    r = client.post(base)
+    assert r.status_code == 503 and r.json()["code"] == "claude_unavailable"
+    assert r.json()["say"]["text"] == PHRASES["claude_down"]
+
+
+def test_hint_sound_failure_is_503(client, fake_claude, fake_voice, speech_bytes):
+    from je_server.phrases import SOHEE_PHRASES
+
+    base = hint_base(client, speech_bytes)
+    client.post(base)
+    h = fake_claude.hint_value
+    fake_voice.fail_text = f"{h.meaning_ko} {SOHEE_PHRASES['hint_start']}"
+    r = client.get(f"{base}/audio")
+    assert r.status_code == 503 and r.json()["code"] == "voice_unavailable"
+    fake_voice.fail_text = h.starters[0]
+    assert client.get(f"{base}/sounds/0").status_code == 503
+
+
+def test_hint_routes_need_token(settings, engine, fake_voice, fake_whisper):
+    from fastapi.testclient import TestClient
+
+    from je_server.app import Services, create_app
+
+    c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
+    base = "/talks/000000000000/lines/0/hint"
+    assert c.post(base).status_code == 401 and c.post(f"{base}/full").status_code == 401
+    for path in (f"{base}/audio", f"{base}/sounds/0", f"{base}/three"):
+        assert c.get(path).status_code == 401

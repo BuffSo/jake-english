@@ -22,7 +22,7 @@ from .config import Settings
 from .engine import Engine, NotFound, TooLong
 from .asr import WhisperError
 from .models import Mode
-from .talk import Talks, TalkBusy, TalkEnded
+from .talk import NoHint, Talks, TalkBusy, TalkEnded
 from .tts import VoiceError
 
 log = logging.getLogger("je_server")
@@ -75,11 +75,11 @@ def build_services(settings: Settings) -> Services:
     voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir, hear=whisper.hear)
     writer, quick = WRITERS[settings.claude_writer], QUICKS[settings.claude_quick]
     recommender = QUICKS[settings.claude_recommend]
-    talker = TALKERS[settings.claude_talk]
-    log.info("claude models: writer %s, quick %s, recommend %s, talk %s", writer["model"], quick["model"],
-             recommender["model"], talker["model"])
+    talker, hinter = TALKERS[settings.claude_talk], QUICKS[settings.claude_hint]
+    log.info("claude models: writer %s, quick %s, recommend %s, talk %s, hint %s", writer["model"], quick["model"],
+             recommender["model"], talker["model"], hinter["model"])
     claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30),
-                    writer=writer, quick=quick, recommender=recommender, talker=talker)
+                    writer=writer, quick=quick, recommender=recommender, talker=talker, hinter=hinter)
     return Services(engine=Engine(store, claude, voice, whisper), voice=voice, whisper=whisper)
 
 
@@ -390,6 +390,63 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             raise ApiError(404, "not_found") from None
         except TalkBusy:
             raise ApiError(409, "busy") from None
+        except ClaudeUnavailable:
+            raise claude_down() from None
+
+    # Sohee chance on Ryan's reply at `idx` (spec free-talk-design 9), each step on its own route like `/ko` and
+    # `/ko/audio`. A step asked before the one it follows is 409 `no_hint`; the first step's answer leaves the full
+    # sentence out, which only 「전체 문장 보기」 (`/hint/full`) gives.
+
+    @router.post("/talks/{rp_id}/lines/{idx}/hint")
+    async def hint(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            h = await talks().hint(rp_id, idx)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except ClaudeUnavailable:
+            raise claude_down() from None
+        return {"meaning_ko": h.meaning_ko, "starters": h.starters}
+
+    @router.get("/talks/{rp_id}/lines/{idx}/hint/audio")
+    async def hint_audio(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            return {"audio": await talks().hint_audio(rp_id, idx)}
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except NoHint:
+            raise ApiError(409, "no_hint") from None
+        except VoiceError:
+            raise ApiError(503, "voice_unavailable") from None
+
+    @router.post("/talks/{rp_id}/lines/{idx}/hint/full")
+    async def hint_full(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            return await talks().show_full(rp_id, idx)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except NoHint:
+            raise ApiError(409, "no_hint") from None
+
+    @router.get("/talks/{rp_id}/lines/{idx}/hint/sounds/{n}")
+    async def hint_sound(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0),
+                         n: int = PathParam(ge=0, le=3)) -> dict:
+        try:
+            return {"audio": await talks().hint_sound(rp_id, idx, n)}
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except NoHint:
+            raise ApiError(409, "no_hint") from None
+        except VoiceError:
+            raise ApiError(503, "voice_unavailable") from None
+
+    @router.get("/talks/{rp_id}/lines/{idx}/hint/three")
+    async def hint_three(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            return (await talks().hint_three(rp_id, idx)).model_dump(mode="json")
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except NoHint:
+            raise ApiError(409, "no_hint") from None
         except ClaudeUnavailable:
             raise claude_down() from None
 

@@ -23,6 +23,9 @@ export type ScriptLine = {
   parts: Said[] | null; // Ryan's answer sentence by sentence with the sound of each
   heard_upto: number | null; // sentences heard when cut off; null when heard to the end
   fix: Fix | null;
+  // the Mac's own record of Sohee chance on Ryan's reply (spec free-talk-design 9), absent from an older server. It
+  // holds the full sentence before 「전체 문장 보기」, so the app reads a hint through the hint routes only, never here
+  hint?: unknown;
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };
 export type Issue = { target: string; heard: string; sound: [string, string] | null; explain: string };
@@ -140,7 +143,7 @@ export type TalkEnd = { items: TalkItem[]; say: Said | null };
 
 // Key lists checked against contract/ by the tests; the type checks below keep them in step with the types.
 export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin", "topic", "pick", "kind"] as const;
-export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio", "parts", "heard_upto", "fix"] as const;
+export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio", "parts", "heard_upto", "fix", "hint"] as const;
 export const FIX_KEYS = ["of", "said", "why_ko", "why_audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "error", "done"] as const;

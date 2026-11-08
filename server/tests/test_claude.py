@@ -835,3 +835,53 @@ async def test_aside_cut_drops_a_leaking_piece():
                                                                                      None, [], []):
             got.append(d)
     assert got == ["괜찮아요. "]
+
+
+# --- Sohee chance (spec free-talk-design 9) --------------------------------------------------------------------
+
+HINT_TALK = [{"말한 사람": "라이언", "말": "Hi! What do you usually do on weekends?"}]
+GOOD_HINT = {"meaning_ko": "주말에 보통 뭐 하는지 물어요.", "starters": ["I usually…", "Not much, just…"],
+             "full": "I usually stay home and rest."}
+
+
+async def test_hint_sends_the_talk_on_the_hint_model():
+    from je_server.claude import QUICK_SONNET
+    from je_server.models import Hint
+
+    fake = FakeAnthropic([json.dumps(GOOD_HINT)])
+    hint = await Claude(fake).hint(HINT_TALK)
+    assert hint == Hint(**GOOD_HINT)
+    r = fake.requests[0]
+    assert r["model"] == QUICK_SONNET["model"] and r["thinking"] == QUICK_SONNET["thinking"]
+    assert r["system"] == prompts.HINT_SYSTEM and r["output_config"]["format"]["schema"] == prompts.HINT_SCHEMA
+    assert json.loads(r["messages"][0]["content"]) == {"대화": HINT_TALK}
+    assert fake.options == [LIVE_OPTIONS]  # the learner waits: fail fast
+    fake = FakeAnthropic([json.dumps(GOOD_HINT)])
+    await Claude(fake, hinter=WRITERS["haiku"]).hint(HINT_TALK)
+    assert fake.requests[0]["model"] == "claude-haiku-5-5"
+
+
+async def test_hint_asks_again_once_when_the_first_is_bad():
+    from je_server.models import Hint
+
+    bad = {**GOOD_HINT, "full": "On weekends I rest."}  # does not start with a starter
+    fake = FakeAnthropic([json.dumps(bad), json.dumps(GOOD_HINT)])
+    assert await Claude(fake).hint(HINT_TALK) == Hint(**GOOD_HINT) and len(fake.requests) == 2
+    fake = FakeAnthropic([json.dumps(bad), "not json"])
+    with pytest.raises(ClaudeUnavailable, match="bad hint"):
+        await Claude(fake).hint(HINT_TALK)
+    assert len(fake.requests) == 2
+
+
+async def test_hint_log_has_tries_and_time_only(caplog):
+    caplog.set_level(logging.INFO, logger="je_server")
+    await Claude(FakeAnthropic([json.dumps(GOOD_HINT)])).hint(HINT_TALK)
+    assert "hint: 1 tries" in caplog.text
+    assert not [t for t in (GOOD_HINT["meaning_ko"], GOOD_HINT["full"], *GOOD_HINT["starters"]) if t in caplog.text]
+
+
+def test_hint_prompt_and_schema_ask_for_the_three_parts():
+    assert prompts.HINT_SCHEMA["required"] == ["meaning_ko", "starters", "full"]
+    assert prompts.HINT_SCHEMA["properties"]["starters"] == {"type": "array", "items": {"type": "string"}}
+    for key in ("meaning_ko", "starters", "full", "소희 찬스"):
+        assert key in prompts.HINT_SYSTEM

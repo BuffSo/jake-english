@@ -21,7 +21,8 @@
    "ko_audio": null,
    "parts": null,
    "heard_upto": null,
-   "fix": null
+   "fix": null,
+   "hint": null
   },
   {
    "idx": 1,
@@ -116,7 +117,8 @@
    "ko_audio": null,
    "parts": null,
    "heard_upto": null,
-   "fix": null
+   "fix": null,
+   "hint": null
   },
   {
    "idx": 2,
@@ -129,7 +131,8 @@
    "ko_audio": null,
    "parts": null,
    "heard_upto": null,
-   "fix": null
+   "fix": null,
+   "hint": null
   }
  ],
  "attempts": {

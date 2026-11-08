@@ -16,7 +16,8 @@
     "ko_audio": null,
     "parts": null,
     "heard_upto": null,
-    "fix": null
+    "fix": null,
+    "hint": null
    },
    "tries": [],
    "first": null
@@ -33,7 +34,8 @@
     "ko_audio": null,
     "parts": null,
     "heard_upto": null,
-    "fix": null
+    "fix": null,
+    "hint": null
    },
    "tries": [
     {
@@ -65,7 +67,8 @@
     "ko_audio": null,
     "parts": null,
     "heard_upto": null,
-    "fix": null
+    "fix": null,
+    "hint": null
    },
    "tries": [],
    "first": null
@@ -82,7 +85,8 @@
     "ko_audio": null,
     "parts": null,
     "heard_upto": null,
-    "fix": null
+    "fix": null,
+    "hint": null
    },
    "tries": [
     {

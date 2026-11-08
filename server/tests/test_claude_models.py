@@ -159,3 +159,27 @@ def test_talk_model_read_from_env():
 def test_unknown_talk_model_stops_the_server():
     with pytest.raises(ValueError, match="JE_CLAUDE_TALK"):
         load_settings({**TOKEN, "JE_CLAUDE_TALK": "gpt"})
+
+
+def test_hint_model_defaults_to_sonnet():
+    # spec free-talk-design 「확인 방법」: in 16 made-up talks Sonnet broke no rule of the hint, Haiku 3 times
+    assert load_settings(TOKEN).claude_hint == "sonnet"
+    assert load_settings({**TOKEN, "JE_CLAUDE_HINT": " "}).claude_hint == "sonnet"
+
+
+def test_hint_model_read_from_env():
+    assert load_settings({**TOKEN, "JE_CLAUDE_HINT": "Haiku"}).claude_hint == "haiku"
+
+
+def test_unknown_hint_model_stops_the_server():
+    with pytest.raises(ValueError, match="JE_CLAUDE_HINT must be one of haiku, sonnet, not 'opus'"):
+        load_settings({**TOKEN, "JE_CLAUDE_HINT": "opus"})
+
+
+def test_server_uses_and_logs_the_hint_model(settings, caplog):
+    from je_server.app import build_services
+
+    caplog.set_level(logging.INFO, logger="je_server")
+    assert build_services(settings).engine.claude.hinter is QUICKS["sonnet"]
+    claude = build_services(replace(settings, claude_hint="haiku")).engine.claude
+    assert claude.hinter is QUICKS["haiku"] and "hint claude-haiku-5-5" in caplog.text

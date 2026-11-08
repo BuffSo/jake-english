@@ -33,6 +33,13 @@ TALK_PHRASES: dict[str, str] = {
     "claude_down": "Sorry, I can't answer right now. Let's try again in a moment.",
 }
 
+# Sohee's fixed words in Sohee chance (spec free-talk-design 9), in her Korean voice. hint_start is said after the
+# hint's Korean line, in one sound with it; hint_full when the full sentence is shown, made once ahead (`Engine.warm`).
+SOHEE_PHRASES: dict[str, str] = {
+    "hint_start": "이렇게 시작해 보세요.",
+    "hint_full": "이렇게 말해 봐요.",
+}
+
 # Ryan's first question in a free talk (spec free-talk-design 2): a light everyday question, no Korean introduction,
 # taken in turn, not at random. The turn of the next one is kept in the Mac's records folder (`Store.load_talk`), so a
 # restart goes on from where it was. Made up: no real people or places.

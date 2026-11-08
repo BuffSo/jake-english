@@ -602,3 +602,175 @@ async def test_end_log_has_times_and_counts_only(talks, speech_bytes, fake_whisp
     await talks.end(rp_id)
     assert re.search(rf"talk end {rp_id} fixes=2 first_fix_sound=\d+\.\d\d total=\d+\.\d\d", caplog.text)
     assert not [t for t in (*SAID, *FIXED, *WHY) if t in caplog.text]
+
+
+# --- Sohee chance (spec free-talk-design 9) ----------------------------------------------------------------------
+
+async def replied(talks, speech_bytes) -> str:
+    """A talk with Ryan's opener (0), my turn (1) and his reply (2)."""
+    rp = await talks.create()
+    await run(talks, rp.id, speech_bytes)
+    return rp.id
+
+
+async def test_hint_is_made_once_and_kept_on_the_line(talks, engine, speech_bytes, fake_claude):
+    from je_server import hints
+
+    rp_id = await replied(talks, speech_bytes)
+    hint = await talks.hint(rp_id, 2)
+    assert hint == fake_claude.hint_value
+    assert engine.load(rp_id).lines[2].hint == hint
+    assert fake_claude.hint_calls == [hints.conversation(engine.load(rp_id), 2)]
+    assert await talks.hint(rp_id, 2) == hint and len(fake_claude.hint_calls) == 1
+    assert (await talks.hint(rp_id, 0)) == hint  # Ryan's first question takes one too
+    assert fake_claude.hint_calls[1] == hints.conversation(engine.load(rp_id), 0)
+
+
+async def test_two_hints_at_once_ask_claude_once(talks, speech_bytes, fake_claude):
+    rp_id = await replied(talks, speech_bytes)
+    fake_claude.hint_gate = asyncio.Event()
+    both = asyncio.gather(talks.hint(rp_id, 2), talks.hint(rp_id, 2))
+    await until(lambda: fake_claude.hint_calls)
+    fake_claude.hint_gate.set()
+    a, b = await both
+    assert len(fake_claude.hint_calls) == 1 and a == b == fake_claude.hint_value
+    await until(lambda: not talks.hinting)
+
+
+async def test_hint_when_claude_is_down_keeps_nothing(talks, engine, speech_bytes, fake_claude):
+    rp_id = await replied(talks, speech_bytes)
+    fake_claude.fail_next = True
+    with pytest.raises(ClaudeUnavailable):
+        await talks.hint(rp_id, 2)
+    assert engine.load(rp_id).lines[2].hint is None
+    assert await talks.hint(rp_id, 2) == fake_claude.hint_value  # asked again on the next press
+
+
+async def test_hint_on_a_line_that_is_not_ryans_reply_is_not_found(talks, engine, speech_bytes, fake_whisper,
+                                                                   fake_claude):
+    rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])
+    fake_claude.fix_items = [fix_item(0, 1)]
+    await talks.end(rp_id)  # a fix line at 3
+    for idx in (1, 3, 99):  # my turn, the fix line, no line
+        with pytest.raises(NotFound):
+            await talks.hint(rp_id, idx)
+    roleplay = await engine.create("길 묻기")
+    with pytest.raises(NotFound):
+        await talks.hint(roleplay.id, 0)
+    old = _talk(("ryan", "reply", "Hi!"), ("user", "ask", "안녕"), ("ryan", "help", "Could you try that in English?"))
+    engine.store.save(old)
+    with pytest.raises(NotFound):
+        await talks.hint(old.id, 2)  # an old record's fixed line
+    assert fake_claude.hint_calls == []
+
+
+async def test_full_before_hint_is_refused(talks, speech_bytes, fake_claude):
+    from je_server.talk import NoHint
+
+    rp_id = await replied(talks, speech_bytes)
+    for ask in (talks.hint_audio(rp_id, 2), talks.show_full(rp_id, 2), talks.hint_sound(rp_id, 2, 0),
+                talks.hint_three(rp_id, 2)):
+        with pytest.raises(NoHint):
+            await ask
+    await talks.hint(rp_id, 2)
+    with pytest.raises(NoHint):
+        await talks.hint_three(rp_id, 2)  # its notes only once the full sentence was shown
+    with pytest.raises(NotFound):
+        await talks.show_full(rp_id, 1)
+
+
+async def test_hint_audio_is_sohee_saying_the_meaning_and_kept(talks, engine, speech_bytes, fake_claude, fake_voice):
+    from je_server.phrases import SOHEE_PHRASES
+
+    rp_id = await replied(talks, speech_bytes)
+    hint = await talks.hint(rp_id, 2)
+    said = f"{hint.meaning_ko} {SOHEE_PHRASES['hint_start']}"
+    key = await talks.hint_audio(rp_id, 2)
+    assert key == fake_voice.key("sohee", "korean", said)
+    assert (said, "sohee", "korean", True) in fake_voice.calls and said in fake_voice.checked
+    assert engine.load(rp_id).lines[2].hint.audio == key
+    fake_voice.calls.clear()
+    assert await talks.hint_audio(rp_id, 2) == key and fake_voice.calls == []
+
+
+async def test_full_marks_the_line_and_says_sohees_line(talks, engine, speech_bytes, fake_claude, fake_voice):
+    from je_server.phrases import SOHEE_PHRASES
+
+    rp_id = await replied(talks, speech_bytes)
+    hint = await talks.hint(rp_id, 2)
+    assert not engine.load(rp_id).lines[2].hint.full_shown
+    body = await talks.show_full(rp_id, 2)
+    phrase = SOHEE_PHRASES["hint_full"]
+    assert body == {"text": hint.full, "say": {"text": phrase, "audio": fake_voice.key("sohee", "korean", phrase)}}
+    assert engine.load(rp_id).lines[2].hint.full_shown
+    assert await talks.show_full(rp_id, 2) == body and len(fake_claude.hint_calls) == 1
+
+
+async def test_hint_sounds_starters_then_full_only_after_shown(talks, speech_bytes, fake_claude, fake_voice):
+    from je_server.talk import NoHint
+
+    rp_id = await replied(talks, speech_bytes)
+    hint = await talks.hint(rp_id, 2)
+    for n, starter in enumerate(hint.starters):
+        assert await talks.hint_sound(rp_id, 2, n) == fake_voice.key("ryan", "english", starter)
+        assert (starter, "ryan", "english", True) in fake_voice.calls
+    after = len(hint.starters)
+    with pytest.raises(NoHint):
+        await talks.hint_sound(rp_id, 2, after)
+    await talks.show_full(rp_id, 2)
+    assert await talks.hint_sound(rp_id, 2, after) == fake_voice.key("ryan", "english", hint.full)
+    assert (hint.full, "ryan", "english", True) in fake_voice.calls
+    with pytest.raises(NotFound):
+        await talks.hint_sound(rp_id, 2, after + 1)
+
+
+async def test_hint_three_notes_the_full_sentence_once(talks, engine, speech_bytes, fake_claude):
+    rp_id = await replied(talks, speech_bytes)
+    hint = await talks.hint(rp_id, 2)
+    await talks.show_full(rp_id, 2)
+    three = await talks.hint_three(rp_id, 2)
+    rp = engine.load(rp_id)
+    assert ("annotate", (hint.full, engine.context(rp, 2))) in fake_claude.calls
+    assert rp.lines[2].hint.full_three == three
+    asked = len(fake_claude.calls)
+    assert await talks.hint_three(rp_id, 2) == three and len(fake_claude.calls) == asked
+
+
+async def test_hint_changes_at_once_keep_each_other(talks, engine, speech_bytes, fake_claude, fake_voice):
+    # Sohee's sound is still being made when 「전체 문장 보기」 is pressed: both stay on the line
+    rp_id = await replied(talks, speech_bytes)
+    await talks.hint(rp_id, 2)
+    entered, gate = asyncio.Event(), asyncio.Event()
+    say = fake_voice.say
+
+    async def held(text, voice, lang, urgent, rank=0, check=False):
+        if voice == "sohee":
+            entered.set()
+            await gate.wait()
+        return await say(text, voice, lang, urgent, rank, check)
+
+    fake_voice.say = held
+    sound = asyncio.create_task(talks.hint_audio(rp_id, 2))
+    await entered.wait()
+    await talks.show_full(rp_id, 2)
+    gate.set()
+    key = await sound
+    hint = engine.load(rp_id).lines[2].hint
+    assert hint.full_shown and hint.audio == key
+
+
+async def test_hint_log_has_times_and_counts_only(talks, speech_bytes, fake_claude, caplog):
+    caplog.set_level(logging.INFO, logger="je_server")
+    rp_id = await replied(talks, speech_bytes)
+    await talks.hint(rp_id, 2)
+    assert re.search(rf"hint {rp_id}/2 starters=2 total=\d+\.\d\d", caplog.text)
+    h = fake_claude.hint_value
+    assert not [t for t in (h.meaning_ko, h.full, *h.starters) if t in caplog.text]
+
+
+async def test_sohees_phrases_are_made_ahead(engine, fake_voice):
+    from je_server.phrases import SOHEE_PHRASES
+
+    await engine.warm()
+    phrase = SOHEE_PHRASES["hint_full"]
+    assert (phrase, "sohee", "korean", False) in fake_voice.calls and phrase in fake_voice.checked

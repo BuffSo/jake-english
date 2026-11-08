@@ -73,11 +73,11 @@ def test_records_from_before_read_as_roleplays():
     raw = json.loads((CONTRACT / "roleplay.json").read_text(encoding="utf-8"))
     del raw["kind"]
     for l in raw["lines"]:
-        for k in ("parts", "heard_upto", "fix"):
+        for k in ("parts", "heard_upto", "fix", "hint"):
             del l[k]
     rp = Roleplay.model_validate(raw)
     assert rp.kind == "roleplay"
-    assert all(l.parts is None and l.heard_upto is None and l.fix is None for l in rp.lines)
+    assert all(l.parts is None and l.heard_upto is None and l.fix is None and l.hint is None for l in rp.lines)
 
 
 def test_talk_events_example_has_the_engine_types():

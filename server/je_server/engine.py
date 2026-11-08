@@ -23,7 +23,7 @@ from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLi
 from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
 from .tts import VoiceError
-from .phrases import PHRASES, TALK_OPENERS, TALK_PHRASES, TIPS
+from .phrases import PHRASES, SOHEE_PHRASES, TALK_OPENERS, TALK_PHRASES, TIPS
 from .review import (first_try, group_of, kept_tries, latest_run, past_items, resume_start, said_on, sentence_key,
                      to_resume)
 from .store import Store
@@ -107,6 +107,8 @@ class Engine:
             await self.voice.say(text, "ryan", "korean", urgent=False, check=True)
         for text in (*TALK_OPENERS, *TALK_PHRASES.values()):  # a free talk's first questions and its fixed lines
             await self.voice.say(text, "ryan", "english", urgent=False, check=True)
+        # Sohee chance's full sentence comes at once (no Claude call), so her line with it is made ahead too
+        await self.voice.say(SOHEE_PHRASES["hint_full"], "sohee", "korean", urgent=False, check=True)
 
     # --- helpers ------------------------------------------------------------------------------
 

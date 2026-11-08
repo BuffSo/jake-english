@@ -17,7 +17,8 @@
      "said": "Yesterday I go to the market and buy two apple.",
      "why_ko": "지난 일이라 go와 buy를 went와 bought로 바꿔요. 사과가 둘이라 apples예요.",
      "why_audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-    }
+    },
+    "hint": null
    },
    "rec": {
     "rp_id": "b1b2c3d4e5f6",

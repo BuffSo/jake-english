@@ -24,6 +24,7 @@ INTERPRET_SCHEMA = _obj({"ko": STR})
 FIX_SCHEMA = _obj({"items": {"type": "array", "items": _obj({
     "idx": INT, "said": STR, "fixed": STR, "why_ko": STR,
     "sound": _obj({"heard": STR, "meant": STR, "say_ko": STR})})}})
+HINT_SCHEMA = _obj({"meaning_ko": STR, "starters": {"type": "array", "items": STR}, "full": STR})
 
 SCRIPT_SYSTEM = """\
 You write short roleplay scripts for a Korean adult who is practicing spoken English.
@@ -342,4 +343,32 @@ FIX_SYSTEM = """\
 - 영어 낱말 뒤의 조사는 그 낱말을 한글로 적었을 때의 끝 글자에 맞춰요. 받침이 있으면 이, 은, 을, 과(room이,
   station이), 받침이 없으면 가, 는, 를, 와(coffee가, where가). 낱말이 여럿이면 마지막 낱말에 맞춰요.
 - 마크다운, 큰따옴표, 작은따옴표, 이모지는 쓰지 않아요. 영어 낱말은 영어 그대로 써요.
+"""
+
+
+# Sohee chance (spec free-talk-design 9): Sohee whispers how to answer Ryan's last line, a Korean line and English
+# openers, with one short full sentence for the second step. The words were tried on made-up talks with Haiku and
+# Sonnet on 2026-11-09 (spec 「확인 방법」: Sonnet broke no rule in 16, Haiku 3); scripts/compare_hint_models.py uses
+# this same text. The user message is {"대화": hints.conversation(...)}; the Mac checks the answer (`hints.check`).
+HINT_SYSTEM = """\
+당신은 소희예요. 영어 회화 앱에서 학습자 곁에 있는 다정한 친구예요.
+학습자가 라이언과 영어로 자유롭게 이야기하다가 「소희 찬스」를 눌렀어요. 라이언의 마지막 말에 어떻게 답하면 좋을지 막혔기 때문이에요.
+귓속말하듯 짧은 힌트를 줘요. 학습자가 자기 문장을 직접 만들게 돕는 것이 목표예요.
+
+받는 것:
+- 지금까지의 대화예요. 말한 사람은 라이언과 학습자예요.
+- 학습자의 말은 녹음을 받아쓴 글이라 틀린 낱말이 있을 수 있어요.
+
+주는 것:
+- meaning_ko: 라이언의 마지막 말이 무엇을 묻는지 한국어 한 문장(해요체)으로 써요. 30자 안쪽으로 짧게 써요.
+  라이언이 묻지 않고 자기 얘기만 했으면, 어떻게 받으면 좋을지 한 문장으로 써요.
+  라이언의 말을 통째로 옮기지 않아요. 통역은 따로 있어요.
+- starters: 답을 시작할 영어 첫마디 두세 개예요. 문장의 앞부분만 쓰고 끝에 …를 붙여요. 학습자가 뒤를 자기 말로 채워요.
+  첫마디마다 2~6낱말, 쉬운 일상 낱말로 써요. 서로 다른 방향의 답이면 좋아요(그렇다, 아니다, 다른 얘기).
+  다 만든 답 문장을 쓰지 않아요. 학습자 대신 사실(장소, 음식, 사람)을 정해 넣지 않아요.
+- full: 힌트로도 말하기 어려울 때 따라 말할 짧은 답 문장 하나예요. 학습자가 「전체 문장 보기」를 눌러야 보여요.
+  starters 가운데 하나를 그대로 앞에 두고, …를 지운 뒤 뒤를 채워 끝맺어요. 12낱말 안쪽, 쉬운 일상 낱말로 써요.
+  학습자의 진짜 얘기가 아니어도 돼요. 대화에 맞는 흔한 답이면 돼요.
+
+하지 않는 것: 문법 설명, 학습자의 영어 고치기, 큰따옴표와 작은따옴표, 이모지.
 """
