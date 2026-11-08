@@ -236,6 +236,11 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         except NotFound:
             raise ApiError(404, "not_found") from None
 
+    @router.get("/resume")
+    def resume() -> dict:
+        # the conversation to resume and where, or null (spec resume-roleplay 1, 2)
+        return {"resume": engine().resume()}
+
     @router.get("/saved")
     def saved() -> dict:
         return {"items": engine().saved()}
@@ -303,6 +308,14 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
                 yield json.dumps(ev, ensure_ascii=False) + "\n"
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+    @router.post("/roleplays/{rp_id}/lines/{idx}/skip")
+    async def skip(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        # a line of mine skipped inside the roleplay: its place moves past it (spec resume-roleplay 3)
+        try:
+            return {"pos": await engine().skip(rp_id, idx)}
+        except NotFound:
+            raise ApiError(404, "not_found") from None
 
     @router.get("/roleplays/{rp_id}/lines/{idx}/attempts/{n}/recording")
     def recording(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0), n: int = PathParam(ge=1)):

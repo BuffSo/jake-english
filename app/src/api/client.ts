@@ -8,6 +8,7 @@ import type {
   LineWithProgress,
   PastItem,
   PastRun,
+  Resume,
   Roleplay,
   Said,
   SavedItem,
@@ -104,6 +105,10 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
     past: async () => (await get<{ items: PastItem[] }>("/past")).items,
     pastRun: (group: string) => get<PastRun>(`/groups/${group}/latest`),
     saved: async () => (await get<{ items: SavedItem[] }>("/saved")).items,
+    // the conversation to resume, or null (spec resume-roleplay 1, 2)
+    resume: async () => (await get<{ resume: Resume | null }>("/resume")).resume,
+    // 「건너뛰기」 inside the roleplay: the Mac moves the place past the line (spec resume-roleplay 3)
+    skipLine: (id: string, idx: number) => post<{ pos: number }>(`/roleplays/${id}/lines/${idx}/skip`),
     setSaved: (rpId: string, idx: number, on: boolean) =>
       post<{ key: string; on: boolean }>("/saved", { rp_id: rpId, idx, on }),
 

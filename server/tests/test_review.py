@@ -19,10 +19,10 @@ from je_server.review import first_try, group_of, latest_run, past_items, spoken
 LINES = [("ryan", "What can I get for you?"), ("user", "A small latte, please."), ("ryan", "Sure.")]
 
 
-def make(rid, created, title="카페에서 주문하기", origin=None, tries=None):
+def make(rid, created, title="카페에서 주문하기", origin=None, tries=None, pos=0):
     """A made-up roleplay. tries: {idx: [(n, mode, followed, at), ...]}"""
     return Roleplay(
-        id=rid, created=created, situation="카페", origin=origin,
+        id=rid, created=created, situation="카페", origin=origin, pos=pos,
         frame=Frame(title_ko=title, user_role_ko="손님", ryan_role_ko="점원", place_ko="카페", goal_ko="주문"),
         lines=[ScriptLine(idx=i, speaker=s, text=t) for i, (s, t) in enumerate(LINES)],
         attempts={idx: [Attempt(n=n, mode=m, heard="x", followed=f, issues=[], say_ko="", audio=[], timings={}, at=at)
@@ -117,3 +117,42 @@ def test_aside_only_run_is_not_a_past_situation():
     run = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", False, None)]})
     run.attempts[1][0].aside = True
     assert not spoken(run) and past_items([run]) == []
+
+
+# --- the conversation to resume (spec resume-roleplay 1, 2) -----------------------------------------------------
+
+from je_server.review import said_before, to_resume
+
+
+def test_to_resume_is_the_newest_roleplay_with_my_line_left():
+    old, new = make(A, "2026-11-05T10:00:00"), make(B, "2026-11-06T10:00:00", pos=1)
+    assert to_resume([new, old]).id == B
+
+
+def test_no_resume_when_the_newest_is_done():
+    # an older conversation left midway is not looked for (spec 1)
+    old, new = make(A, "2026-11-05T10:00:00"), make(B, "2026-11-06T10:00:00", pos=2, tries=SAID)
+    assert to_resume([old, new]) is None
+
+
+def test_no_resume_without_records():
+    assert to_resume([]) is None
+
+
+def test_no_resume_after_the_last_line_is_mine_and_done():
+    rp = make(A, "2026-11-05T10:00:00", pos=2)
+    rp.lines = rp.lines[:2]  # Ryan, me: I end the conversation
+    assert to_resume([rp]) is None and to_resume([rp.model_copy(update={"pos": 1})]).id == A
+
+
+def test_said_before_takes_the_last_roleplay_try():
+    rp = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", True, None), (2, "retry", True, None),
+                                                   (3, "practice", True, None)]})
+    assert said_before(rp, 2) == [{"idx": 1, "heard": "x", "n": 2}]
+    assert said_before(rp, 1) == [] and said_before(make(B, "2026-11-05T10:00:00"), 2) == []  # skipped: no try
+
+
+def test_said_before_leaves_out_asides():
+    rp = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", True, None)]})
+    rp.attempts[1].append(rp.attempts[1][0].model_copy(update={"n": 2, "aside": True, "followed": False}))
+    assert said_before(rp, 2) == [{"idx": 1, "heard": "x", "n": 1}]
