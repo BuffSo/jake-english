@@ -62,7 +62,7 @@ def word_rows(records: list[dict]) -> list[tuple[str, int, float | None, float |
     judged = [w for w in _words(records) if w.get("pick") is not None]
     by_dict = [w for w in judged if w.get("dict") and len(w["dict"]["primary"]) == 1]
     no_second = [w for w in by_dict if not w["dict"]["secondary"]]
-    top: list[dict] = []
+    top: list[dict] = by_dict if len(by_dict) == 1 else []  # `quantiles` needs two values
     if len(by_dict) >= 2:
         # inclusive: the default (exclusive) puts the cut above the largest margin when there are only a few words
         cut = statistics.quantiles([w["margin"] for w in by_dict], n=4, method="inclusive")[2]

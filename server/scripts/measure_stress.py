@@ -10,9 +10,11 @@ last 10 minutes unless --now is given.
 Records and recordings are only read. Values go to {data}/stress/{id}/{idx}-{n}.json. WAV copies and MFA's work go to
 {data}/tmp/stress-<pid>-<n>/ and are deleted when done, also on failure, Ctrl-C, SIGHUP and SIGTERM; folders left by a
 run that was killed outright (SIGKILL, power cut) are deleted by the next run. MFA and the feature script run at background priority
-(taskpolicy -b) with one job. Only counts, stage names and seconds are printed, never words or paths. It stops at once
-when JE_DATA_DIR has no roleplays/ (a mistyped path would get an empty app data folder made in its place) or the MFA
-environment cannot import parselmouth and praatio.
+(taskpolicy -b) with one job.
+
+Only counts, stage names, seconds and the tries the feature script could not measure (roleplay ID, line, try number)
+are printed, never words or paths. It stops at once when JE_DATA_DIR has no roleplays/ (a mistyped path would get an
+empty app data folder made in its place) or the MFA environment cannot import parselmouth and praatio.
 """
 from __future__ import annotations
 
@@ -63,8 +65,11 @@ def praat_features(mfa_env: Path, corpus: Path, out: Path, dest: Path) -> dict:
 
 def features_ready(mfa_env: Path) -> bool:
     """Whether the MFA environment's Python has what the feature script needs, checked before minutes of MFA."""
-    done = subprocess.run([str(mfa_env / "bin" / "python"), "-I", "-c", "import parselmouth, praatio"],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        done = subprocess.run([str(mfa_env / "bin" / "python"), "-I", "-c", "import parselmouth, praatio"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:  # no Python there: say so, without a traceback that shows the path
+        return False
     return done.returncode == 0
 
 
@@ -107,6 +112,7 @@ def _chunk(data_dir: Path, jobs: list[stress.Job], mfa_env: Path, work: Path, al
     for job in ready:
         if job.key in found.get("failed", []):  # the feature script could not measure it: no values, tried again
             _failed(counts, "stress features")
+            counts["unmeasured"].append(job)
             continue
         aligned = found["files"].get(job.key)
         record = stress.build(job, aligned, {**tools, "praat": found.get("praat", "")}, measured)
@@ -155,11 +161,12 @@ def exit_on_signals() -> None:
 def run(data_dir: Path, mfa_env: Path, now: bool = False, chunk: int = CHUNK, align: Callable | None = None,
         features: Callable | None = None, version: Callable | None = None) -> dict:
     """Measures the pending tries in chunks and returns the counts. A chunk that fails writes no values, so its
-    recordings are tried again next time. MFA, the feature script and the version check can be replaced (tests)."""
+    recordings are tried again next time; so is a single file the feature script could not measure, while the rest of
+    its chunk is written. MFA, the feature script and the version check can be replaced (tests)."""
     align, features, version = align or mfa_align, features or praat_features, version or mfa_version
     remove_dead_work(data_dir)
     counts = {"measured": 0, "unaligned": 0, "korean_or_empty": 0, "failed": 0,
-              "failed_at": {"wav": 0, "mfa align": 0, "stress features": 0}, "busy": False}
+              "failed_at": {"wav": 0, "mfa align": 0, "stress features": 0}, "unmeasured": [], "busy": False}
     if not now and stress.in_use(data_dir, time.time()):
         counts["busy"] = True
         return counts
@@ -206,6 +213,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"stress: measured {counts['measured']}, unaligned {counts['unaligned']}, "
           f"left out (Korean or no words) {counts['korean_or_empty']}, failed {counts['failed']}"
           f"{f' ({stages})' if stages else ''}, {time.monotonic() - t0:.0f} s")
+    if counts["unmeasured"]:
+        # a file that fails the same way every run is tried again every run: its try is named so it can be looked at
+        # (a roleplay ID and numbers, no words, no path)
+        tries = ", ".join(f"{j.rp_id} line {j.idx} try {j.n}" for j in counts["unmeasured"])
+        print(f"stress: not measured by the feature script: {tries} (tried again next run)")
     return 0
 
 

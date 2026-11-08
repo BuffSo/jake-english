@@ -85,7 +85,7 @@ NO_STAGE = {"wav": 0, "mfa align": 0, "stress features": 0}
 def test_run_writes_one_record_per_try_and_cleans_tmp(data):
     counts = run(data)
     assert counts == {"measured": 1, "unaligned": 1, "korean_or_empty": 1, "failed": 0, "failed_at": NO_STAGE,
-                      "busy": False}
+                      "unmeasured": [], "busy": False}
     assert sorted(p.name for p in (data / "stress" / RP).iterdir()) == ["1-1.json", "3-1.json"]
     rec = json.loads((data / "stress" / RP / "1-1.json").read_text())
     assert rec["status"] == "ok" and rec["tools"] == {"mfa": "3.4.3", "model": "english_us_arpa", "praat": "6.1.38"}
@@ -104,7 +104,7 @@ def test_a_second_run_measures_nothing(data):
     run(data)
     fake = Fake()
     assert run(data, fake) == {"measured": 0, "unaligned": 0, "korean_or_empty": 1, "failed": 0,
-                               "failed_at": NO_STAGE, "busy": False}
+                               "failed_at": NO_STAGE, "unmeasured": [], "busy": False}
     assert fake.aligned == 0
 
 
@@ -214,6 +214,53 @@ def test_main_stops_on_a_data_folder_without_roleplays(monkeypatch, capsys, tmp_
     assert mod.main(["--now"]) == 1
     assert "roleplays" in capsys.readouterr().out
     assert not wrong.exists()
+
+
+def test_a_failing_feature_step_counts_every_ready_file_under_its_stage(data):
+    def boom(*a):
+        raise RuntimeError("stress features failed")
+
+    counts = run(data, features=boom)
+    assert counts["failed"] == 2 and counts["failed_at"] == {**NO_STAGE, "stress features": 2}
+    assert not (data / "stress").exists() and not tmp_left(data)
+
+
+def test_main_prints_each_failed_stage_and_the_tries_the_feature_script_could_not_measure(monkeypatch, capsys,
+                                                                                          data, mfa):
+    """A file that fails the same way every run would be tried again forever: its try (roleplay ID, line, try
+    number; no words, no path) is printed so it can be looked at (final review)."""
+    Store(data).rec_path(RP, 3, 1).write_bytes(b"not a sound")
+    store = Store(data)
+    rp = store.load(RP)
+    rp.attempts[1].append(attempt(2, "See you soon."))
+    store.save(rp)
+    store.rec_path(RP, 1, 2).write_bytes(store.rec_path(RP, 1, 1).read_bytes())
+    fake = Fake()
+    monkeypatch.setattr(mod, "env", lambda: {"JE_DATA_DIR": str(data), "JE_MFA_ENV": str(mfa)})
+    monkeypatch.setattr(mod, "mfa_align", fake.align)
+    monkeypatch.setattr(mod, "praat_features", lambda env, corpus, out, dest: {
+        "praat": "6.1.38", "files": {f"{RP}_1_1": ALIGNED}, "failed": [f"{RP}_1_2"]})
+    monkeypatch.setattr(mod, "mfa_version", lambda env: "3.4.3")
+    assert mod.main(["--now"]) == 0
+    out = capsys.readouterr().out
+    assert "failed 2 (wav 1, stress features 1)" in out
+    assert f"stress: not measured by the feature script: {RP} line 1 try 2" in out
+    assert "soon" not in out and str(data) not in out
+
+
+def fake_python(tmp_path, code: int):
+    env = tmp_path / f"env{code}"
+    (env / "bin").mkdir(parents=True)
+    py = env / "bin" / "python"
+    py.write_text(f"#!/bin/sh\nexit {code}\n")
+    py.chmod(0o755)
+    return env
+
+
+def test_features_ready_asks_the_environment_python(tmp_path):
+    assert mod.features_ready(fake_python(tmp_path, 0)) is True
+    assert mod.features_ready(fake_python(tmp_path, 1)) is False
+    assert mod.features_ready(tmp_path / "no-env") is False  # no traceback with the path in it
 
 
 def test_a_file_the_feature_script_could_not_measure_is_failed_and_tried_again(data):

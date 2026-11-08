@@ -55,6 +55,11 @@ def test_top_quarter_is_not_empty_for_a_small_sample():
     assert rows["top_quarter"] == (1, 0.0, 1.0)
 
 
+def test_top_quarter_of_one_word_is_that_word():
+    rows = {r[0]: r[1:] for r in word_rows([rec([two(0, [0], margin=1.0)])])}
+    assert rows["top_quarter"] == (1, 1.0, 1.0)
+
+
 def test_mark_row_needs_the_same_syllable_count():
     words = [two(1, [0], mark={"s": 1, "w": [0], "emph": True, "n": 2}),
              two(0, [0], mark={"s": 0, "w": [], "emph": False, "n": 3}),
