@@ -16,6 +16,7 @@ import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
+import { keepWords } from "../ui/keepWords";
 import { Named } from "../ui/Named";
 import { lineNotes, needsNotes } from "../ui/notesView";
 import { StarButton, StarMark } from "../ui/Star";
@@ -23,7 +24,7 @@ import { ThreeLineView } from "../ui/ThreeLine";
 import { useInterpret } from "../ui/useInterpret";
 import { useSaved } from "../ui/useSaved";
 import { colors, top } from "../ui/theme";
-import { codeOf, messageOf, styles as common, Waiting } from "./common";
+import { codeOf, ErrorText, messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
 type Rate = 0.6 | 0.8 | 1;
@@ -426,7 +427,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             {star?.saved && !opened && <Text> </Text>}
             {star?.saved && !opened && <StarMark />}
           </Text>
-          <Text style={styles.heardLine}>들린 말: {b.text}</Text>
+          <Text style={styles.heardLine}>{keepWords(`들린 말: ${b.text}`)}</Text>
           {opened && idx !== undefined && <Ko idx={idx} />}
           {opened && idx !== undefined && (
             <View style={[styles.linkGroup, styles.gap]}>
@@ -477,20 +478,20 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       <View style={styles.header}>
         <BackButton onPress={askLeave} />
         <View style={styles.titleRow}>
-          <Text style={[common.title, styles.titleText]}>{title}</Text>
+          <Text style={[common.title, styles.titleText]}>{keepWords(title)}</Text>
           {count && <Text style={styles.count}>{count}</Text>}
         </View>
         <Text style={common.sub}>
-          {practice
-            ? rp.frame.title_ko
-            : `나: ${rp.frame.user_role_ko} · 라이언: ${rp.frame.ryan_role_ko} · ${rp.frame.place_ko}`}
+          {keepWords(
+            practice ? rp.frame.title_ko : `나: ${rp.frame.user_role_ko} · 라이언: ${rp.frame.ryan_role_ko} · ${rp.frame.place_ko}`,
+          )}
         </Text>
         {fromSaved && (
           <Pressable onPress={replaySituation} hitSlop={8} style={styles.replay}>
             <Text style={[styles.link, !canCopy && styles.off]}>{copying ? "준비하고 있어요" : "이 상황 다시 하기 ›"}</Text>
           </Pressable>
         )}
-        {copyError && <Text style={common.error}>{copyError}</Text>}
+        {copyError && <ErrorText text={copyError} />}
       </View>
       <ScrollView
         ref={scroll}
@@ -503,7 +504,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {state.jake && !practice && (
           <Named part="jake">
             <Pressable onPress={replayJake} style={[styles.bubble, styles.ryan]}>
-              <Text style={styles.plainText}>{state.jake.text}</Text>
+              <Text style={styles.plainText}>{keepWords(state.jake.text)}</Text>
               <Text style={styles.hint}>눌러서 다시 듣기</Text>
             </Pressable>
           </Named>
@@ -522,7 +523,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           ) : (
             <Named key={i} part={b.kind === "user" ? "mine" : "feedback"}>
               <View style={[styles.bubble, b.kind === "user" ? styles.user : styles.feedback]}>
-                <Text style={styles.plainText}>{b.text}</Text>
+                <Text style={styles.plainText}>{keepWords(b.text)}</Text>
               </View>
             </Named>
           ),
@@ -581,16 +582,17 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </View>
           </Named>
         )}
-        {state.heard && <Text style={styles.heard}>들린 말: {state.heard}</Text>}
+        {state.heard && <Text style={styles.heard}>{keepWords(`들린 말: ${state.heard}`)}</Text>}
         {state.feedback !== "" && (
           <Named part="feedback">
             <View style={[styles.bubble, styles.feedback]}>
-              <Text style={styles.plainText}>{state.feedback}</Text>
+              <Text style={styles.plainText}>{keepWords(state.feedback)}</Text>
             </View>
           </Named>
         )}
         {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" onShow={toEnd} />}
-        {state.message && <Text style={state.phase === "error" ? common.error : styles.notice}>{state.message}</Text>}
+        {state.message &&
+          (state.phase === "error" ? <ErrorText text={state.message} /> : <Text style={styles.notice}>{keepWords(state.message)}</Text>)}
       </ScrollView>
 
       {/* No 「처음으로」 at the bottom: back does nearly the same, one screen at a time (2026-11-06 user). Without it

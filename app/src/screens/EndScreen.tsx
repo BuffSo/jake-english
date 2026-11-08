@@ -15,11 +15,12 @@ import type { Action, State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { KoButton, KoLine, type KoProps } from "../ui/Interpret";
+import { keepWords } from "../ui/keepWords";
 import { StarButton, StarMark } from "../ui/Star";
 import { colors, top } from "../ui/theme";
 import { useInterpret } from "../ui/useInterpret";
 import { useSaved } from "../ui/useSaved";
-import { messageOf, styles as common, Waiting } from "./common";
+import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 
 type Props = { state: State; dispatch: Dispatch<Action>; sounds: SoundQueue };
 type Source = ReturnType<typeof api.audioSource>;
@@ -175,10 +176,10 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
     <View style={styles.wrap}>
       <View style={styles.header}>
         <BackButton onPress={back} />
-        <Text style={common.title}>{past ? past.title : rp?.frame.title_ko}</Text>
+        <Text style={common.title}>{keepWords((past ? past.title : rp?.frame.title_ko) ?? "")}</Text>
         {past
           ? rp && <Text style={[common.sub, styles.say]}>{dayKo(rp.created)}</Text>
-          : summary && <Text style={[common.body, styles.say]}>{summary.say.text}</Text>}
+          : summary && <Text style={[common.body, styles.say]}>{keepWords(summary.say.text)}</Text>}
       </View>
       <ScrollView
         ref={scroll}
@@ -219,7 +220,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
             />
           );
         })}
-        {error && <Text style={common.error}>{error}</Text>}
+        {error && <ErrorText text={error} />}
       </ScrollView>
       {/* no 「처음으로」: back goes to a new situation, one more back to the first screen (2026-11-06 user) */}
       {summary && rp && (
@@ -323,7 +324,7 @@ function TryView({ t, open, onPlay }: { t: Try; open: boolean; onPlay: () => voi
   return (
     <View style={styles.try}>
       <View style={styles.who}>
-        <Text style={styles.heard}>들린 말: {t.heard}</Text>
+        <Text style={styles.heard}>{keepWords(`들린 말: ${t.heard}`)}</Text>
         {open && (
           <Pressable onPress={onPlay} hitSlop={8}>
             <Text style={styles.play}>▶ 내 녹음</Text>
@@ -332,7 +333,7 @@ function TryView({ t, open, onPlay }: { t: Try; open: boolean; onPlay: () => voi
       </View>
       {points.map((p, i) => (
         <Text key={i} style={styles.point}>
-          {p}
+          {keepWords(p)}
         </Text>
       ))}
     </View>

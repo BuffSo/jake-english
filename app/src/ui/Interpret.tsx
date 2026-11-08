@@ -4,6 +4,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { KoEntry, KoView } from "../flow/interpret";
+import { keepWords } from "./keepWords";
 import { colors } from "./theme";
 
 // What a line hands to its 「통역」 button and Sohee's line
@@ -28,7 +29,7 @@ export function KoLine({ view, entry, onReplay }: { view: KoView; entry: KoEntry
         <Text style={styles.tagText}>소희</Text>
       </View>
       <Text style={styles.text}>
-        {entry.text}
+        {keepWords(entry.text)}
         <Text style={styles.play}> ▶</Text>
       </Text>
     </Pressable>

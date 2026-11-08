@@ -89,3 +89,45 @@ test("a list that could not be loaded says so until it loads", async () => {
   expect(store.lastError()).toBeNull();
   expect(store.items()).toEqual([]);
 });
+
+// The Mac took the change but the list could not be loaded again: the row must go, and a second 「빼기」 must not
+// save it back (todo 12-1)
+function failingAfterFirstList() {
+  let calls = 0;
+  const set = jest.fn(async (_rp: string, _idx: number, _on: boolean) => {});
+  const store = createSavedStore({
+    list: async () => {
+      calls += 1;
+      if (calls > 1) throw new Error("offline");
+      return [item("Sure.", "sure")];
+    },
+    set,
+    onFail: () => {},
+    changed: () => {},
+  });
+  return { store, set };
+}
+
+test("removing takes a sentence off the list at once, even when the list cannot be loaded again", async () => {
+  const { store, set } = failingAfterFirstList();
+  await store.refresh();
+  await store.remove("aaaaaaaaaaaa", 1, "Sure.");
+  expect(set).toHaveBeenCalledWith("aaaaaaaaaaaa", 1, false);
+  expect(store.items()).toEqual([]);
+  expect(store.has("Sure.")).toBe(false);
+});
+
+test("remove never saves: a sentence already out is sent out again", async () => {
+  const set = jest.fn(async (_rp: string, _idx: number, _on: boolean) => {});
+  const store = createSavedStore({ list: async () => [], set, onFail: () => {}, changed: () => {} });
+  await store.refresh();
+  await store.remove("aaaaaaaaaaaa", 1, "Sure.");
+  expect(set).toHaveBeenCalledWith("aaaaaaaaaaaa", 1, false);
+});
+
+test("unsaving with toggle also takes it off the list when the list cannot be loaded again", async () => {
+  const { store } = failingAfterFirstList();
+  await store.refresh();
+  await store.toggle("aaaaaaaaaaaa", 1, "Sure.");
+  expect(store.items()).toEqual([]);
+});

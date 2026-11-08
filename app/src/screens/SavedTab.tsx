@@ -15,7 +15,7 @@ import { keepWords } from "../ui/keepWords";
 import { ListCard } from "../ui/ListCard";
 import { colors } from "../ui/theme";
 import { useSaved } from "../ui/useSaved";
-import { messageOf, styles as common, Waiting } from "./common";
+import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 
 export function SavedTab({ dispatch }: { dispatch: Dispatch<Action> }) {
   const saved = useSaved();
@@ -51,6 +51,10 @@ export function SavedTab({ dispatch }: { dispatch: Dispatch<Action> }) {
 
   function askRemove(i: SavedItem) {
     if (asking.current || saved.pending(i.text)) return; // asked already, or on its way out
+    // A practice on its way: the dialog stayed over the practice screen once it came, and 「빼기」 took out the sentence
+    // being practised (PR #30 review). The gate, not `starting`, which is the last render's value: a tap on ★ right
+    // after the row would still see it false.
+    if (gate.busy) return;
     asking.current = true;
     const done = () => {
       asking.current = false;
@@ -65,7 +69,7 @@ export function SavedTab({ dispatch }: { dispatch: Dispatch<Action> }) {
           style: "destructive",
           onPress: () => {
             done();
-            void saved.toggle(i.rp_id, i.idx, i.text);
+            void saved.remove(i.rp_id, i.idx, i.text);
           },
         },
       ],
@@ -94,12 +98,12 @@ export function SavedTab({ dispatch }: { dispatch: Dispatch<Action> }) {
         ))}
         {items === null && saved.lastError() !== null && (
           <>
-            <Text style={common.error}>{messageOf(saved.lastError())}</Text>
+            <ErrorText text={messageOf(saved.lastError())} />
             <Button label="다시 시도" onPress={() => saved.refresh()} />
           </>
         )}
         {starting && <Waiting text="준비하고 있어요" />}
-        {error && <Text style={common.error}>{error}</Text>}
+        {error && <ErrorText text={error} />}
       </ScrollView>
       {!!items?.length && (
         <View style={styles.controls}>

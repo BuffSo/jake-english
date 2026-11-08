@@ -1,10 +1,10 @@
 // 「지난 상황」 tab of 「복습하기」: one card per script spoken in, newest first, with the last day it was done (spec
 // review-practice 2, review-screens 3). The rows showed the first day before; with the newest first the days came out
-// of order, so they show the last day, labelled once above the list.
-import { useCallback, useEffect, useState, type Dispatch } from "react";
+// of order, so they show the last day, labelled once above the list. The list is loaded by `ReviewScreen`, once while
+// 「복습하기」 is open: this tab is drawn anew at each switch, and loading here showed an empty tab each time (todo 12-4).
+import type { Dispatch } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { api } from "../api";
 import type { PastItem } from "../api/types";
 import { dayKo } from "../flow/review";
 import type { Action } from "../flow/state";
@@ -12,24 +12,11 @@ import { Button } from "../ui/Button";
 import { keepWords } from "../ui/keepWords";
 import { ListCard } from "../ui/ListCard";
 import { colors } from "../ui/theme";
-import { messageOf, styles as common } from "./common";
+import { ErrorText, styles as common } from "./common";
 
-export function PastTab({ dispatch }: { dispatch: Dispatch<Action> }) {
-  const [items, setItems] = useState<PastItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+type Props = { items: PastItem[] | null; error: string | null; onRetry: () => void; dispatch: Dispatch<Action> };
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setItems(await api.past());
-    } catch (e) {
-      setError(messageOf(e));
-    }
-  }, []);
-  useEffect(() => {
-    load();
-  }, [load]);
-
+export function PastTab({ items, error, onRetry, dispatch }: Props) {
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       {items?.length === 0 && <Text style={[common.sub, styles.empty]}>아직 해 본 상황이 없어요</Text>}
@@ -44,8 +31,8 @@ export function PastTab({ dispatch }: { dispatch: Dispatch<Action> }) {
       ))}
       {error && (
         <>
-          <Text style={common.error}>{error}</Text>
-          <Button label="다시 시도" onPress={load} />
+          <ErrorText text={error} />
+          <Button label="다시 시도" onPress={onRetry} />
         </>
       )}
     </ScrollView>
