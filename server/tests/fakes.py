@@ -207,6 +207,7 @@ class FakeVoice:
         self.audio_dir = Path(audio_dir)
         self.calls: list[tuple[str, str, str, bool]] = []
         self.checked: list[str] = []  # texts asked to be heard back (check=True)
+        self.ranks: list[int] = []  # each call's rank, beside `calls`
         self.fail_text: str | None = None
 
     async def start(self):
@@ -222,6 +223,7 @@ class FakeVoice:
         from je_server.tts import VoiceError, audio_key
 
         self.calls.append((text, voice, lang, urgent))
+        self.ranks.append(rank)
         if check:
             self.checked.append(text)
         if text == self.fail_text:

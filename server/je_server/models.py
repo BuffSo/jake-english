@@ -47,7 +47,8 @@ class ScriptLine(BaseModel):
     kind: Literal["script", "reply"] = "script"
     three: ThreeLine | None = None
     audio: str | None = None  # sound key (sha256 hex) of Ryan reading the line
-    # Sohee's Korean for the line and the sound key of her saying it, made only when asked (spec korean-translation 5)
+    # Sohee's Korean for the line and the sound key of her saying it (spec korean-translation 5): made when asked, but a
+    # list pick's lines start with the Korean written in the repository and their sound is made ahead (todo 13)
     ko: str | None = None
     ko_audio: str | None = None
 
