@@ -134,6 +134,9 @@ FRAME = Frame(title_ko="호텔 체크인", user_role_ko="손님", ryan_role_ko="
 ASIDE = [
     Case("near miss tip", "The room is on the tenth floor.", "The loom is on the tent floor.",
          [issue("room", "loom", RL), issue("tenth", "tent")]),
+    # one tip for two words: the feedback prompt needed its own rule for this (todo 29); teacher Ryan gets the same case
+    Case("same tip twice", "Do you have fried rice?", "Do you have flied lice?",
+         [issue("fried", "flied", RL), issue("rice", "lice", RL)]),
     Case("near miss F", "I'd like two coffees, please.", "I'd like to copies, please.",
          [Issue(target="coffees", heard="copies", sound=("F", "P"), explain=FP)]),
     Case("near miss number", "That's seventy dollars.", "That's seventeen dollars.", [issue("seventy", "seventeen")]),

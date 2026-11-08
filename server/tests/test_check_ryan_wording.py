@@ -131,3 +131,12 @@ def test_a_dropped_comma_does_not_count_as_rewording():
     case = next(c for c in cw.FEEDBACK if c.name == "tip")
     said = "그런데 room이 loom처럼 들렸어요. " + cw.RL.replace("닿지만,", "닿지만") + " 한 번 더 해 볼까요?"
     assert cw.flags(case, said, aside=False) == []
+
+
+def test_teacher_ryan_has_a_shared_tip_case():
+    # PR #50 review: feedback got a rule for one tip on two words; teacher Ryan is measured on the same case
+    case = next(c for c in cw.ASIDE if c.name == "same tip twice")
+    once = "fried가 flied처럼, rice가 lice처럼 들렸어요. " + cw.RL + " 한 번 더 해 볼까요?"
+    assert cw.flags(case, once, aside=True) == []
+    framed = "fried가 flied처럼, rice가 lice처럼 들렸어요. 두 낱말 모두 R이 L로 들렸어요. " + cw.RL + " 한 번 더 해 볼까요?"
+    assert cw.flags(case, framed, aside=True) == ["sound named (fried)"]
