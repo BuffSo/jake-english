@@ -166,6 +166,23 @@ async def test_copy_starts_fresh_with_the_same_script(engine_with_rp, speech_byt
     assert ("make_script", (old.situation,)) not in fake_claude.calls[calls:]
 
 
+async def test_copy_makes_an_unsettled_note_again(engine_with_rp):
+    # a note left without its reading would stay so in every copy of the roleplay (todo three_line_notes_degrade_rate 3)
+    engine, rp_id, user_idx = engine_with_rp
+    old = engine.store.load(rp_id)
+    users = [l.idx for l in old.lines if l.speaker == "user"]
+    for i in users:
+        await engine.three(rp_id, i)
+    old = engine.store.load(rp_id)
+    old.lines[user_idx] = old.lines[user_idx].model_copy(
+        update={"three": old.lines[user_idx].three.model_copy(update={"reading": ""})})
+    engine.store.save(old)
+    new = await engine.copy(rp_id)
+    assert new.lines[user_idx].three is None and new.lines[user_idx].audio == old.lines[user_idx].audio
+    assert all(new.lines[i] == old.lines[i] for i in users if i != user_idx)
+    assert (await engine.three(new.id, user_idx)).reading
+
+
 async def test_copy_keeps_reply_lines_in_order(engine):
     rp = await old_reply_record(engine)
     new = await engine.copy(rp.id)

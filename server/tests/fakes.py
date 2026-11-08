@@ -13,9 +13,9 @@ from je_server.models import Frame, Syllable, ThreeLine, Word
 
 
 def noted(text: str) -> ThreeLine:
-    """A note with Korean in it, as a good annotate gives: `plain` has none, and a pick does not reuse that (spec
-    fixed-list-scripts 2)."""
-    return ThreeLine(words=[Word(syl=[Syllable(en=t, ko="가", m="n")]) for t in text.split()], reading="")
+    """A note with Korean and a reading in it, as a good annotate gives: a pick or a copy does not reuse one without
+    them (`threeline.settled`, spec fixed-list-scripts 2)."""
+    return ThreeLine(words=[Word(syl=[Syllable(en=t, ko="가", m="n")]) for t in text.split()], reading="[[가]]는 짧게.")
 
 
 def _response(text: str, stop_reason: str = "end_turn"):
