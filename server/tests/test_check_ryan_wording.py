@@ -154,3 +154,10 @@ def test_names_the_server_dropped_are_still_flagged():
     shown = "한 번 더 해 볼까요?"
     raw = "짚을 곳이 없어요. " + shown
     assert cw.flags(case, shown, aside=True, raw=raw) == ["names '짚을' (server dropped)"]
+
+
+def test_a_capitalized_name_counts_as_pointed():
+    # the Mac sends names in lowercase; Haiku wrote 「Chungmuro가 Chungmugong처럼」 and the check called it missing
+    case = next(c for c in cw.FEEDBACK if c.name == "name")
+    said = "나머지 낱말은 다 알아들었어요. 그런데 Chungmuro가 Chungmugong처럼 들렸어요. 한 번 더 해 볼까요?"
+    assert cw.flags(case, said, aside=False) == []

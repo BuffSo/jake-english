@@ -137,6 +137,10 @@ FEEDBACK = [
          [issue("on", "")], ["이번에는 right의 R 소리가 제대로 났어요", REST]),
     Case("dropped", "Can I pay by card?", "Can I pay card?", [issue("by", "")], [REST]),
     *(Case(name, line, heard, [issue(t, h, tip(*p), p)], [REST]) for name, p, line, heard, t, h in SOUND_LINES),
+    # a name missing from the dictionary, a syllable changed: no sound tip (spec teacher-answer-context 3); a recording
+    # test had Haiku add 「소리 나는 대로 들어 보고 따라 해 볼까요?」, advice not given
+    Case("name", "Get off at Chungmuro.", "Get off at Chungmugong.", [issue("chungmuro", "chungmugong")], [REST],
+         never=("들어 보고", "소리 나는 대로", "천천히")),
     Case("clean", "Thanks for waiting.", "Thanks for waiting.", [], [CLEAN]),
     Case("clean last", "Thanks, you too!", "Thanks, you too!", [], [CLEAN], last=True),
 ]
@@ -191,10 +195,11 @@ def flags(case: Case, text: str, aside: bool, raw: str = "") -> list[str]:
     the server drops them from `text`, so a prompt that stops keeping them out would not show there."""
     text = " ".join(text.split())
     out = tip_flags(case, text)
+    # the Mac compares in lowercase; the model may write a name capitalized (Chungmuro)
     for i in case.issues:
-        if i.target and i.target not in text:
+        if i.target and i.target.lower() not in text.lower():
             out.append(f"word not pointed ({i.target})")
-        if i.heard and i.heard not in text:
+        if i.heard and i.heard.lower() not in text.lower():
             out.append(f"heard word not said ({i.heard})")
     # the model's own answer: the server drops sentences that name its materials from what the learner sees (todo 40
     # 2), and a name it dropped is still the model breaking the rule
