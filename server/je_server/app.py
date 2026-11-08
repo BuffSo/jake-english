@@ -304,6 +304,14 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
 
+    @router.post("/roleplays/{rp_id}/lines/{idx}/skip")
+    async def skip(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        # a line of mine skipped inside the roleplay: its place moves past it (spec resume-roleplay 3)
+        try:
+            return {"pos": await engine().skip(rp_id, idx)}
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+
     @router.get("/roleplays/{rp_id}/lines/{idx}/attempts/{n}/recording")
     def recording(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0), n: int = PathParam(ge=1)):
         # found by a checked ID and two integers only, inside the roleplay's rec folder (REVIEW.md 「맥 서버 보안」)

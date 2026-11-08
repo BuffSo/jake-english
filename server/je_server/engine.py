@@ -727,6 +727,19 @@ class Engine:
             self.store.save_saved(items)
         return {"key": key, "on": on}
 
+    async def skip(self, rp_id: str, idx: int) -> int:
+        """「건너뛰기」 on a line of mine inside the roleplay: the place moves past it, so resuming starts after it
+        (spec resume-roleplay 3). No try and no recording are kept; the place only moves forward. NotFound: no such
+        line, or Ryan's."""
+        _, line = self.get_line(rp_id, idx)
+        if line.speaker != "user":
+            raise NotFound(f"{rp_id}/{idx}")
+        async with self.lock(rp_id):
+            rp = self.store.load(rp_id)
+            rp.pos = max(rp.pos, idx + 1)
+            self.store.save(rp)
+            return rp.pos
+
     async def save_attempt(self, rp_id: str, idx: int, attempt: Attempt, pos: int | None) -> None:
         async with self.lock(rp_id):
             rp = self.store.load(rp_id)
