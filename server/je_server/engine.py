@@ -8,9 +8,10 @@ import os
 import re
 import threading
 import time
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from datetime import date, datetime
 from pathlib import Path
+from typing import Literal
 
 from . import audio
 from .asr import WhisperError
@@ -606,8 +607,12 @@ class Engine:
         yield NewSentence(("" if sent != sent.rstrip() else " ") + fixed)
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
-                    timings: dict[str, float], t0: float) -> AsyncIterator[dict]:
-        """Streams text events as they come and an audio event per finished sentence, in order."""
+                    timings: dict[str, float], t0: float, lang: Literal["korean", "english"] = "korean",
+                    on_text_end: Callable[[str], Awaitable[dict | None]] | None = None) -> AsyncIterator[dict]:
+        """Streams text events as they come and an audio event per finished sentence in Ryan's `lang` voice, in
+        order: feedback and teacher Ryan in Korean, a free-talk reply in English from its first sentence on (spec
+        free-talk-design 4). Once the text has ended without an error, `on_text_end` is given all of it and the event
+        it returns goes out at once, maybe between audio events: a free-talk reply is saved there (spec 2)."""
         out: asyncio.Queue = asyncio.Queue()
         sentences: asyncio.Queue = asyncio.Queue()
 
@@ -626,6 +631,8 @@ class Engine:
                         await sentences.put(s)
                 for s in buf.flush():
                     await sentences.put(s)
+                if on_text_end is not None and (ev := await on_text_end("".join(said))) is not None:
+                    await out.put(ev)
             except ClaudeUnavailable:
                 await out.put(self.error("claude_unavailable", "claude_down"))
             finally:
@@ -634,7 +641,7 @@ class Engine:
         async def make_audio():
             while (s := await sentences.get()) is not None:
                 try:
-                    key = await self.voice.say(s, "ryan", "korean", urgent=True)
+                    key = await self.voice.say(s, "ryan", lang, urgent=True)
                 except VoiceError:
                     log.info("feedback sentence voice failed")
                     continue

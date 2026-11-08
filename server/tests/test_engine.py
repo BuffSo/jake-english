@@ -453,3 +453,50 @@ async def test_a_talk_is_not_copied(engine):
     engine.store.save(talk)
     with pytest.raises(NotFound):
         await engine.copy(talk.id)
+
+
+async def _pieces(*pieces, fail=False):
+    for piece in pieces:
+        yield piece
+    if fail:
+        raise ClaudeUnavailable("fake")
+
+
+async def _spoken(engine, text, **kw):
+    import time
+
+    return [e async for e in engine.speak(text, [], [], {}, time.perf_counter(), **kw)]
+
+
+async def test_speak_in_english_uses_ryans_english_voice(engine, fake_voice):
+    # a free-talk reply (spec free-talk-design 4); feedback and teacher Ryan keep his Korean voice
+    events = await _spoken(engine, _pieces("Sounds fun! ", "Was it busy?"), lang="english")
+    assert [c[1:] for c in fake_voice.calls] == [("ryan", "english", True)] * 2
+    assert [e["key"] for e in events if e["type"] == "audio"] == [
+        fake_voice.key("ryan", "english", "Sounds fun!"), fake_voice.key("ryan", "english", "Was it busy?")]
+
+
+async def test_speak_tells_when_the_text_is_done(engine):
+    told = []
+
+    async def on_text_end(text):
+        told.append(text)
+        return {"type": "reply"}
+
+    events = await _spoken(engine, _pieces("Sounds fun! ", "Was it ", "busy?"), on_text_end=on_text_end)
+    assert told == ["Sounds fun! Was it busy?"]
+    kinds = [e["type"] for e in events]
+    assert kinds.count("reply") == 1
+    assert kinds.index("reply") > max(i for i, k in enumerate(kinds) if k == "text")
+
+
+async def test_speak_does_not_tell_a_text_claude_cut_off(engine):
+    told = []
+
+    async def on_text_end(text):
+        told.append(text)
+        return {"type": "reply"}
+
+    events = await _spoken(engine, _pieces("Sounds fun! ", fail=True), on_text_end=on_text_end)
+    assert told == [] and "reply" not in [e["type"] for e in events]
+    assert [e["code"] for e in events if e["type"] == "error"] == ["claude_unavailable"]
