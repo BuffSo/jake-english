@@ -23,7 +23,7 @@ adb는 안드로이드 SDK의 `platform-tools/adb`다(SDK 기본 위치는 `~/Li
 1. **기기를 고른다.** `adb devices -l`에서 USB 폰은 일련번호에 `:`이 없고 `emulator-`로 시작하지 않는 것이다. 이후 명령은 모두 `adb -s <일련번호>`로 그 기기를 정해 부른다. 에뮬레이터가 함께 떠 있으면 `-s` 없이 부를 때 오류가 난다.
 2. **화면이 꺼지지 않게 한다.** `adb shell svc power stayon usb`. 꽂혀 있는 동안 화면이 켜져 있다. 잠금 화면이면 누르기가 앱에 닿지 않는다. 지금 상태는 `adb shell dumpsys window | grep -E "mCurrentFocus|isKeyguardShowing"`로 본다.
 3. **앱을 깐다.** `adb install -r app/android/app/build/outputs/apk/release/app-release.apk`. 빌드는 `app/README.md`.
-4. **앱을 띄운다.** `adb shell monkey -p dev.jakeso.english -c android.intent.category.LAUNCHER 1`
+4. **앱을 띄운다.** `adb shell monkey -p dev.jakeso.english -c android.intent.category.LAUNCHER 1`. 3에서 앱이 앞에 떠 있었으면 깐 뒤 폰이 저절로 다시 띄운다. 그때는 부르지 않는다(아래 「겪은 것」의 「깐 뒤 곧바로 띄우면 앱이 두 번 떠 소리가 겹친다」).
 5. **화면 글과 자리를 읽는다.**
 
    ```sh
@@ -78,6 +78,11 @@ adb는 안드로이드 SDK의 `platform-tools/adb`다(SDK 기본 위치는 `~/Li
   - 증상: 방금 녹음한 내 말 줄(평가 자리의 들린 말)을 보려고 에뮬레이터 마이크를 켜고 학습자 목소리 녹음을 `afplay -v 4`로 틀었다. 들린 말에는 튼 녹음이 아니라 맥 둘레의 다른 말소리만 받아써졌다. 맥 소리가 마이크에 닿지 않은 까닭은 확인하지 않았다.
   - 고친 것: 마이크를 바로 끄고(`hostmicoff`), 그 녹음이 든 시험 복사본과 화면 덤프를 지웠다. 받아쓴 글은 어디에도 옮기지 않았다. 마이크로 다시 하지 않고, 지어낸 글을 그 자리에 넣는 임시 코드로 APK를 빌드해 모양과 누르기만 봤다. 빌드가 끝나면 바로 `git checkout -- <파일>`로 되돌리고 `git status`가 깨끗한지 본 뒤 깔았다. 시험이 끝나면 깨끗한 코드로 다시 빌드해 깔아, 임시 코드가 든 앱을 남기지 않는다.
   - 같은 실수를 막는 방법: 녹음 뒤의 화면 모양과 누르기만 볼 때는 마이크보다 임시 빌드를 먼저 쓴다. 녹음 흐름 자체를 봐야 할 때만 마이크를 쓰고, 첫 녹음의 들린 말이 튼 문장인지부터 본다. 아니면 거기서 멈춘다.
+- **깐 뒤 곧바로 띄우면 앱이 두 번 떠 소리가 겹친다 (2026-11-08 noisy-room).**
+  - 증상: 사용자가 「라이언 목소리가 에코 되어 나온다」고 했다. 폰 기록(`adb logcat`의 `APM_AudioPolicyManager` startOutput/stopOutput)을 보니, 첫 화면 인사 두 줄이 서로 다른 재생 세션에서 0.6초 차이로 두 번씩 났다.
+  - 원인: 앱이 앞에 떠 있을 때 `adb install -r`로 깔면, 삼성 폰이 업데이트 뒤 앱을 저절로 다시 띄운다(systemui `PackageUpdateActivity`, 기록에 `CorePackageUpdate`). 그 사이 `monkey`로 또 띄우자 앱 화면이 두 번 그려졌다. 먼저 뜬 화면은 닫혔지만, 그 화면의 소리 대기열이 넣어 둔 인사를 끝까지 틀었다. 앱 쪽 정리는 할 일 `20261108_42_todo_sound_queue_after_remount.md`.
+  - 고친 것: 깐 뒤 5초 기다려 앞의 앱을 보고, 이 앱이 떠 있으면 띄우지 않는다. 런처나 업데이트 화면이면 한 번만 띄운다. 그 뒤로는 겹치지 않았다.
+  - 막는 방법: 위 「명령」 4. 소리가 겹쳤다는 말을 들으면, 먼저 폰 기록에서 같은 길이의 재생이 겹쳐 시작했는지와 그 세션 번호를 본다. 폰 기록은 오래 남지 않으니 바로 받아 둔다.
 - **zsh에서 adb 경로를 변수에 담을 때 (2026-11-08):** `E="$A -s emulator-5556"; $E shell …`은 zsh가 낱말을 나누지 않아 「그런 파일이 없다」로 실패한다. 그사이 `hostmicon`이 빠진 채 녹음이 무음으로 갔다. `"$A" -s emulator-5556 …`처럼 매번 쓴다.
 - **소리를 내는 것과 여는 것을 가린다 (2026-11-08 leftover-minors):** 대화 화면과 끝 화면의 말풍선은 누르면 열기만 한다. 소리는 그 안의 「🔊 듣기」, 「🔊 내 녹음」과 아래 「🔊 다시 듣기」가 낸다. 실패하는 소리 뒤에 말풍선을 눌러 「두 번째 소리가 나는지」를 보려다, 두 번째 소리가 처음부터 없어 시험이 헛돌았다. 두 소리를 이어 누르는 시험은 먼저 하나씩 눌러 `logcat`에 그 소리(`frames delivered`나 `Source error`)가 잡히는지 대조부터 본다.
 - **받을 수 없는 소리는 3초 뒤에 오류가 난다 (2026-11-08 leftover-minors):** 앱의 플레이어는 맥이 404를 주어도 3초쯤 다시 받아 본 뒤 `logcat`에 `Source error`와 `Response code: 404`를 남긴다. 녹음을 뺀 데이터 복사본에서는 「🔊 내 녹음」이 모두 이렇게 실패한다. 다른 소리의 실패를 시험할 때는 복사본의 `audio/`에서 그 소리 파일만 잠깐 빼고, 끝나면 되돌린다.
