@@ -157,7 +157,7 @@ export const NO_SPEECH = "말소리가 없어 녹음을 멈췄어요.";
 
 export const OFFLINE = "맥에 연결할 수 없어요. 맥과 인터넷 연결을 확인해 주세요.";
 
-function messageFor(code: ErrorCode, say?: { text: string }): string {
+export function messageFor(code: ErrorCode, say?: { text: string }): string {
   if (say?.text) return say.text;
   if (code === "offline") return OFFLINE;
   if (code === "claude_unavailable") return "지금은 라이언이 대답할 수 없어요. 맥의 인터넷 연결을 확인해 주세요.";

@@ -13,6 +13,8 @@ import type {
   Said,
   SavedItem,
   Summary,
+  TalkEnd,
+  TalkEvent,
   ThreeLine,
 } from "./types";
 
@@ -83,6 +85,32 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
     return request(path, { method: "POST", headers: { "Content-Type": "audio/mp4" }, body: bytes as never }, timeout);
   }
 
+  // the answer streams as lines of JSON; 30 seconds without a chunk means the Mac is gone
+  async function readEvents<E>(res: Response, onEvent: (e: E) => void): Promise<void> {
+    const reader = res.body?.getReader();
+    if (!reader) throw new ApiError("unknown");
+    const decoder = new TextDecoder();
+    const lines = new NdjsonSplitter();
+    for (;;) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new ApiError("offline")), TIMEOUT);
+      });
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await Promise.race([reader.read(), idle]);
+      } catch (e) {
+        reader.cancel().catch(() => {});
+        throw e instanceof ApiError ? e : new ApiError("offline");
+      } finally {
+        clearTimeout(timer);
+      }
+      if (chunk.done) break;
+      for (const e of lines.push(decoder.decode(chunk.value, { stream: true }))) onEvent(e as E);
+    }
+    for (const e of lines.flush()) onEvent(e as E);
+  }
+
   return {
     // asks for the day's shadowing tip: the Mac counts it said only when asked, so a plain `/home` check leaves it
     // (spec ryan-shadowing-tip 4)
@@ -120,29 +148,17 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
       onEvent: (e: AttemptEvent) => void,
     ): Promise<void> {
       const res = await upload(`/roleplays/${id}/lines/${idx}/attempts?mode=${mode}`, fileUri);
-      const reader = res.body?.getReader();
-      if (!reader) throw new ApiError("unknown");
-      const decoder = new TextDecoder();
-      const lines = new NdjsonSplitter();
-      for (;;) {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const idle = new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new ApiError("offline")), TIMEOUT);
-        });
-        let chunk: ReadableStreamReadResult<Uint8Array>;
-        try {
-          chunk = await Promise.race([reader.read(), idle]);
-        } catch (e) {
-          reader.cancel().catch(() => {});
-          throw e instanceof ApiError ? e : new ApiError("offline");
-        } finally {
-          clearTimeout(timer);
-        }
-        if (chunk.done) break;
-        for (const e of lines.push(decoder.decode(chunk.value, { stream: true }))) onEvent(e as AttemptEvent);
-      }
-      for (const e of lines.flush()) onEvent(e as AttemptEvent);
+      await readEvents(res, onEvent);
     },
+
+    // free talk (spec free-talk-design 2, 6): `heard` is how many of Ryan's sentences had started when I cut in
+    createTalk: () => post<Roleplay>("/talks", undefined, LONG),
+    async talkTurn(id: string, fileUri: string, heard: number | null, onEvent: (e: TalkEvent) => void): Promise<void> {
+      const res = await upload(`/talks/${id}/turns${heard === null ? "" : `?heard=${heard}`}`, fileUri);
+      await readEvents(res, onEvent);
+    },
+    endTalk: (id: string, heard: number | null) =>
+      post<TalkEnd>(`/talks/${id}/end${heard === null ? "" : `?heard=${heard}`}`, undefined, LONG),
 
     audioSource: (key: string, rate: 0.6 | 0.8 | 1 = 1) => ({ uri: `${base}/audio/${key}?rate=${rate}`, headers: auth }),
     imageSource: (path: string) => ({ uri: base + path, headers: auth }),
