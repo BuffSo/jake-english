@@ -25,6 +25,7 @@ export class SoundQueue {
   private listeners = new Set<(playing: boolean) => void>();
   private now: NowTag = { tag: null, since: 0 };
   private tagListeners = new Set<(now: NowTag) => void>();
+  private closed = false;
 
   constructor() {
     this.player.addListener("playbackStatusUpdate", (status) => {
@@ -71,6 +72,7 @@ export class SoundQueue {
   }
 
   private add(item: Item): void {
+    if (this.closed) return;
     this.queue.push(item);
     if (!this.playing) this.next();
   }
@@ -79,10 +81,21 @@ export class SoundQueue {
     this.queue = [];
     this.idle = [];
     clearTimeout(this.watchdog);
-    this.player.pause();
+    if (!this.closed) this.player.pause(); // after the close the player is no longer ours
     this.sounding = false;
     this.setPlaying(false);
     this.setTag(null);
+  }
+
+  // for good, when the app root that made the queue goes away. A phone reinstall opened the app twice in one process:
+  // the first root closed, but its greeting, asked for before, arrived after and played over the second's (todo
+  // 20261108_42). Sounds asked for after this are dropped.
+  close(): void {
+    // `clear()` first: its pause is what stops a sound already playing. expo-audio's `remove()` on Android only lets
+    // the player go, and the sound would play on (final review).
+    this.clear();
+    this.closed = true;
+    this.player.remove();
   }
 
   onIdle(cb: () => void): void {
