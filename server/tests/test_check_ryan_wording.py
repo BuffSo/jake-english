@@ -46,3 +46,18 @@ def test_aside_flags_a_skip_wish_without_the_skip_button():
     assert cw.flags(case, "괜찮아요. 다시 해 볼까요?", aside=True) == ["does not say '건너뛰기'"]
     good = "「건너뛰기」를 누르면 녹음하지 않고 다음으로 넘어가요. 아니면 한 번 더 해 볼까요?"
     assert cw.flags(case, good, aside=True) == []
+
+
+def test_a_tip_cut_in_half_is_flagged():
+    # todo 20: teacher Ryan said only the R half of the R and L tip; the check looked for 「닿」, which both halves have
+    case = next(c for c in cw.ASIDE if c.name == "near miss tip")
+    point = "room이 loom처럼, tenth가 tent처럼 들렸어요. "
+    half = point + "R은 혀가 어디에도 닿지 않게 하고 입술을 살짝 동그랗게 모아요. 한 번 더 해 볼까요?"
+    assert "tip cut (room)" in cw.flags(case, half, aside=True)
+    whole = point + cw.RL + " 한 번 더 해 볼까요?"
+    assert not [f for f in cw.flags(case, whole, aside=True) if f.startswith("tip")]
+    assert "tip dropped (room)" in cw.flags(case, point + "한 번 더 해 볼까요?", aside=True)
+    # one tip for two words is said once, whole: nothing cut
+    twice = next(c for c in cw.FEEDBACK if c.name == "same tip twice")
+    once = "나머지 낱말은 다 알아들었어요. 그런데 fried가 flied처럼, rice가 lice처럼 들렸어요. " + cw.RL + " 한 번 더 해 볼까요?"
+    assert cw.flags(twice, once, aside=False) == []
