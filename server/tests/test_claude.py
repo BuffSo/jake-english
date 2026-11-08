@@ -1,10 +1,12 @@
 import json
+import random
+from collections import Counter
 
 import pytest
 
 from fakes import (FakeAnthropic, connection_error, refusal_response, script_json, three_json,
                    three_json_with_wrong_stress)
-from je_server.claude import Claude, ClaudeUnavailable
+from je_server.claude import JAKE_ENDINGS, Claude, ClaudeUnavailable, pick_ending
 from je_server.threeline import check
 from je_server.topics import get
 
@@ -404,3 +406,35 @@ async def test_stream_cut_by_the_network_is_unavailable(error):
     assert got == ["괜찮아요. "]
     with pytest.raises(ClaudeUnavailable):
         [d async for d in Claude(FakeAnthropic([["좋아요. ", cut]])).feedback("a", "b", [], [])]
+
+
+# --- Jake's endings (2026-11-08 the user heard five in Jake's voice and chose three to mix) ---------
+
+
+def test_endings_are_the_three_the_user_chose():
+    assert JAKE_ENDINGS == (("상황을 골라 봤어요.", 2), ("상황을 추천해요.", 2), ("상황으로 연습해 볼까요?", 1))
+
+
+def test_pick_ending_weights_bolkkayo_least():
+    # 「볼까요」 is Ryan's ending too, so Jake says it least
+    rng = random.Random(7)
+    got = Counter(pick_ending([], rng) for _ in range(5000))
+    share = {e: got[e] / 5000 for e, _ in JAKE_ENDINGS}
+    assert abs(share["상황을 골라 봤어요."] - 0.4) < 0.03 and abs(share["상황을 추천해요."] - 0.4) < 0.03
+    assert abs(share["상황으로 연습해 볼까요?"] - 0.2) < 0.03
+
+
+def test_pick_ending_skips_the_last_turned_down_ending():
+    # pressing 「다른 걸로요」 again and again should not hear the same ending twice in a row
+    rng = random.Random(3)
+    for ending, _ in JAKE_ENDINGS:
+        down = ["카페에서 주문하는 상황을 추천해요.", f"공항에서 짐을 찾는 {ending} "]  # the last one counts, spaces too
+        got = {pick_ending(down, rng) for _ in range(300)}
+        assert ending not in got and len(got) == 2
+
+
+def test_pick_ending_any_after_an_old_form():
+    # an app or a record from before 2026-11-08 sends the old 「…어때요?」 sentence: it matches no ending
+    rng = random.Random(5)
+    got = {pick_ending(["카페에서 주문하는 상황으로 연습해 보면 어때요?"], rng) for _ in range(300)}
+    assert got == {e for e, _ in JAKE_ENDINGS}

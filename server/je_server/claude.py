@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 import time
 from collections.abc import AsyncIterator, Sequence
@@ -52,6 +53,25 @@ DOUBLE_QUOTES = str.maketrans("", "", "\"“”")
 # Calls made while the learner waits in a turn (feedback, teacher Ryan's answer). The app gives up after 30s without a
 # stream event, so these must fail sooner and let Ryan say "지금은 대답할 수 없어요" (final review, 2026-11-05).
 LIVE_OPTIONS: dict[str, Any] = {"timeout": 12.0, "max_retries": 1}
+
+
+# How Jake's suggestion ends, with weights (2026-11-08 the user heard five endings in Jake's voice and chose these three
+# to mix, in place of the one 「…상황으로 연습해 보면 어때요?」). 「볼까요」 is Ryan's ending too, so it comes least
+# (AI recommendation, the user agreed). The server picks one and Claude keeps it: asked to choose among them itself,
+# a model leans on one and cannot keep the weights.
+JAKE_ENDINGS: tuple[tuple[str, int], ...] = (
+    ("상황을 골라 봤어요.", 2),
+    ("상황을 추천해요.", 2),
+    ("상황으로 연습해 볼까요?", 1),
+)
+
+
+def pick_ending(turned_down: Sequence[str], rng: random.Random | None = None) -> str:
+    """One of JAKE_ENDINGS by weight, but not the ending of the last suggestion just turned down (the app sends the
+    latest last), so 「다른 걸로요」 again and again does not hear the same ending twice in a row."""
+    last = turned_down[-1].strip() if turned_down else ""
+    left = [(e, w) for e, w in JAKE_ENDINGS if not last.endswith(e)]
+    return (rng or random).choices([e for e, _ in left], weights=[w for _, w in left])[0]
 
 
 class ClaudeUnavailable(Exception):
