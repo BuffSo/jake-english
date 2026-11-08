@@ -2,7 +2,7 @@
 
 import type { Thinking } from "../api/types";
 
-export type Who = "jake" | "ryan";
+export type Who = "jake" | "ryan" | "sohee";
 export type { Thinking };
 
 // The person named in the waiting text thinks; Ryan otherwise, since he makes the script, listens and evaluates

@@ -86,7 +86,7 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onTalk, onReview
             />
             <View style={styles.gap} />
             <ChoiceCard
-              icon="🗣️"
+              icon="☕"
               title="자유 대화"
               line="대본 없이 라이언과 영어로 이야기해요"
               color={colors.free}

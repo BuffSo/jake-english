@@ -11,6 +11,8 @@ import type {
   Resume,
   Roleplay,
   Said,
+  Hint,
+  HintFull,
   SavedItem,
   Summary,
   TalkEnd,
@@ -159,6 +161,13 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
     },
     endTalk: (id: string, heard: number | null) =>
       post<TalkEnd>(`/talks/${id}/end${heard === null ? "" : `?heard=${heard}`}`, undefined, LONG),
+
+    // Sohee chance (spec free-talk-design): the hint and the full sentence come from Claude, so they get LONG
+    getHint: (id: string, idx: number) => post<Hint>(`/talks/${id}/lines/${idx}/hint`, undefined, LONG),
+    getHintAudio: (id: string, idx: number) => get<{ audio: string }>(`/talks/${id}/lines/${idx}/hint/audio`),
+    showFull: (id: string, idx: number) => post<HintFull>(`/talks/${id}/lines/${idx}/hint/full`, undefined, LONG),
+    getHintSound: (id: string, idx: number, n: number) => get<{ audio: string }>(`/talks/${id}/lines/${idx}/hint/sounds/${n}`),
+    getHintThree: (id: string, idx: number) => get<ThreeLine>(`/talks/${id}/lines/${idx}/hint/three`, LONG),
 
     audioSource: (key: string, rate: 0.6 | 0.8 | 1 = 1) => ({ uri: `${base}/audio/${key}?rate=${rate}`, headers: auth }),
     imageSource: (path: string) => ({ uri: base + path, headers: auth }),

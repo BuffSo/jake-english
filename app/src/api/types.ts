@@ -63,7 +63,10 @@ export type Roleplay = {
 };
 export type Said = { text: string; audio: string };
 // thinking-face picture paths per person, cross-faded while the app waits (/home `images.thinking`)
-export type Thinking = { jake: string[]; ryan: string[] };
+export type Thinking = { jake: string[]; ryan: string[]; sohee?: string[] };
+// Sohee chance (spec free-talk-design): Korean meaning + sentence starters, then the full sentence on request
+export type Hint = { meaning_ko: string; starters: string[] };
+export type HintFull = { text: string; say: Said };
 // A situation topic and its prepared list (spec situation-topics 1, 3). The Mac keeps what Claude gets; the app only
 // shows the names and sends the ids back.
 export type Topic = { id: string; name_ko: string; placeholder_ko: string; picks: { id: string; title_ko: string }[] };
@@ -86,7 +89,8 @@ export type Home = {
   // (spec ryan-shadowing-tip 4)
   tip?: Said;
   // jake: Jake's front picture, shown while his suggestion waits for the learner's pick (absent on an older server)
-  images: { front: string; listening: string; jake?: string; thinking: Thinking };
+  // sohee: her face and whisper face; absent on a server from before the Sohee chance
+  images: { front: string; listening: string; jake?: string; thinking: Thinking; sohee?: { face: string; whisper: string } };
   topics?: Topic[]; // absent on a server from before topics: use flow/situation `topicsOf`
 };
 export type Progress = { no: number; total: number }; // 「내 대사 no/total」

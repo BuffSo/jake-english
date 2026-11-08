@@ -21,10 +21,10 @@ export const FACE_BOX: Record<Face, { x: number; y: number; size: number }> = {
   jake: { x: 66, y: 175, size: 440 },
 };
 
-// The pictures shown after the home screen: Ryan's listening face, Jake's face and the thinking faces. Loaded as soon
+// The pictures shown after the home screen: Ryan's listening face, Jake's face, the thinking faces and Sohee's. Loaded as soon
 // as /home is back, so that none first shows as an empty circle (2026-11-06, after the phone test). The front picture
 // is on the home screen already. An older server's missing ones are skipped.
 export function laterPictures(images: Home["images"]): string[] {
   const t = images.thinking;
-  return [images.listening, ...(images.jake ? [images.jake] : []), ...(t?.jake ?? []), ...(t?.ryan ?? [])];
+  return [images.listening, ...(images.jake ? [images.jake] : []), ...(t?.jake ?? []), ...(t?.ryan ?? []), ...(t?.sohee ?? []), ...(images.sohee ? [images.sohee.face, images.sohee.whisper] : [])];
 }
