@@ -82,7 +82,8 @@ def test_comparison_counts_matched_words():
 def test_issue_ko_says_what_was_heard():
     assert issue_ko(Issue(target="right", heard="light")) == "「right」 → 「light」처럼 들렸어요"
     assert issue_ko(Issue(target="on", heard="")) == "「on」 → 들리지 않았어요"
-    assert issue_ko(Issue(target="", heard="and")) == "대사에 없는 「and」 들렸어요"
+    # 「도」 fits every word: 이 or 가 would depend on how the word ends in Korean (the user's choice, 2026-11-08)
+    assert issue_ko(Issue(target="", heard="and")) == "대사에 없는 「and」도 들렸어요"
 
 
 def test_limit_caps_issues_and_one_per_sound():
@@ -211,3 +212,67 @@ def test_words_that_sound_the_same_are_notation():
     # the transcriber may write "to" for "two": they sound the same, so there is nothing to say
     assert compare("I wear two seventy.", "I wear to seventy.").diffs == []
     assert compare("Is this for me?", "Is this four me?").diffs == []
+
+
+# --- following by the matched words, and restarts (todo follow-feedback leftovers 1, 2) ------------------------
+
+def test_a_short_line_split_into_two_words_is_still_followed():
+    # the Mac matches joined words, fillers and restarts, so following is judged on that match too: a two-word line
+    # written as three words by the transcriber fell under FOLLOW_MIN before
+    assert similarity("Downstairs, please.", "Down stairs, please.") == 1.0
+    assert similarity("We need two tickets.", "We need, we need two tickets.") == 1.0
+    assert similarity("We need two tickets.", "Um, we need two tickets.") == 1.0
+
+
+def test_similarity_of_plain_differences_is_as_before():
+    # one word out of four: (3 + 3) / (4 + 4), what the word match gave before
+    assert similarity("We need two tickets.", "We need three tickets.") == 0.75
+    assert similarity("Turn left here.", "Sorry, I am new here.") < FOLLOW_MIN
+
+
+def test_a_word_said_again_and_again_is_a_restart():
+    assert find_issues("We need two tickets.", "We, we, we need two tickets.", limit=2) == []
+    assert find_issues("We need two tickets.", "We need, we need, we need two tickets.", limit=2) == []
+
+
+def test_a_start_that_went_wrong_and_was_said_again_is_a_restart():
+    # the words before the restart came out wrong, but the learner said them again as written
+    assert find_issues("Could I see the menu?", "Could I sit the, could I see the menu?", limit=2) == []
+
+
+def test_a_word_added_inside_the_line_is_still_a_point():
+    assert find_issues("We need two tickets.", "We need two more tickets.", limit=2) == [
+        Issue(target="", heard="more")]
+    # not a try at the words after it: another first word
+    assert find_issues("Could I see the menu?", "Please, could I see the menu?", limit=2) == [
+        Issue(target="", heard="please")]
+
+
+# --- the end screen's words, and notation (todo follow-feedback leftovers 3, 5) --------------------------------
+
+def test_issue_ko_shows_the_words_as_written():
+    # the Mac compares in lowercase; the end screen shows a word the way the line or the transcript writes it
+    assert issue_ko(Issue(target="i", heard="eye"), "Can I see the menu?", "Can eye see the menu?") == (
+        "「I」 → 「eye」처럼 들렸어요")
+    assert issue_ko(Issue(target="", heard="boston"), "We need two tickets.", "We need two Boston tickets.") == (
+        "대사에 없는 「Boston」도 들렸어요")
+    # written both ways in the line, or not written at all (a number read out): left as compared
+    assert issue_ko(Issue(target="please", heard=""), "Please, please wait.", "Please wait.") == (
+        "「please」 → 들리지 않았어요")
+    assert issue_ko(Issue(target="ten", heard="tin"), "Wait 10 minutes.", "Wait tin minutes.") == (
+        "「ten」 → 「tin」처럼 들렸어요")
+
+
+def test_numbers_of_a_million_and_more_are_notation():
+    assert words("2,500,000") == "two million five hundred thousand".split()
+    assert compare("It sold 1,000,000 copies.", "It sold one million copies.").diffs == []
+
+
+def test_a_price_read_without_dollars_is_notation():
+    # people read $5.99 as "five ninety-nine" too; the voice and the learner may do either
+    for heard in ("It's five ninety-nine.", "It's five dollars ninety-nine.", "It's five dollars and ninety-nine cents.",
+                  "It's $5.99."):
+        assert similarity("It's $5.99.", heard) == 1.0, heard
+    assert compare("That's $2.05.", "That's two oh five.").diffs == []
+    assert compare("It's five ninety-nine.", "It's $5.99.").diffs == []
+    assert compare("It's $5.99.", "It's five forty-nine.").diffs != []  # another price is still a point

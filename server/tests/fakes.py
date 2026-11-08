@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import anthropic
 import httpx2
 
+from je_server.asr import WhisperError
 from je_server.claude import ClaudeUnavailable
 from je_server.models import Frame, Syllable, ThreeLine, Word
 
@@ -39,9 +40,20 @@ def connection_error() -> anthropic.APIConnectionError:
     return anthropic.APIConnectionError(request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
 
 
+class Ended(list):
+    """A stream's pieces and why it ended (`stop_reason`), as `get_final_message` gives it."""
+
+    def __init__(self, pieces, stop_reason):
+        super().__init__(pieces)
+        self.stop_reason = stop_reason
+
+
 class _Stream:
     def __init__(self, item):
         self.item = item
+
+    async def get_final_message(self):
+        return SimpleNamespace(stop_reason=getattr(self.item, "stop_reason", "end_turn"))
 
     async def __aenter__(self):
         if isinstance(self.item, Exception):
@@ -209,6 +221,8 @@ class FakeVoice:
         self.checked: list[str] = []  # texts asked to be heard back (check=True)
         self.ranks: list[int] = []  # each call's rank, beside `calls`
         self.fail_text: str | None = None
+        # the worker's reference fingerprints by its voice name and language (`tts.Voice.refs`); none by default
+        self.refs: dict[str, dict[str, str]] = {}
 
     async def start(self):
         self.audio_dir.mkdir(parents=True, exist_ok=True)
@@ -219,8 +233,13 @@ class FakeVoice:
     def path(self, key):
         return self.audio_dir / f"{key}.m4a"
 
+    def key(self, voice, lang, text):
+        from je_server.tts import WORKER_VOICE, audio_key
+
+        return audio_key(voice, lang, text, self.refs.get(WORKER_VOICE.get(voice, voice), {}).get(lang, ""))
+
     async def say(self, text, voice, lang, urgent, rank=0, check=False):
-        from je_server.tts import VoiceError, audio_key
+        from je_server.tts import VoiceError
 
         self.calls.append((text, voice, lang, urgent))
         self.ranks.append(rank)
@@ -228,7 +247,7 @@ class FakeVoice:
             self.checked.append(text)
         if text == self.fail_text:
             raise VoiceError("fake")
-        key = audio_key(voice, lang, text)
+        key = self.key(voice, lang, text)
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.path(key).write_bytes(b"fake")
         return key
@@ -258,8 +277,6 @@ class FakeWhisper:
         return self.text
 
     async def transcribe_auto(self, wav):
-        from je_server.asr import WhisperError
-
         self.calls += 1
         self.langs.append("auto")
         if self.auto_fail:

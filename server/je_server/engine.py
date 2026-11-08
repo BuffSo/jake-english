@@ -16,13 +16,12 @@ from .claude import ClaudeUnavailable, pick_ending
 from . import topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
-from .sentences import SentenceBuffer
+from .sentences import NewSentence, SentenceBuffer
 from .threeline import blank
 from .tts import VoiceError
 from .phrases import PHRASES
 from .review import first_try, group_of, latest_run, past_items, sentence_key
 from .store import Store
-from .tts import audio_key
 
 log = logging.getLogger("je_server")
 LINE_WAIT = 120
@@ -31,6 +30,8 @@ NEAR_MIN = 0.3  # below FOLLOW_MIN but at least this close to the line: a try at
 # the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer
 ASIDES_KEPT = 3
 HANGUL = re.compile(r"[가-힣]")
+ENDS = (".", "?", "!")  # the marks SentenceBuffer cuts a sentence at
+CLOSERS = "」』)]\"'”’"  # closing brackets and quotes a sentence end may sit inside
 # Sohee's sounds made ahead for a pick (todo 13) come after every model sound waiting, which go by line number
 SOHEE_RANK = 1000
 # the longest one of them waits for a recording's answer, so a request that never closes cannot stop them for good
@@ -65,7 +66,7 @@ class Engine:
 
     def said(self, name: str) -> Said:
         text = PHRASES[name]
-        return Said(text=text, audio=audio_key("ryan", "korean", text))
+        return Said(text=text, audio=self.voice.key("ryan", "korean", text))
 
     async def warm(self) -> None:
         for text in PHRASES.values():  # made once and played many times, so heard back (check)
@@ -143,7 +144,7 @@ class Engine:
         make; her sound comes with it when the Mac has made it before (todo 13). Without it, the line as it is."""
         if not ko:
             return line
-        key = audio_key("sohee", "korean", ko)
+        key = self.voice.key("sohee", "korean", ko)
         return line.model_copy(update={"ko": ko, "ko_audio": key if self.voice.path(key).is_file() else None})
 
     async def _sohee_later(self, rp_id: str) -> None:
@@ -158,7 +159,7 @@ class Engine:
             _, line = self.get_line(rp_id, idx)
             if not line.ko:
                 continue
-            made = audio_key("sohee", "korean", line.ko)
+            made = self.voice.key("sohee", "korean", line.ko)
             if self.voice.path(made).is_file():  # a tap, or another run of the pick, made it meanwhile
                 if line.ko_audio != made:
                     await self.update_line(rp_id, idx, line.text, ko_audio=made)
@@ -173,31 +174,47 @@ class Engine:
                 continue
             await self.update_line(rp_id, idx, line.text, ko_audio=key)
 
-    @staticmethod
-    def _prepared(runs: list[Roleplay], line: ScriptLine) -> ScriptLine:
+    def _prepared(self, runs: list[Roleplay], line: ScriptLine) -> ScriptLine:
         """The line with what earlier runs (oldest first) made for the same line: same place, speaker and words.
         Each part comes from the newest run that has it; a note with no Korean is made again, Sohee's sound comes
-        with her Korean (spec 2)."""
+        with her Korean (spec 2), and a sound made for an older key is made again (`_current_sounds`)."""
         same = [l for r in reversed(runs) for l in r.lines[line.idx:line.idx + 1]
                 if (l.speaker, l.text) == (line.speaker, line.text)]
         three = next((l.three for l in same if l.three is not None and not blank(l.three)), None)
         audio = next((l.audio for l in same if l.audio is not None), None)
         ko = next((l for l in same if l.ko is not None), None)
-        return line.model_copy(update={"three": three, "audio": audio, "ko": ko and ko.ko,
-                                       "ko_audio": ko and ko.ko_audio})
+        return self._current_sounds(line.model_copy(update={"three": three, "audio": audio, "ko": ko and ko.ko,
+                                                            "ko_audio": ko and ko.ko_audio}))
+
+    def _current_sounds(self, line: ScriptLine) -> ScriptLine:
+        """The line without the sounds an earlier run made for another key than today's: another reference
+        recording, rate or way of making (todo voice-reference-in-sound-key, fixed-list-scripts minors 4). A new run
+        makes them again; the earlier run's own record keeps what was heard then."""
+        drop = {}
+        if line.audio is not None and line.audio != self.voice.key("ryan", "english", line.text):
+            drop["audio"] = None
+        if line.ko_audio is not None and (line.ko is None
+                                          or line.ko_audio != self.voice.key("sohee", "korean", line.ko)):
+            drop["ko_audio"] = None
+        return line.model_copy(update=drop) if drop else line
 
     async def copy(self, rp_id: str) -> Roleplay:
         """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
-        sounds are reused, so it starts at once; the old record and its tries stay as they are. A list pick plays its
+        sounds are reused, so it starts at once, except sounds made for an older key (`_current_sounds`); the old
+        record and its tries stay as they are. A list pick plays its
         script as it is now in the repository; one taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
         if old.pick is not None and old.topic is not None:
             try:
-                return await self.create_pick(old.topic, old.pick)
+                topics.pick(old.topic, old.pick)
             except KeyError:
-                pass
+                pass  # taken off the list: copied below
+            else:
+                # outside the try: a KeyError from inside is a bug, not a pick taken off the list (todo 08 1)
+                return await self.create_pick(old.topic, old.pick)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
-                      situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
+                      situation=old.situation, frame=old.frame,
+                      lines=[self._current_sounds(l.model_copy(deep=True)) for l in old.lines],
                       origin=old.origin or old.id,  # a copy of a copy still points at the first (ADR-0011)
                       topic=old.topic, pick=old.pick)
         self.store.save(rp)
@@ -281,13 +298,9 @@ class Engine:
 
     def _three_task(self, rp_id: str, idx: int) -> asyncio.Task:
         """The one task making this line's notes, started if none is running."""
-        key = (rp_id, idx)
-        task = self.threes.get(key)
+        task = self.threes.get((rp_id, idx))
         if task is None or task.done():
-            task = asyncio.create_task(self._make_three(rp_id, idx))
-            task.add_done_callback(_quiet)
-            task.add_done_callback(lambda _: self.threes.pop(key, None))
-            self.threes[key] = task
+            task = _keep(self.threes, (rp_id, idx), asyncio.create_task(self._make_three(rp_id, idx)))
         return task
 
     async def _make_three(self, rp_id: str, idx: int) -> ThreeLine:
@@ -307,14 +320,14 @@ class Engine:
         _, line = self.get_line(rp_id, idx)
         if line.ko is not None:
             return line.ko
-        key = (rp_id, idx)
-        task = self.kos.get(key)
+        return await asyncio.shield(self._ko_task(rp_id, idx))
+
+    def _ko_task(self, rp_id: str, idx: int) -> asyncio.Task:
+        """The one task making this line's Korean, started if none is running."""
+        task = self.kos.get((rp_id, idx))
         if task is None or task.done():
-            task = asyncio.create_task(self._make_ko(rp_id, idx))
-            task.add_done_callback(_quiet)
-            task.add_done_callback(lambda _: self.kos.pop(key, None))
-            self.kos[key] = task
-        return await asyncio.shield(task)
+            task = _keep(self.kos, (rp_id, idx), asyncio.create_task(self._make_ko(rp_id, idx)))
+        return task
 
     async def _make_ko(self, rp_id: str, idx: int) -> str:
         rp, line = self.get_line(rp_id, idx)
@@ -431,9 +444,10 @@ class Engine:
                 # the text cannot tell the two apart (auto-detection also translates English into Korean).
                 try:
                     auto, lang = await self.whisper.transcribe_auto(wav)
-                except WhisperError:
-                    # only a check for Korean: the English transcript stands (todo offscript-aside minors 2)
-                    log.info("auto transcription failed")
+                except WhisperError as e:
+                    # only a check for Korean: the English transcript stands (todo offscript-aside minors 2). The
+                    # error carries the failure's type name only, never the transcript
+                    log.info("auto transcription failed: %s", e)
                     auto, lang = "", ""
                 if lang == "korean" and HANGUL.search(auto):
                     heard_ko = auto
@@ -502,16 +516,20 @@ class Engine:
         error or an empty box, so the learner can try the line again (spec offscript-aside 3)."""
         fixed = self.said("retry_offscript").text
         sent = ""
-        held = ""  # trailing spaces wait for the next piece, so a cut piece can take its period right after the text
+        # trailing spaces wait for the next piece, so a cut piece can take its period right after the text; after a
+        # sentence end they go at once, so SentenceBuffer cuts that sentence for the voice without waiting (todo
+        # teacher-answer-cut 3)
+        held = ""
         try:
             async for delta in text:
                 body = delta.rstrip()
-                if body:
-                    yield held + body
-                    sent += held + body
-                    held = delta[len(body):]
-                else:
+                if not body:
                     held += delta
+                    continue
+                out = held + (delta if body.endswith(ENDS) else body)
+                held = "" if body.endswith(ENDS) else delta[len(body):]
+                yield out
+                sent += out
         except ClaudeUnavailable:
             log.info("aside answer unavailable")
         else:
@@ -521,9 +539,13 @@ class Engine:
         if not sent:
             yield fixed
             return
-        # a cut sentence ends before the fixed phrase, at the marks SentenceBuffer cuts at, so both read and voice
-        # it as two sentences
-        yield ("" if sent.endswith((".", "?", "!")) else ".") + " " + fixed
+        # a cut sentence ends before the fixed phrase, so both read and voice it as two sentences. A piece that already
+        # ends one, 「…」 or a mark inside a closing bracket or quote included, takes no other period (todo
+        # teacher-answer-cut 2); SentenceBuffer does not cut after those, so the fixed phrase starts a new sentence for
+        # the voice on its own (`NewSentence`, PR #44 review)
+        if not sent.rstrip().rstrip(CLOSERS).endswith((*ENDS, "…")):
+            yield "."
+        yield NewSentence(("" if sent != sent.rstrip() else " ") + fixed)
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
                     timings: dict[str, float], t0: float) -> AsyncIterator[dict]:
@@ -536,6 +558,10 @@ class Engine:
             try:
                 async for delta in text:
                     timings.setdefault("first_text", time.perf_counter() - t0)
+                    if isinstance(delta, NewSentence):  # the sentence so far ends here for the voice
+                        for s in buf.flush():
+                            await sentences.put(s)
+                    delta = str(delta)
                     said.append(delta)
                     await out.put({"type": "text", "delta": delta})
                     for s in buf.feed(delta):
@@ -610,7 +636,8 @@ class Engine:
             issues_left = issues_left or bool(tries and tries[-1].issues)
             lines.append({"line": l.model_dump(mode="json"), "tries": [
                 {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
-                 "issues": [{"target": i.target, "heard": i.heard, "say_ko": issue_ko(i)} for i in a.issues],
+                 "issues": [{"target": i.target, "heard": i.heard, "say_ko": issue_ko(i, l.text, a.heard)}
+                            for i in a.issues],
                  # Ryan's one point for a roleplay turn said differently, in records from before 2026-11-07 (asides
                  # are left out above); a retry said differently only asked to follow the line, not a point
                  # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
@@ -684,6 +711,15 @@ class Engine:
             if pos is not None:
                 rp.pos = max(rp.pos, pos)
             self.store.save(rp)
+
+
+def _keep(tasks: dict, key, task: asyncio.Task) -> asyncio.Task:
+    """Keeps `task` under `key` while it runs. Its done callback runs on a later turn of the loop, and a new ask may
+    have put its own task under the key in between: the callback removes only its own (todo line-notes minors 1)."""
+    tasks[key] = task
+    task.add_done_callback(_quiet)
+    task.add_done_callback(lambda t: tasks.pop(key) if tasks.get(key) is t else None)
+    return task
 
 
 def _quiet(task: asyncio.Task) -> None:

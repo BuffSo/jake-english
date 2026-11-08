@@ -337,11 +337,16 @@ class Claude:
             "짚을 것": _points(issues),
             "앞서 선생님에게 한 말": [{"들린 말": h, "라이언의 답": a} for h, a in earlier],
         }
-        async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600):
+        async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600,
+                                       whole=True):
             yield text
 
-    async def _stream(self, kw: dict[str, Any], system: str, body: dict, max_tokens: int) -> AsyncIterator[str]:
-        """A live call streamed as text, without double quotes; an empty output_config is left out."""
+    async def _stream(self, kw: dict[str, Any], system: str, body: dict, max_tokens: int,
+                      whole: bool = False) -> AsyncIterator[str]:
+        """A live call streamed as text, without double quotes; an empty output_config is left out. `whole`: a stream
+        that ends at the token limit or as a refusal, after some text and without an error, is unavailable too, so
+        teacher Ryan's cut answer ends with the fixed phrase (todo teacher-answer-cut 1). The writer model may think,
+        and thinking uses the same tokens. Feedback leaves it off: it is short and keeps what came."""
         if not kw.get("output_config", True):
             kw = {k: v for k, v in kw.items() if k != "output_config"}
         try:
@@ -352,6 +357,9 @@ class Claude:
                 async for text in stream.text_stream:
                     if text := text.translate(DOUBLE_QUOTES):
                         yield text
+                if whole and (why := (await stream.get_final_message()).stop_reason) in ("max_tokens", "refusal"):
+                    log.info("claude stream ended: %s", why)
+                    raise ClaudeUnavailable(why)
         except (anthropic.APIConnectionError, httpx2.TransportError) as e:
             # the SDK raises a transport error met while reading the stream (a dropped connection, a read timeout
             # between pieces) as it is, not as APIConnectionError (final review, 2026-11-07)

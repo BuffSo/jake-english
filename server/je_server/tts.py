@@ -2,7 +2,8 @@
 
 One worker, one queue: urgent jobs (Ryan's live feedback) go before prepared ones (model audio for
 later lines). Sounds are cached by sha256(voice|lang|rate|text), with Korean keys also carrying how they were
-made (`MADE`), so the same line is made once.
+made (`MADE`) and every key the fingerprint of the voice's reference recordings the worker reports when it starts
+(`Voice.refs`), so the same line is made once and a new recording makes new sounds.
 Sounds played as they are made once (Jake, Ryan's fixed phrases, Sohee) can be heard back with whisper and made
 again when their last word is missing.
 """
@@ -58,10 +59,13 @@ class VoiceError(Exception):
     pass
 
 
-def audio_key(voice: str, lang: str, text: str) -> str:
-    # the rate is in the key, so a sound made before a rate change is never served for the new rate
+def audio_key(voice: str, lang: str, text: str, ref: str = "") -> str:
+    """The rate is in the key, so a sound made before a rate change is never served for the new rate; so is `ref`,
+    the reference recordings' fingerprint, so a sound in an old recording's voice is not served after a new one
+    (todo voice-reference-in-sound-key). Without a fingerprint the key is as it was before it came in."""
     made = f"{MADE[lang]}|" if MADE[lang] else ""
-    return hashlib.sha256(f"{voice}|{lang}|{SPEAK_RATE[voice, lang]}|{made}{text}".encode()).hexdigest()
+    ref = f"{ref}|" if ref else ""
+    return hashlib.sha256(f"{voice}|{lang}|{SPEAK_RATE[voice, lang]}|{made}{ref}{text}".encode()).hexdigest()
 
 
 def ends_right(text: str, heard: str) -> bool:
@@ -86,9 +90,16 @@ class Voice:
         self.ids = itertools.count(1)
         self.consumer: asyncio.Task | None = None
         self.rating: dict[str, asyncio.Future] = {}
+        # the reference recordings' fingerprints by worker voice and language, from the worker's {"ready": true}
+        # (`tts_worker.ref_prints`); read again whenever a worker starts, so a new recording counts after a restart
+        self.refs: dict[str, dict[str, str]] = {}
 
     def path(self, key: str) -> Path:
         return self.audio_dir / f"{key}.m4a"
+
+    def key(self, voice: str, lang: str, text: str) -> str:
+        """The sound's key in the voice as the worker has it now: `audio_key` with its reference fingerprint."""
+        return audio_key(voice, lang, text, self.refs.get(WORKER_VOICE.get(voice, voice), {}).get(lang, ""))
 
     async def start(self) -> None:
         self.audio_dir.mkdir(parents=True, exist_ok=True)
@@ -103,8 +114,10 @@ class Voice:
             limit=1 << 20)
         try:
             line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=self.start_timeout)
-            if not line or not json.loads(line).get("ready"):
+            ready = json.loads(line) if line else {}
+            if not ready.get("ready"):
                 raise VoiceError("voice worker did not start")
+            self.refs = ready.get("refs") or {}
         except BaseException:
             # a half-started worker must not stay: the next job would read its late {"ready": true} as the
             # answer, and every answer after that would belong to the job before (PR #12 review)
@@ -120,7 +133,7 @@ class Voice:
         Sohee's sounds made ahead pass a rank above every line number (`engine.SOHEE_RANK`) to come after them.
         check hears the sound back and makes it again when its last word is missing; it adds a transcription
         (about 0.4 s), so Ryan's live feedback does not use it."""
-        key = audio_key(voice, lang, text)
+        key = self.key(voice, lang, text)
         if self.path(key).exists():
             return key
         fut = self.inflight.get(key)

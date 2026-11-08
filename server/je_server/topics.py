@@ -119,7 +119,7 @@ TOPICS: tuple[Topic, ...] = (
                   "2인분부터 주문한다고 알려 준다.", "ryan",
                   ("먹을 곳을 알려 주는 서울 사람", "한국식 고기구이를 먹어 보고 싶은 외국인 관광객", "홍대입구역 근처",
                    "관광객에게 삼겹살을 권하고 주문하는 법을 알려 주기"),
-                  (("ryan", "Excuse me. I want to try Korean barbecue. Any ideas around here?",
+                  (("ryan", "Excuse me, I want to try Korean barbecue. Any ideas around here?",
                     "저기요, 한국식 고기구이를 먹어 보고 싶은데요. 이 근처에서 뭘 먹으면 좋을까요?"),
                    ("user", "You should try samgyeopsal. It's grilled pork belly.",
                     "삼겹살 한번 드셔 보세요. 돼지 뱃살을 구워 먹는 거예요."),
@@ -153,8 +153,8 @@ TOPICS: tuple[Topic, ...] = (
                   "나온다.", "ryan",
                   ("하와이에 여행 온 한국 사람", "새우 트럭 직원", "하와이 오아후 노스쇼어 카후쿠의 지오반니 새우 트럭",
                    "마늘 새우 접시를 주문하기"),
-                  (("ryan", "Aloha! Welcome to Giovanni's. What can I get for you?",
-                    "알로하! 지오반니에 오신 걸 환영합니다. 뭘 드릴까요?"),
+                  (("ryan", "Aloha, welcome to Giovanni's! What can I get for you?",
+                    "알로하, 지오반니에 오신 걸 환영합니다! 뭘 드릴까요?"),
                    ("user", "Hi! It's my first time here. What do you have?",
                     "안녕하세요! 여기 처음 왔는데요. 어떤 메뉴가 있어요?"),
                    ("ryan", "We've got shrimp scampi, hot and spicy, and lemon butter.",
@@ -165,9 +165,10 @@ TOPICS: tuple[Topic, ...] = (
                     "네, 알겠습니다. 밥 두 스쿱이 같이 나와요."),
                    ("user", "Great. I heard it's really garlicky.",
                     "좋아요. 마늘 맛이 아주 진하다고 들었어요."),
-                   ("ryan", "Oh, it is. Lots of garlic. Enjoy!",
+                   ("ryan", "Oh, it is, with lots of garlic. Enjoy!",
                     "그럼요, 마늘이 듬뿍 들어가요. 맛있게 드세요!"))),
-            # the name on the booking and the checkout time are small made-up values: the hotel has no name
+            # the name on the booking, the checkout time and the Wi-Fi password on the key card sleeve are small
+            # made-up values: the hotel has no name (REVIEW.md 「목록 대본의 사실」)
             _pick("u-hotel-checkin", "뉴욕 호텔 체크인",
                   "뉴욕 맨해튼의 호텔 프런트에서 예약한 방에 체크인한다. 예약한 이름을 말하고 여권과 카드를 내고, "
                   "체크아웃 시간과 와이파이를 묻는다.", "user",
@@ -183,8 +184,8 @@ TOPICS: tuple[Topic, ...] = (
                     "체크아웃은 오전 열한 시입니다. 여기 객실 키입니다."),
                    ("user", "Thanks. And how do I get on the Wi-Fi?",
                     "감사합니다. 그리고 와이파이는 어떻게 연결해요?"),
-                   ("ryan", "Just pick the hotel network. The password is on your key card sleeve. Enjoy your stay!",
-                    "호텔 와이파이를 고르시면 돼요. 비밀번호는 카드키 봉투에 적혀 있어요. 즐거운 시간 보내세요!"))),
+                   ("ryan", "Just pick the hotel network, and the password is on your key card sleeve. Enjoy your stay!",
+                    "호텔 와이파이를 고르시고, 비밀번호는 카드키 봉투에 적혀 있어요. 즐거운 시간 보내세요!"))),
             _pick("u-sneaker-size", "알라모아나 센터에서 운동화 사이즈",
                   "하와이 호놀룰루 알라모아나 센터의 신발 가게에서 점원에게 운동화를 다른 사이즈로 신어 볼 수 있는지 "
                   "묻는다. 한국 사이즈 270은 미국 남자 사이즈 9다.", "user",

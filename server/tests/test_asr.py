@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from je_server.asr import Whisper
+from je_server.asr import Whisper, WhisperError
 
 pytestmark = pytest.mark.anyio
 
@@ -93,8 +93,6 @@ def _refused(request: httpx.Request):
                                      lambda r: httpx.Response(200, text="oops"), _refused],
                          ids=["status", "not-json", "connection"])
 async def test_whisper_failures_are_whisper_errors(tmp_path, handler):
-    from je_server.asr import WhisperError
-
     wav = tmp_path / "a.wav"
     wav.write_bytes(b"RIFF")
     with pytest.raises(WhisperError):

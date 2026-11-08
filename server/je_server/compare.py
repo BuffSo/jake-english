@@ -31,16 +31,18 @@ _TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
 _SHORT = {"wanna": "want to", "gonna": "going to", "ok": "okay"}
 _AFTER_A = frozenset({"hundred", "thousand", "dollar"})
 MAX_READING_SETS = 64  # numbers in a line and its transcript; past this, each is read the first way
+NUMBER_LIMIT = 10**12  # digits up to this are read as words; longer ones stay digits
 
 
 def _number(n: int) -> str:
-    """Words for 0 <= n < 1,000,000, the way the transcriber's digits are read out (1,000 is one thousand)."""
+    """Words for 0 <= n < NUMBER_LIMIT, the way the transcriber's digits are read out (1,000 is one thousand,
+    2,500,000 two million five hundred thousand)."""
     if n < 20:
         return _ONES[n]
     if n < 100:
         tens, ones = divmod(n, 10)
         return _TENS[tens] + (f" {_ONES[ones]}" if ones else "")
-    for size, name in ((1000, "thousand"), (100, "hundred")):
+    for size, name in ((10**9, "billion"), (10**6, "million"), (1000, "thousand"), (100, "hundred")):
         if n >= size:
             head, rest = divmod(n, size)
             return f"{_number(head)} {name}" + (f" {_number(rest)}" if rest else "")
@@ -78,10 +80,23 @@ def _readings(n: int) -> tuple[str, ...]:
 Token = str | tuple[str, ...]  # a word, or the readings of a number
 
 
+def _price(dollars: int, cents: int) -> list[Token]:
+    """$5.99 the ways people read a price: five dollars ninety nine, five ninety nine, five dollars and ninety nine
+    cents. The voice and the learner may say either (todo follow-feedback leftovers 5)."""
+    unit = "dollar" if dollars == 1 else "dollars"
+    d = _number(dollars)
+    if not cents:
+        return [d, unit]
+    c = _number(cents) if cents >= 10 else f"oh {_ONES[cents]}"  # $2.05 is two oh five, as 5:05 is
+    cent = "cent" if cents == 1 else "cents"
+    return [(f"{d} {unit} {c}", f"{d} {c}", f"{d} {unit} and {_number(cents)} {cent}")]
+
+
 def _tokens(text: str) -> list[Token]:
     t = text.lower().replace("’", "'")
     t = re.sub(r"(?<=\d),(?=\d{3})", "", t)  # 1,000 is one number
     t = re.sub(r"\b([ap])\.?m\b\.?", r"\1m", t)
+    t = re.sub(r"\$(\d{1,12})\.(\d\d)\b", r"pricex\1x\2", t)  # read below, with or without dollars
     t = re.sub(r"\$(\d+)", lambda m: f"{m[1]} dollar" + ("" if m[1] == "1" else "s"), t)
     t = re.sub(r"(\d+)%", r"\1 percent", t)
     t = re.sub(r"\b(\d{1,2}):00\b", r"\1", t)  # 9:00 is nine (o'clock is dropped below)
@@ -92,11 +107,15 @@ def _tokens(text: str) -> list[Token]:
             continue
         if w == "o'clock":
             continue
-        if (m := re.fullmatch(r"(\d+)(?:st|nd|rd|th)", w)) and int(m[1]) < 1_000_000:
+        if m := re.fullmatch(r"pricex(\d+)x(\d\d)", w):
+            for p in _price(int(m[1]), int(m[2])):
+                out += p.split() if isinstance(p, str) else [p]
+            continue
+        if (m := re.fullmatch(r"(\d+)(?:st|nd|rd|th)", w)) and int(m[1]) < NUMBER_LIMIT:
             out += _ordinal(int(m[1])).split()
         elif w.isdigit() and len(w) == 2 and w[0] == "0":  # the 05 of 5:05 is "oh five"
             out += ["oh", _ONES[int(w[1])]]
-        elif w.isdigit() and int(w) < 1_000_000:
+        elif w.isdigit() and int(w) < NUMBER_LIMIT:
             r = _readings(int(w))
             out += r[0].split() if len(r) == 1 else [r]
         else:
@@ -116,8 +135,9 @@ def _read(tokens: list[Token], picks: tuple[int, ...] = ()) -> list[str]:
 
 def words(text: str) -> list[str]:
     """Lowercase words with the transcriber's notation evened out: 10 and ten, $5 and five dollars, 11 AM and
-    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, $100 and a hundred dollars, 2nd and second, wanna and
-    want to, OK and okay are the same words. A number is read the first way (`_readings`)."""
+    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, $100 and a hundred dollars, $5.99 and five ninety nine,
+    2nd and second, wanna and want to, OK and okay are the same words. A number or a price is read the first way
+    (`_readings`, `_price`)."""
     return _read(_tokens(text))
 
 
@@ -145,10 +165,14 @@ def _paired(target: str, heard: str) -> tuple[list[str], list[str]]:
 
 
 def similarity(target: str, heard: str) -> float:
-    a, b = _paired(target, heard)
-    if not a or not b:
+    """How closely the transcript follows the line, 0 to 1: the words matched on both sides over all words, by
+    `compare`'s match. Notation (joined words, numbers), fillers and restarts do not count against it, so a short line
+    the transcriber wrote as more words is still followed (todo follow-feedback leftovers 1). Without those it is the
+    plain word match's ratio."""
+    c = compare(target, heard)
+    if not c.total or not c.heard_total:
         return 0.0
-    return SequenceMatcher(None, a, b, autojunk=False).ratio()
+    return (c.matched + c.heard_matched) / (c.total + c.heard_total)
 
 
 def sound_pairs(target_word: str, heard_word: str) -> list[tuple[str, str]]:
@@ -181,6 +205,8 @@ class Comparison:
     matched: int  # line words heard right
     total: int  # line words
     matched_words: set[str] = field(default_factory=set)
+    heard_matched: int = 0  # transcript words that matched the line (a word written in two counts both)
+    heard_total: int = 0  # transcript words, fillers and restarts aside
 
 
 def _same_sound(target_word: str, heard_word: str) -> bool:
@@ -206,9 +232,20 @@ def _issue(target: list[str], heard: list[str], found: tuple[tuple[str, str], st
 
 
 def _restart(line: list[str], at: int, added: list[str]) -> bool:
-    """Added words that repeat the line's words right before or after them: the learner started over."""
+    """Added words where the learner started over: the line's words right before or after them said once or more
+    ("we need, we need two tickets", "we, we, we need"), or a try at the words after them that came out wrong and was
+    then said again (the same first word and at least half the same: "could I sit the, could I see the menu"). The
+    Mac points at what the learner finally said (todo follow-feedback leftovers 2)."""
     n = len(added)
-    return (at >= n and line[at - n:at] == added) or line[at:at + n] == added
+    for m in range(1, n + 1):
+        if n % m:
+            continue
+        chunks = [line[at:at + m]] + ([line[at - m:at]] if at >= m else [])
+        if any(len(c) == m and added == c * (n // m) for c in chunks):
+            return True
+    ahead = line[at:at + n]
+    return (n >= 2 and len(ahead) == n and added[0] == ahead[0]
+            and SequenceMatcher(None, added, ahead, autojunk=False).ratio() >= 0.5)
 
 
 def compare(target: str, heard: str) -> Comparison:
@@ -218,25 +255,28 @@ def compare(target: str, heard: str) -> Comparison:
     b = [w for w in wb if w not in FILLERS]
     diffs: list[Issue] = []
     matched: set[str] = set()
-    count = 0
+    count = heard_count = restarted = 0
     for tag, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
         ta, hb = a[i1:i2], b[j1:j2]
         if tag == "equal" or "".join(ta) == "".join(hb):  # checkout and check out
             count += len(ta)
+            heard_count += len(hb)
             matched.update(ta)
         elif tag == "insert" and _restart(a, i1, hb):
-            continue
+            restarted += len(hb)
         elif tag == "replace" and len(ta) == len(hb):
             for t, h in zip(ta, hb):
                 if _same_sound(t, h):  # to for two, four for for: how the transcriber wrote it
                     count += 1
+                    heard_count += 1
                     matched.add(t)
                 else:
                     diffs.append(_issue([t], [h], _listed(t, h)))
         else:
             found = next((f for t in ta for h in hb if (f := _listed(t, h))), None)
             diffs.append(_issue(ta, hb, found))
-    return Comparison(diffs=diffs, matched=count, total=len(a), matched_words=matched)
+    return Comparison(diffs=diffs, matched=count, total=len(a), matched_words=matched, heard_matched=heard_count,
+                      heard_total=len(b) - restarted)
 
 
 def find_issues(target: str, heard: str, limit: int) -> list[Issue]:
@@ -258,13 +298,27 @@ def find_issues(target: str, heard: str, limit: int) -> list[Issue]:
     return out
 
 
-def issue_ko(i: Issue) -> str:
-    """The end screen's line for a point, worded like Ryan's: what was heard, never what was said."""
+def _as_written(found: str, text: str) -> str:
+    """The words of a point as `text` writes them, each one that `text` writes in one way only: the Mac compares in
+    lowercase, and the end screen showed 「i」 for 「I」 (todo follow-feedback leftovers 3). A word written both ways,
+    or not written at all (a number read out), stays as compared."""
+    forms: dict[str, set[str]] = {}
+    for w in re.findall(r"[A-Za-z0-9'’]+", text):
+        w = w.replace("’", "'").strip("'")
+        forms.setdefault(w.lower(), set()).add(w)
+    return " ".join(next(iter(f)) if len(f := forms.get(w, set())) == 1 else w for w in found.split())
+
+
+def issue_ko(i: Issue, line: str = "", heard: str = "") -> str:
+    """The end screen's line for a point, worded like Ryan's: what was heard, never what was said. `line` and
+    `heard` give the words as written. An added word takes 「도」, which fits after any word, where 이 or 가 would
+    depend on how it ends in Korean (the user's choice, 2026-11-08)."""
+    target, said = _as_written(i.target, line), _as_written(i.heard, heard)
     if not i.target:
-        return f"대사에 없는 「{i.heard}」 들렸어요"
+        return f"대사에 없는 「{said}」도 들렸어요"
     if not i.heard:
-        return f"「{i.target}」 → 들리지 않았어요"
-    return f"「{i.target}」 → 「{i.heard}」처럼 들렸어요"
+        return f"「{target}」 → 들리지 않았어요"
+    return f"「{target}」 → 「{said}」처럼 들렸어요"
 
 
 def praise_candidates(target: str, heard: str, before: list[Issue], limit: int = 2) -> list[str]:

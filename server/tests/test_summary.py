@@ -123,3 +123,18 @@ async def test_latest_reads_the_records_once(engine_with_rp, speech_bytes, fake_
     got = engine.latest(rp_id)
     assert len(reads) == 1
     assert got["roleplay"]["id"] == rp_id and got["summary"] == engine.summary(rp_id)
+
+
+
+async def test_summary_shows_points_as_the_words_are_written(engine_with_rp):
+    # todo follow-feedback leftovers 3: the points are kept in lowercase; the end screen writes them as the line does
+    from je_server.models import Attempt, Issue
+
+    engine, rp_id, user_idx = engine_with_rp
+    line = engine.load(rp_id).lines[user_idx].text
+    assert line.startswith("It's ")
+    await engine.save_attempt(rp_id, user_idx, Attempt(n=1, mode="turn", heard="Is right over there.", followed=True,
+                                                       issues=[Issue(target="it's", heard="is")], say_ko="…",
+                                                       audio=[], timings={}), pos=None)
+    [t] = tries(engine.summary(rp_id), user_idx)
+    assert t["issues"] == [{"target": "it's", "heard": "is", "say_ko": "「It's」 → 「Is」처럼 들렸어요"}]

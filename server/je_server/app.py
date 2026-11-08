@@ -256,8 +256,6 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             return {**line.model_dump(mode="json"), "progress": engine().progress(rp_id, idx)}
         except NotFound:
             raise ApiError(404, "not_found") from None
-        except ClaudeUnavailable:
-            raise claude_down() from None
 
     @router.get("/roleplays/{rp_id}/lines/{idx}/three")
     async def three(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
