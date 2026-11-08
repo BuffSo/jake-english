@@ -186,10 +186,23 @@ def test_feedback_prompt_keeps_the_given_tip_and_hides_the_materials():
     from je_server import prompts
 
     p = prompts.FEEDBACK_SYSTEM
-    assert "맞는지 따지지 않고 그대로 말해요" in p
+    assert "맞는지 따지지 않고 처음부터 끝까지 그대로 말해요" in p
     assert "받은 자료의 이름을 말하지 않고, 자료가 없다는 말도 하지 않아요" in p
     assert "「역할극」이라고 하지 않고 「대화」라고 해요" in p  # the app says 「대화」 (review-screens, 2026-11-07)
     assert "받지 않은 조언" in p  # a live run added 「천천히」 and 「끊지 않고」
+
+
+def test_feedback_prompt_keeps_a_given_tip_whole():
+    # todo 29, live 2026-11-08: given one R and L tip for two words, Haiku put 「두 낱말 모두 R을 L로 …」 before it four
+    # times in five; teacher Ryan's prompt got the same fix in todo 20
+    from je_server import prompts
+
+    p = prompts.FEEDBACK_SYSTEM
+    assert "처음부터 끝까지 그대로 말해요" in p and "한쪽 소리만" in p
+    assert "앞에 설명을 더 붙이지 않아요" in p
+    # after that port, live: still two in five; one tip for two words gets its own rule and example
+    assert "두 낱말에서 같은 소리가 바뀌었다는 말은 하지 않아요" in p
+    assert "예(짚을 것 둘의 소리 내는 법이 같을 때)" in p
 
 
 def test_live_prompts_fit_the_particle_to_the_english_word():

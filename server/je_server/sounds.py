@@ -1,6 +1,7 @@
-"""The sound explanation list (spec 「소리 설명 목록」). Ryan only rewords these; he never invents one.
+"""The sound explanation list (spec 「소리 설명 목록」). Ryan says these word for word; he never invents one.
 
-The texts in data/sounds.json are a draft until a person reviews them.
+A person reviewed the texts in data/sounds.json on 2026-11-08. Change them the same way, and check both Ryans on
+the changed tip (scripts/check_ryan_wording.py --case sound).
 """
 from __future__ import annotations
 
