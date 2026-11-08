@@ -31,7 +31,7 @@
 - 이미 소넷이 써 둔 옛 목록 기록을 새 묶음에 넣기. 대본이 달라 같은 대본의 회차가 아니다(ADR-0011 「상황 이름으로 묶지 않는다」와 같은 까닭). 그 기록은 지금처럼 「지난 상황」에 따로 남는다.
 - 앱 화면 바꾸기. 앱이 보내는 요청(`POST /roleplays`의 `pick`, `topic`)은 그대로다. 받는 역할극에는 목록 줄 id 필드 하나가 더해진다(아래 5). 앱은 모르는 필드를 쓰지 않으니 깔린 앱이 그대로 돈다. 맞춰 둘 곳은 앱과 서버가 같은 모양을 보는지 확인하는 약속 시험(`contract/roleplay.json`, 앱 `ROLEPLAY_KEYS`)뿐이고, 주제(`topic`)를 더할 때와 같다. 화면은 고치지 않으니 APK를 새로 빌드하지 않는다(AI 판단). 목록 카드를 눌렀을 때 보이는 「라이언이 대본을 만들고 있어요」도 그대로 두고, 짧게 지나간다.
 - 내 대사를 보여 주기 전에 읽는 법을 기다리지 않게 하기. 시작이 늦은 또 하나의 원인이지만 앱도 고쳐야 해서 다음 PR에서 한다(원래 폴더 `docs/todo/20261108_03_todo_dont_wait_for_line_notes.md`, AI 판단을 사용자가 받아들임). 그래서 이 PR에서는 목록 상황을 처음 고른 회차만 읽는 법을 만드는 동안 기다린다.
-- 목록을 늘리기, 「그 밖의 상황」의 목록(상황 주제 스펙 「미룬 것」).
+- 목록을 늘리기, 「그 밖의 상황」의 목록(상황 주제 스펙 「미룬 것」). 이 스펙을 처음 쓴 PR에서 하지 않았다는 뜻이다. 2026-11-08 「미국 여행」에 두 줄을 더했다(아래 「더한 대본」).
 
 ## 실패로 볼 것
 
@@ -197,6 +197,45 @@ AI 초안이다. 사실은 상황 주제 스펙 3에서 확인한 것만 썼다.
 | 나 | In Korea I wear a 270. That's a men's 9, right? |
 | R | That's right, a men's 9. Let me grab a pair from the back. |
 | 나 | Great, thank you. I'll wait here. |
+
+## 더한 대본 (2026-11-08)
+
+사용자가 「미국 여행」에 예약 상황 둘을 더하자고 했다. 「요즘은 보통 예약을 많이 하잖아. 전화 예약을 했을 수도 있고 온라인 예약을 했을 수도 있고, 그 가정하에 호텔 체크인 해 보는 것도 괜찮을 것 같아. 하와이 씨푸드 레스토랑 같은 곳도 예약 안 하고 갔을 때 예약했냐고 직원이 물어보고, 뭐 이런 상황도 미리 만들어 보자.」 대본은 AI 초안을 main 세션을 거쳐 사용자가 정했다(list-reservations 카드). 목록 끝에 더해 앞의 세 줄은 자리가 그대로다. 소희의 한국어는 `topics.py`에 있다.
+
+- 갈림길과 사용자 판단(모두 AI 추천을 받아들임): 호텔은 전화 예약이 아니라 온라인 예약으로, 확인 번호를 보여 준다. 식당은 바 자리에 앉지 않고 테이블을 기다리며 대기 명단에 이름을 올린다. 가게 이름은 쓰지 않는다.
+- 지어낸 작은 값은 2박, 킹 침대 방, 12층, 30분, 대기 명단의 이름 「Jake」다. 대본이 말하는 값은 목록 설명에도 적었다(`REVIEW.md` 「목록 대본의 사실」).
+- 대기 명단 이름은 AI 초안의 「Kim」을 사용자가 「Jake」로 바꿨다. 식당 대기 명단은 보통 이름(first name)을 올린다. 호텔은 성으로 찾는 일이 많아 「뉴욕 호텔 체크인」의 「Kim」은 그대로 둔다.
+
+**로스앤젤레스 호텔에서 온라인 예약 확인** (`u-hotel-online`, 라이언 먼저)
+
+- 틀: 나는 로스앤젤레스에 여행 온 한국 사람, 라이언은 호텔 프런트 직원, 장소는 로스앤젤레스의 호텔 프런트, 목표는 온라인으로 한 예약을 확인하고 체크인하기.
+- 「뉴욕 호텔 체크인」은 이미 예약한 방에 이름을 대고 들어가는 대본이다. 이 대본은 예약을 어떻게 했는지와 예약 내용(몇 박, 방 종류)을 주고받는다.
+
+| | 대사 |
+|---|---|
+| R | Hi, welcome! Are you checking in? |
+| 나 | Yes, I booked online. Here's my confirmation number. |
+| R | Thanks. I have you down for two nights in a king room. |
+| 나 | That's right. Could I get a room on a high floor? |
+| R | Sure, you're on the twelfth floor. Here are your keys. |
+| 나 | Awesome, the higher the better. Thank you! |
+
+- 처음 초안의 한 줄이 지난 역할극 기록의 문장과 같아, 사용자에게 보이기 전에 바꿨다. 넣은 대사, 통역, 설명을 기록 전부와 맞대 보았다(개수만 출력). 같은 문장은 0이다. 낱말 다섯이나 여섯이 이어지는 것도 0이다. 넷이 이어지는 것은 흔한 말 1이다. 지명과 값(로스앤젤레스, 와이키키, 12층, 킹 침대, 확인 번호를 영어와 한국어로)은 기록에 하나도 없다. 같은 문장만 보면 낱말 하나를 바꾼 줄이나 지명이 기록에서 온 것을 놓친다(PR #56 리뷰).
+
+**와이키키 해산물 식당에 예약 없이 가기** (`u-seafood-walkin`, 라이언 먼저)
+
+- 틀: 나는 하와이에 여행 온 한국 사람, 라이언은 식당 입구의 안내 직원, 장소는 하와이 호놀룰루 와이키키의 해산물 식당, 목표는 예약 없이 간 식당에서 자리를 묻고 대기 명단에 이름 올리기.
+- 「30-minute wait, or you can sit at the bar」는 바에는 기다리지 않고 앉을 수 있다는 뜻으로 읽힌다. 설명에 「바에는 앉을 수 있다」가 있다. 한국어에는 영어에 없는 「바로」를 넣지 않는다.
+
+| | 대사 |
+|---|---|
+| R | Aloha, welcome in! Do you have a reservation? |
+| 나 | No, we don't. Do you have a table for two? |
+| R | We're pretty full right now. It's about a 30-minute wait, or you can sit at the bar. |
+| 나 | We'll wait for a table. Can I put my name down? |
+| R | Sure, what name should I put down? |
+| 나 | It's Jake. Thank you! |
+| R | Great, we'll call you when your table is ready. |
 
 ## 빌더에게 맡기는 것
 

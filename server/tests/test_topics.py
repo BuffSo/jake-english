@@ -18,9 +18,12 @@ def test_tourist_starts_with_ryan_and_is_strangers():
 
 
 def test_starting_lists():
-    # three per topic to try it first (user), none yet for 「그 밖의 상황」
-    assert [len(get(t).picks) for t in ("tourist", "usa", "other")] == [3, 3, 0]
-    assert [p.first for p in get("usa").picks] == ["ryan", "user", "user"]
+    # three per topic to try it first (user), none yet for 「그 밖의 상황」; 2026-11-08 the user added two reservation
+    # scenes to 「미국 여행」, at the end so the first three keep their places (todo 38)
+    assert [len(get(t).picks) for t in ("tourist", "usa", "other")] == [3, 5, 0]
+    assert [p.id for p in get("usa").picks] == ["u-shrimp-truck", "u-hotel-checkin", "u-sneaker-size",
+                                                "u-hotel-online", "u-seafood-walkin"]
+    assert [p.first for p in get("usa").picks] == ["ryan", "user", "user", "ryan", "ryan"]
     assert all(p.first == "ryan" for p in get("tourist").picks)
     ids = [p.id for t in TOPICS for p in t.picks]
     assert len(ids) == len(set(ids))
@@ -97,6 +100,10 @@ def test_script_keeps_the_facts_of_its_description():
                                                      "lemon butter", "two scoops of rice"))
     assert all(w in said["u-hotel-checkin"] for w in ("passport", "credit card", "checkout", "Wi-Fi"))
     assert "270" in said["u-sneaker-size"] and "men's 9" in said["u-sneaker-size"]
+    assert all(w in said["u-hotel-online"] for w in ("booked online", "confirmation number", "two nights",
+                                                     "king room", "high floor"))
+    assert all(w in said["u-seafood-walkin"] for w in ("reservation", "table for two", "30-minute wait", "bar",
+                                                       "put my name down"))
 
 
 def test_ryans_list_lines_are_one_or_two_sentences():
@@ -157,6 +164,8 @@ def test_korean_keeps_the_facts():
     assert all(w in said["u-shrimp-truck"] for w in ("지오반니", "스캠피", "매운", "레몬 버터", "밥 두 스쿱"))
     assert all(w in said["u-hotel-checkin"] for w in ("여권", "신용카드", "체크아웃", "와이파이"))
     assert all(w in said["u-sneaker-size"] for w in ("270", "9 사이즈"))
+    assert all(w in said["u-hotel-online"] for w in ("온라인", "확인 번호", "2박", "킹 침대", "높은 층"))
+    assert all(w in said["u-seafood-walkin"] for w in ("예약", "두 명", "30분", "바에", "이름"))
 
 
 def test_tmoney_korean_says_cash_only_of_the_machine():
@@ -164,3 +173,30 @@ def test_tmoney_korean_says_cash_only_of_the_machine():
     ko = pick("tourist", "t-tmoney").ko
     assert [i for i, k in enumerate(ko) if "현금" in k] == [3]
     assert "카드" not in ko[5]
+
+
+# --- reservation scenes (todo 38, 2026-11-08) ---------------------------------------------------------------------
+
+def test_reserved_hotel_says_how_it_was_booked():
+    # the old hotel pick is already booked under a name; this one says how it was booked in the learner's first line
+    p = pick("usa", "u-hotel-online")
+    first = next(i for i, (s, _) in enumerate(p.script) if s == "user")
+    assert "online" in p.script[first][1] and "온라인" in p.ko[first]
+
+
+def test_walk_in_host_asks_for_a_reservation_first():
+    # the user: we walk in without one and the staff ask whether we booked
+    p = pick("usa", "u-seafood-walkin")
+    assert p.script[0][0] == "ryan" and "reservation" in p.script[0][1] and "예약" in p.ko[0]
+
+
+def test_reservation_values_are_in_the_description():
+    # the made-up values the scripts say are facts of their descriptions too (REVIEW.md 「목록 대본의 사실」)
+    hotel, food = pick("usa", "u-hotel-online").situation, pick("usa", "u-seafood-walkin").situation
+    assert all(w in hotel for w in ("온라인", "확인 번호", "킹 침대", "2박", "높은 층", "12층"))
+    assert all(w in food for w in ("예약 없이", "30분", "바에는", "대기 명단", "제이크"))
+
+
+def test_walk_in_korean_says_no_more_than_the_english():
+    # the bar is only another place to sit: 「바로」(right away) is not in the English
+    assert not any("바로" in k for k in pick("usa", "u-seafood-walkin").ko)
