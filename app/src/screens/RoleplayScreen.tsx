@@ -9,10 +9,10 @@ import type { SoundQueue } from "../audio/player";
 import { useAnswering } from "../audio/useAnswering";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
-import { createGate, stopThenSend } from "../flow/gate";
+import { createGate, runThenHold, stopThenSend, TAP_HOLD_MS } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
-import { askFirst, canReplay, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
+import { askFirst, canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { InRowButton } from "../ui/InRowButton";
@@ -326,6 +326,27 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
 
   const startRecording = () => gate.run(doStart);
   const stopRecording = () => stopThenSend(gate, stopRec, sendRec);
+  // 「취소」 and 「건너뛰기」 go through the same gate and keep it shut a moment: the second tap of a double tap finds
+  // it shut, not the button the redraw puts in the same place (spec record-cancel-skip 5)
+  const hold = () => new Promise<void>((r) => setTimeout(r, TAP_HOLD_MS));
+  const cancelRecording = () => runThenHold(gate, doCancel, hold);
+  const skipLine = () => runThenHold(gate, doSkip, hold);
+
+  // 「취소」: the recording is stopped and deleted on the phone, never sent; back to before speaking, in the same mode
+  // (spec record-cancel-skip 1). Nothing to cancel when a stop or the auto-stop got there first.
+  async function doCancel(): Promise<boolean> {
+    if (!rec.isRecording()) return false;
+    await rec.discard();
+    dispatch({ type: "recordCancel" });
+    return true;
+  }
+
+  // 「건너뛰기」: where 「다음」 goes, without a recording (spec record-cancel-skip 2)
+  async function doSkip(): Promise<boolean> {
+    if (!canSkip(state)) return false;
+    dispatch({ type: "skip" });
+    return true;
+  }
 
   async function doStart() {
     if (state.phase !== "ready" && state.phase !== "evaluated") return;
@@ -469,12 +490,15 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             {star?.saved && !opened && <Text> </Text>}
             {star?.saved && !opened && <StarMark />}
           </Text>
-          <View style={styles.heardRow}>
-            <Text style={[styles.heardLine, styles.shrink]}>{keepWords(`들린 말: ${b.text}`)}</Text>
-            {opened && b.rec && (
-              <InRowButton label="🔊 내 녹음" onPress={() => b.rec && playRec(b.rec)} dim={!listenOk} textStyle={styles.link} />
-            )}
-          </View>
+          {/* a line skipped without a recording has its script only (spec record-cancel-skip 3) */}
+          {b.text !== "" && (
+            <View style={styles.heardRow}>
+              <Text style={[styles.heardLine, styles.shrink]}>{keepWords(`들린 말: ${b.text}`)}</Text>
+              {opened && b.rec && (
+                <InRowButton label="🔊 내 녹음" onPress={() => b.rec && playRec(b.rec)} dim={!listenOk} textStyle={styles.link} />
+              )}
+            </View>
+          )}
           {opened && idx !== undefined && koLine(idx)}
           {opened && idx !== undefined && (
             <View style={[styles.linkGroup, styles.gap]}>
@@ -672,16 +696,26 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                   />
                 ))}
               </View>
+              {/* gray on the left, blue filling the rest, like 「다시 해 보기 | 다음」 (spec record-cancel-skip 4) */}
               {state.phase !== "evaluated" && (
-                <Button
-                  label={state.phase === "recording" ? "■ 말하기 끝" : busy ? "평가하고 있어요" : shadow ? "🎤 따라 말하기" : "🎤 말하기"}
-                  onPress={state.phase === "recording" ? stopRecording : startRecording}
-                  disabled={busy}
-                />
+                <View style={styles.pair}>
+                  {canSkip(state) && <Button label="건너뛰기" onPress={skipLine} kind="plain" />}
+                  {state.phase === "recording" && <Button label="취소" onPress={cancelRecording} kind="plain" />}
+                  <Button
+                    label={state.phase === "recording" ? "■ 말하기 끝" : busy ? "평가하고 있어요" : shadow ? "🎤 따라 말하기" : "🎤 말하기"}
+                    onPress={state.phase === "recording" ? stopRecording : startRecording}
+                    disabled={busy}
+                    grow
+                  />
+                </View>
               )}
-              {/* after teacher Ryan's answer only the same line again, never past it (spec offscript-aside 5) */}
+              {/* after teacher Ryan's answer the same line again, or past it without a recording (spec offscript-aside 5,
+                  record-cancel-skip 2) */}
               {state.phase === "evaluated" && state.aside && (
-                <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} />
+                <View style={styles.pair}>
+                  <Button label="건너뛰기" onPress={skipLine} kind="plain" />
+                  <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} grow />
+                </View>
               )}
               {state.phase === "evaluated" && !state.aside && (
                 <View style={styles.row}>
@@ -748,4 +782,5 @@ const styles = StyleSheet.create({
   notice: { fontSize: 16, color: colors.sub, marginTop: 8 },
   controls: { padding: 12, borderTopWidth: 1, borderTopColor: "#E9ECEF" },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" },
+  pair: { flexDirection: "row", gap: 8 },
 });
