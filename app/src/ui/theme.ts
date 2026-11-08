@@ -19,6 +19,10 @@ export const colors = {
   sohee: "#2F9E44", // Sohee's tag on her interpretation (spec korean-translation 2)
   soheeText: "#1F6F34", // her Korean: darker, to read on the gray and blue bubbles
   danger: "#C92A2A",
+  // a button that cannot be pressed now, whatever its kind: a fixed gray, not a see-through blue or gray, which read
+  // like a secondary button (spec button-colors 1). The words stay readable: 「평가하고 있어요」 says what is going on.
+  off: "#E9ECEF",
+  offText: "#868E96",
 };
 
 // The gap above each screen's content. The frame in App.tsx already keeps clear of the status bar; this used to

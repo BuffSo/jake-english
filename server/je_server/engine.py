@@ -5,9 +5,10 @@ import asyncio
 import contextlib
 import logging
 import re
+import threading
 import time
 from collections.abc import AsyncIterator, Sequence
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from . import audio
@@ -19,7 +20,7 @@ from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLi
 from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
 from .tts import VoiceError
-from .phrases import PHRASES
+from .phrases import PHRASES, TIPS
 from .review import first_try, group_of, latest_run, past_items, sentence_key
 from .store import Store
 
@@ -61,15 +62,37 @@ class Engine:
         self.quiet = asyncio.Event()
         self.quiet.set()
         self.saved_lock = asyncio.Lock()  # the saved-sentence file is read and written one change at a time
+        # `/home` runs in a worker thread: two at once must not both take the day's tip
+        self.tip_lock = threading.Lock()
 
     # --- fixed phrases ------------------------------------------------------------------------
 
     def said(self, name: str) -> Said:
-        text = PHRASES[name]
+        return self._ryan_said(PHRASES[name])
+
+    def _ryan_said(self, text: str) -> Said:
         return Said(text=text, audio=self.voice.key("ryan", "korean", text))
 
+    def home_tip(self, day: date | None = None) -> Said | None:
+        """Ryan's shadowing tip for the day's first start, the next in turn; None once it was said that day (spec
+        ryan-shadowing-tip 2, 4). The Mac's date. Remembered in the data folder, so a restart does not say it again."""
+        today = (day or date.today()).isoformat()
+        with self.tip_lock:
+            try:
+                last, nxt = self.store.load_tip()
+                if last == today:
+                    return None
+                self.store.save_tip(today, nxt + 1)
+            except OSError as e:
+                # the first screen is the way into the app: a tip.json the Mac cannot read or write (a full or
+                # read-only disk) costs the day's tip, never the screen (final review)
+                log.warning("tip.json unusable, no tip today: %s", type(e).__name__)
+                return None
+        return self._ryan_said(TIPS[nxt % len(TIPS)])
+
     async def warm(self) -> None:
-        for text in PHRASES.values():  # made once and played many times, so heard back (check)
+        # made once and played many times, so heard back (check); the tips too, said once a day
+        for text in [*PHRASES.values(), *TIPS]:
             await self.voice.say(text, "ryan", "korean", urgent=False, check=True)
 
     # --- helpers ------------------------------------------------------------------------------

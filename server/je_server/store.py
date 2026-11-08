@@ -89,6 +89,27 @@ class Store:
                 ok = False
         return items, ok
 
+    # --- Ryan's shadowing tip: the day it was last said and which comes next (spec ryan-shadowing-tip 4) ----------
+
+    def load_tip(self) -> tuple[str | None, int]:
+        """The day (YYYY-MM-DD) the tip was last said and the turn of the next one. A missing or unreadable file reads
+        as never said, from the first one: the first screen must not fail over it."""
+        path = self.root / "tip.json"
+        if not path.exists():
+            return None, 0
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            day, nxt = raw["day"], raw["next"]
+            if not isinstance(day, str) or not isinstance(nxt, int) or isinstance(nxt, bool) or nxt < 0:
+                raise ValueError
+        except (ValueError, TypeError, KeyError):
+            log.warning("unreadable tip.json: starting the tips over")
+            return None, 0
+        return day, nxt
+
+    def save_tip(self, day: str, next_: int) -> None:
+        self._write(self.root / "tip.json", json.dumps({"day": day, "next": next_}))
+
     def load(self, rp_id: str) -> Roleplay:
         path = self._dir(rp_id) / "roleplay.json"
         if not path.exists():

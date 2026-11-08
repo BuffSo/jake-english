@@ -384,3 +384,62 @@ async def test_history_skips_asides(engine_with_rp, speech_bytes, fake_whisper):
     [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "turn")]
     rp = engine.store.load(rp_id)
     assert engine.history(rp, user_idx + 1)[-1] == ("user", rp.lines[user_idx].text)
+
+
+# --- Ryan's shadowing tip (spec ryan-shadowing-tip 2, 4) ---------------------------------------------------------
+
+
+def test_tip_comes_once_a_day_in_turn(engine):
+    from datetime import date
+
+    from je_server.phrases import TIPS
+
+    d1, d2 = date(2026, 11, 8), date(2026, 11, 9)
+    assert engine.home_tip(d1).text == TIPS[0]
+    assert engine.home_tip(d1) is None
+    assert engine.home_tip(d2).text == TIPS[1]
+
+
+def test_tip_wraps_after_the_last(engine):
+    from datetime import date
+
+    from je_server.phrases import TIPS
+
+    texts = [engine.home_tip(date(2026, 11, d)).text for d in range(1, 7)]
+    assert texts == [*TIPS, TIPS[0]]
+
+
+def test_tip_once_a_day_even_after_a_restart(engine_factory):
+    from datetime import date
+
+    from je_server.phrases import TIPS
+
+    day = date(2026, 11, 8)
+    assert engine_factory().home_tip(day).text == TIPS[0]
+    assert engine_factory().home_tip(day) is None
+    assert engine_factory().home_tip(date(2026, 11, 9)).text == TIPS[1]
+
+
+def test_unreadable_tip_file_starts_over(engine, tmp_path):
+    from datetime import date
+
+    from je_server.phrases import TIPS
+
+    (tmp_path / "data" / "tip.json").write_text("{not json", encoding="utf-8")
+    assert engine.home_tip(date(2026, 11, 8)).text == TIPS[0]
+
+
+def test_tip_is_ryans_korean_sound(engine, fake_voice):
+    from datetime import date
+
+    from je_server.phrases import TIPS
+
+    said = engine.home_tip(date(2026, 11, 8))
+    assert said.audio == fake_voice.key("ryan", "korean", TIPS[0])
+
+
+async def test_tips_are_made_ahead_and_checked(engine, fake_voice):
+    from je_server.phrases import TIPS
+
+    await engine.warm()
+    assert set(TIPS) <= set(fake_voice.checked)

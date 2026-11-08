@@ -339,3 +339,28 @@ def test_recommend_route_takes_the_topic(client, fake_claude):
     assert [a for n, a in fake_claude.calls if n == "recommend"][-1] == ([], [], "tourist")
     r = client.post("/recommend", json={"topic": "nope"})
     assert r.status_code == 422 and r.json()["code"] == "bad_request"
+
+
+def test_home_without_asking_neither_gives_nor_uses_the_tip(client):
+    # spec ryan-shadowing-tip 4: a card's `curl /home` must not use up the day's line
+    from je_server.phrases import TIPS
+
+    assert "tip" not in client.get("/home").json()
+    assert client.get("/home", params={"tip": 1}).json()["tip"]["text"] == TIPS[0]
+
+
+def test_home_gives_the_tip_once_when_asked(client):
+    from je_server.phrases import TIPS
+
+    first = client.get("/home", params={"tip": 1}).json()
+    assert first["tip"]["text"] == TIPS[0] and len(first["tip"]["audio"]) == 64
+    assert "tip" not in client.get("/home", params={"tip": 1}).json()
+    assert "tip" not in first["lines"]
+
+
+def test_home_still_answers_when_the_tip_file_cannot_be_read(client, tmp_path):
+    # final review: the first screen is the way into the app; a tip.json the Mac cannot read or write (here a
+    # folder in its place, like a full or read-only disk) must not turn /home into a 500
+    (tmp_path / "data" / "tip.json").mkdir()
+    r = client.get("/home", params={"tip": 1})
+    assert r.status_code == 200 and "tip" not in r.json() and "greeting" in r.json()["lines"]

@@ -46,3 +46,12 @@ def test_plain_closing_does_not_praise():
     # spec record-cancel-skip 3: no line was said, so nothing the Mac heard to praise
     assert PHRASES["closing_plain"] == "대화 끝! 수고했어요."
     assert "잘했어요" not in PHRASES["closing_plain"]
+
+
+def test_tips_say_shadowing_and_are_not_fixed_lines():
+    # spec ryan-shadowing-tip 1: each line has the word, five in this order, apart from the always-same lines
+    from je_server.phrases import TIPS
+
+    assert len(TIPS) == 5 and all("섀도잉" in t for t in TIPS)
+    assert TIPS[4] == "섀도잉하기 전에, 어디를 세게 읽고 어디를 이어 읽는지 잘 들어 보세요."
+    assert not set(TIPS) & set(PHRASES.values())

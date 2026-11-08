@@ -28,7 +28,7 @@ test("sends bearer token", async () => {
   const f = jest.fn(async () => json(200, { lines: {}, images: {} }));
   await makeApi(URL, TOKEN, f as never, noFile).getHome();
   const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
-  expect(url).toBe(`${URL}/home`);
+  expect(url).toBe(`${URL}/home?tip=1`); // asks for the day's shadowing tip (spec ryan-shadowing-tip 4)
   expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
 });
 
