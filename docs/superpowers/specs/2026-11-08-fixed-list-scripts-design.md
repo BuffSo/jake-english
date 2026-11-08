@@ -198,6 +198,45 @@ AI 초안이다. 사실은 상황 주제 스펙 3에서 확인한 것만 썼다.
 | R | That's right, a men's 9. Let me grab a pair from the back. |
 | 나 | Great, thank you. I'll wait here. |
 
+## 더한 대본 (2026-11-08)
+
+사용자가 「미국 여행」에 예약 상황 둘을 더하자고 했다. 「요즘은 보통 예약을 많이 하잖아. 전화 예약을 했을 수도 있고 온라인 예약을 했을 수도 있고, 그 가정하에 호텔 체크인 해 보는 것도 괜찮을 것 같아. 하와이 씨푸드 레스토랑 같은 곳도 예약 안 하고 갔을 때 예약했냐고 직원이 물어보고, 뭐 이런 상황도 미리 만들어 보자.」 대본은 AI 초안을 main 세션을 거쳐 사용자가 정했다(list-reservations 카드). 목록 끝에 더해 앞의 세 줄은 자리가 그대로다. 소희의 한국어는 `topics.py`에 있다.
+
+- 갈림길과 사용자 판단(모두 AI 추천을 받아들임): 호텔은 전화 예약이 아니라 온라인 예약으로, 확인 번호를 보여 준다. 식당은 바 자리에 앉지 않고 테이블을 기다리며 대기 명단에 이름을 올린다. 가게 이름은 쓰지 않는다.
+- 지어낸 작은 값은 2박, 킹 침대 방, 12층, 30분, 대기 명단의 이름 「Jake」다. 대본이 말하는 값은 목록 설명에도 적었다(`REVIEW.md` 「목록 대본의 사실」).
+- 대기 명단 이름은 AI 초안의 「Kim」을 사용자가 「Jake」로 바꿨다. 식당 대기 명단은 보통 이름(first name)을 올린다. 호텔은 성으로 찾는 일이 많아 「뉴욕 호텔 체크인」의 「Kim」은 그대로 둔다.
+
+**로스앤젤레스 호텔에서 온라인 예약 확인** (`u-hotel-online`, 라이언 먼저)
+
+- 틀: 나는 로스앤젤레스에 여행 온 한국 사람, 라이언은 호텔 프런트 직원, 장소는 로스앤젤레스의 호텔 프런트, 목표는 온라인으로 한 예약을 확인하고 체크인하기.
+- 「뉴욕 호텔 체크인」은 이미 예약한 방에 이름을 대고 들어가는 대본이다. 이 대본은 예약을 어떻게 했는지와 예약 내용(몇 박, 방 종류)을 주고받는다.
+
+| | 대사 |
+|---|---|
+| R | Hi, welcome! Are you checking in? |
+| 나 | Yes, I booked online. Here's my confirmation number. |
+| R | Thanks. I have you down for two nights in a king room. |
+| 나 | That's right. Could I get a room on a high floor? |
+| R | Sure, you're on the twelfth floor. Here are your keys. |
+| 나 | Awesome, the higher the better. Thank you! |
+
+- 처음 초안의 한 줄이 지난 역할극 기록의 문장과 같아, 사용자에게 보이기 전에 바꿨다. 넣은 대사와 통역을 기록 전부와 문장 단위로 맞대 본 결과는 0이다.
+
+**와이키키 해산물 식당에 예약 없이 가기** (`u-seafood-walkin`, 라이언 먼저)
+
+- 틀: 나는 하와이에 여행 온 한국 사람, 라이언은 식당 입구의 안내 직원, 장소는 하와이 호놀룰루 와이키키의 해산물 식당, 목표는 예약 없이 간 식당에서 자리를 묻고 대기 명단에 이름 올리기.
+- 「30-minute wait, or you can sit at the bar」는 바에는 기다리지 않고 앉을 수 있다는 뜻으로 읽힌다. 설명에 「바에는 앉을 수 있다」가 있다. 한국어에는 영어에 없는 「바로」를 넣지 않는다.
+
+| | 대사 |
+|---|---|
+| R | Aloha, welcome in! Do you have a reservation? |
+| 나 | No, we don't. Do you have a table for two? |
+| R | We're pretty full right now. It's about a 30-minute wait, or you can sit at the bar. |
+| 나 | We'll wait for a table. Can I put my name down? |
+| R | Sure, what name should I put down? |
+| 나 | It's Jake. Thank you! |
+| R | Great, we'll call you when your table is ready. |
+
 ## 빌더에게 맡기는 것
 
 - 대본과 상황 틀을 어느 파일에 어떤 모양으로 둘지(`topics.py`의 `Pick`에 더할지, 따로 둘지).
