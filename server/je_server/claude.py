@@ -74,6 +74,25 @@ def pick_ending(turned_down: Sequence[str], rng: random.Random | None = None) ->
     return (rng or random).choices([e for e, _ in left], weights=[w for _, w in left])[0]
 
 
+def _ending_at_end(ending: str) -> re.Pattern[str]:
+    """The ending at the end of a sentence, with or without its spaces."""
+    return re.compile(r"\s*" + r"\s*".join(re.escape(c) for c in ending if not c.isspace()) + r"\s*$")
+
+
+# Endings a suggestion may come back with: Jake's three and the one from before them. Real Haiku (2026-11-08) wrote
+# 「추천해요」 for 「골라 봤어요」 4 times in 21, after turned-down sentences ending so, and once lost a space in one.
+KNOWN_ENDINGS = tuple(_ending_at_end(e) for e in (*(e for e, _ in JAKE_ENDINGS), "상황으로 연습해 보면 어때요?"))
+
+
+def swap_ending(text: str, ending: str) -> str | None:
+    """`text` ending in `ending` when it ends in one of KNOWN_ENDINGS, or None. The clause before 상황 fits every
+    ending, so only the ending changes."""
+    for known in KNOWN_ENDINGS:
+        if m := known.search(text):
+            return f"{text[:m.start()]} {ending}".strip()
+    return None
+
+
 class ClaudeUnavailable(Exception):
     """No answer right now: no internet, rate limit, server error, timeout or refusal."""
 
@@ -239,8 +258,12 @@ class Claude:
         text = (data or {}).get("request_ko", "").strip() if isinstance(data, dict) else ""
         if not text:
             raise ClaudeUnavailable("empty recommendation")
-        if not text.endswith(ending):  # said as it came: no second call (plan jake-recommend-endings)
-            log.warning("recommendation did not keep the given ending")
+        if not text.endswith(ending):  # no second call: swap a known ending, say anything else as it came
+            if (swapped := swap_ending(text, ending)) is None:
+                log.warning("recommendation did not keep the given ending")
+            else:
+                log.info("recommendation ending swapped")
+                text = swapped
         return text
 
     # --- the conversation sent along ---------------------------------------------------------

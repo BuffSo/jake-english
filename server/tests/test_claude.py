@@ -453,10 +453,28 @@ async def test_recommend_passes_the_ending():
     assert "끝말" in system and "어때요" not in system and "볼까요" not in system and "골라 봤어요" not in system
 
 
-async def test_recommend_keeps_an_answer_with_another_ending(caplog):
-    # no second call for a missed ending: Jake says it as it came, and the log notes it without the sentence
-    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황으로 연습해 보면 어때요?"})])
+async def test_recommend_keeps_an_answer_with_an_unknown_ending(caplog):
+    # no second call for a missed ending: an ending the server does not know is said as it came, and the log notes
+    # it without the sentence
+    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황이에요."})])
     with caplog.at_level(logging.WARNING, logger="je_server"):
         text = await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.")
-    assert text.endswith("어때요?") and len(fake.requests) == 1
+    assert text == "카페에서 주문하는 상황이에요." and len(fake.requests) == 1
     assert "ending" in caplog.text and "카페" not in caplog.text
+
+
+@pytest.mark.parametrize("answer, ending, said", [
+    # real Haiku, 2026-11-08: 4 in 21 wrote 「추천해요」 when given 「골라 봤어요」, after turned-down 「추천해요」 ones
+    ("카페에서 주문하는 상황을 추천해요.", "상황을 골라 봤어요.", "카페에서 주문하는 상황을 골라 봤어요."),
+    ("카페에서 주문하는 상황으로 연습해 보면 어때요?", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+    # and once the space before 연습해 was lost
+    ("공항에서 짐을 찾는 상황으로연습해 볼까요?", "상황으로 연습해 볼까요?", "공항에서 짐을 찾는 상황으로 연습해 볼까요?"),
+    ("공항에서 짐을 찾는상황을 골라 봤어요. ", "상황을 추천해요.", "공항에서 짐을 찾는 상황을 추천해요."),
+])
+async def test_recommend_swaps_a_known_ending_for_the_given_one(caplog, answer, ending, said):
+    # the clause before 상황 fits every ending, so the server swaps only the ending: still one call
+    fake = FakeAnthropic([json.dumps({"request_ko": answer})])
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        text = await Claude(fake).recommend([], [], OTHER, ending)
+    assert text == said and len(fake.requests) == 1
+    assert "ending swapped" in caplog.text and "did not keep" not in caplog.text and "상황" not in caplog.text
