@@ -14,6 +14,9 @@ PHRASES: dict[str, str] = {
     "ask_describe": "어떤 상황인지 말하거나 써 주세요.",
     "closing_retry": "대화 끝! 수고했어요. 고칠 것이 남았던 대사를 다시 해 볼까요?",
     "closing_clean": "대화 끝! 수고했어요. 오늘 정말 잘했어요.",
+    # no line was said inside the roleplay (all skipped, or only words to teacher Ryan): nothing heard to praise
+    # (spec record-cancel-skip 3)
+    "closing_plain": "대화 끝! 수고했어요.",
     "no_speech": "잘 안 들렸어요. 한 번 더 말해 줄래요?",
     "retry_offscript": "이번에는 대사를 그대로 따라 말해 볼까요?",
     "claude_down": "지금은 제가 대답할 수 없어요. 맥의 인터넷 연결을 확인해 주세요.",

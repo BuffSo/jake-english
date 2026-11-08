@@ -40,3 +40,9 @@ def test_ryan_says_daehwa_not_roleplay():
     assert PHRASES["closing_retry"].startswith("대화 끝! 수고했어요.")
     assert PHRASES["closing_clean"].startswith("대화 끝! 수고했어요.")
     assert not [k for k, v in PHRASES.items() if "역할극" in v]
+
+
+def test_plain_closing_does_not_praise():
+    # spec record-cancel-skip 3: no line was said, so nothing the Mac heard to praise
+    assert PHRASES["closing_plain"] == "대화 끝! 수고했어요."
+    assert "잘했어요" not in PHRASES["closing_plain"]
