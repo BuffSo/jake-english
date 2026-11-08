@@ -7,6 +7,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { SOON_ENDS_MS } from "../config";
 import { BUTTON_BORDER, buttonLook } from "./buttonLook";
+import { keepWords } from "./keepWords";
 import { colors } from "./theme";
 import { LINE_MIN, voiceShare } from "./voiceLevel";
 
@@ -82,7 +83,7 @@ export function SoonEnds({ since }: { since: number | null }) {
     const t = setTimeout(() => setSoon(true), Math.max(0, since + SOON_ENDS_MS - Date.now()));
     return () => clearTimeout(t);
   }, [since]);
-  return soon ? <Text style={styles.soon}>녹음이 곧 끝나요</Text> : null;
+  return soon ? <Text style={styles.soon}>{keepWords("녹음이 곧 끝나요")}</Text> : null;
 }
 
 // the size of a large `Button` next to it: its padding less the line and its gap, so 「취소」 and this match

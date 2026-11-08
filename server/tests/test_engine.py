@@ -430,6 +430,33 @@ def test_unreadable_tip_file_starts_over(engine, tmp_path):
     assert engine.home_tip(date(2026, 11, 8)).text == TIPS[0]
 
 
+def test_two_first_screens_at_once_take_the_tip_once(engine, monkeypatch):
+    # `/home` runs in a worker thread, so two can read tip.json before either writes it; the lock makes the read,
+    # the check and the write one step (todo 20261108_30 1). Without it both got the day's tip.
+    import threading
+    import time
+    from datetime import date
+
+    real = engine.store.load_tip
+
+    def slow_load():
+        got = real()
+        time.sleep(0.1)  # both threads have read before either writes
+        return got
+
+    monkeypatch.setattr(engine.store, "load_tip", slow_load)
+    day = date(2026, 11, 8)
+    got = []
+    threads = [threading.Thread(target=lambda: got.append(engine.home_tip(day))) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(got) == 2  # a thread that raised would leave one answer and pass the count below
+    assert sum(said is not None for said in got) == 1
+    assert engine.store.load_tip() == ("2026-11-08", 1)
+
+
 def test_tip_is_ryans_korean_sound(engine, fake_voice):
     from datetime import date
 
