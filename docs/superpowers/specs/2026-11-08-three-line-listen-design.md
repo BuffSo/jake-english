@@ -4,6 +4,7 @@
 > 앞선 스펙: `2026-11-05-roleplay-practice-design.md`(이하 「역할극 뒤 연습 스펙」), `2026-11-06-korean-translation-design.md`(이하 「통역 스펙」), `2026-11-07-review-practice-design.md`.
 > 할 일: 원래 폴더 `docs/todo/20261107_06_todo_three_line_contrast_and_listen_buttons.md`, 같은 화면의 작은 일 `docs/todo/20261106_10_todo_korean_translation_review_minors.md`
 > 작성: 2026-11-08 (three-line-listen 카드)
+> 바뀜: 6의 🔊는 누르면 소리가 끝날 때까지 울리고, 다시 누르면 멈춘다. 통역 줄의 🔊는 글 끝에서 「통역」 이름표 바로 뒤로 옮겼다(2026-11-08, `docs/superpowers/specs/2026-11-08-play-button-feedback-design.md`).
 > 표시: 「(사용자)」는 사용자가 정한 것, 「(AI 판단)」은 AI가 정한 것이다. 화면 모양은 브라우저 초안 다섯 칸(1~5)을 보고 사용자가 「추천대로 해 줘」라고 정했다. 5는 사용자가 두 번 고쳐 말해 정해졌다(아래 「정한 과정」).
 
 ## 왜 만드나
