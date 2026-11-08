@@ -1,6 +1,6 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Roleplay, ScriptLine } from "../api/types";
-import { askFirst, canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
+import { askFirst, canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, modelKey, NO_SPEECH, practiceFor, reduce, showMicHint, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -842,5 +842,79 @@ describe("skip and cancel (spec record-cancel-skip)", () => {
     const s = reduce(reduce(at("ready"), skip), { type: "lineLoaded", line: ryanLine });
     const bubble = s.history.at(-1)!;
     expect(practiceFor(s, bubble)).toBe("mine");
+  });
+});
+
+describe("first-turn hint and the silent cancel (spec record-feedback 3, 4)", () => {
+  const user = { ...rp.lines[1], idx: 1 } as ScriptLine;
+  const seenAll = { 0: ryanLine, 1: userLine };
+
+  test("the hint shows on my turn before the mic was ever used", () => {
+    expect(at("ready").micUsed).toBe(false);
+    expect(showMicHint(at("ready"))).toBe(true);
+    expect(showMicHint(at("recording"))).toBe(false);
+    expect(showMicHint(at("evaluating"))).toBe(false);
+  });
+
+  test("it goes for good once the mic starts, even after a cancel", () => {
+    const started = reduce(at("ready"), { type: "recordStart" });
+    expect(started.micUsed).toBe(true);
+    expect(showMicHint(reduce(started, { type: "recordCancel" }))).toBe(false);
+  });
+
+  test("a skip keeps it for the next turn", () => {
+    const s = reduce(at("ready"), { type: "skip" });
+    expect(s.micUsed).toBe(false);
+    expect(showMicHint(reduce(s, { type: "lineLoaded", line: { ...user, idx: 3 } }))).toBe(true);
+  });
+
+  test("not on Ryan's turn, nor while a line loads", () => {
+    const ryan = reduce(reduce(situation, { type: "created", roleplay: rp }), { type: "lineLoaded", line: ryanLine });
+    expect(ryan.phase).toBe("ryan");
+    expect(showMicHint(ryan)).toBe(false);
+    expect(showMicHint(at("loading"))).toBe(false);
+  });
+
+  test("on Ryan's line to follow in shadow practice", () => {
+    const s = reduce(reduce(end(), { type: "startPractice", kind: "shadow", order: [0] }), { type: "lineLoaded", line: ryanLine });
+    expect(showMicHint(s)).toBe(true);
+  });
+
+  test("each new conversation and practice starts with it", () => {
+    const used = (s: State): State => ({ ...s, micUsed: true });
+    expect(reduce(situation, { type: "created", roleplay: rp }).micUsed).toBe(false);
+    expect(reduce(used(end()), { type: "restarted", roleplay: { ...rp, id: "c".repeat(12) } }).micUsed).toBe(false);
+    expect(reduce(used(end()), { type: "startPractice", kind: "mine", order: [1] }).micUsed).toBe(false);
+    const mid = used(at("ready", { idx: 3, line: { ...user, idx: 3 }, seen: seenAll }));
+    expect(reduce(mid, { type: "practiseLine", kind: "mine", idx: 1 }).micUsed).toBe(false);
+  });
+
+  test("back from a line practised mid-roleplay brings the roleplay back as it was", () => {
+    const mid = at("ready", { idx: 3, line: { ...user, idx: 3 }, seen: seenAll });
+    let s = reduce(mid, { type: "practiseLine", kind: "mine", idx: 1 });
+    s = reduce(s, { type: "recordStart" });
+    expect(s.micUsed).toBe(true);
+    s = reduce(reduce(s, { type: "recordCancel" }), { type: "back" });
+    expect(s.micUsed).toBe(false);
+  });
+
+  test("noSpeech goes back to before speaking with the notice, in the same mode", () => {
+    const s = reduce(at("recording", { mode: "retry" }), { type: "noSpeech" });
+    expect(s.phase).toBe("ready");
+    expect(s.mode).toBe("retry");
+    expect(s.message).toBe(NO_SPEECH);
+    expect(NO_SPEECH).toBe("말소리가 없어 녹음을 멈췄어요.");
+  });
+
+  test("noSpeech outside recording does nothing", () => {
+    for (const p of ["ready", "evaluating", "evaluated", "error"] as const) {
+      const s = at(p);
+      expect(reduce(s, { type: "noSpeech" })).toBe(s);
+    }
+  });
+
+  test("the notice goes at the next start", () => {
+    const s = reduce(reduce(at("recording"), { type: "noSpeech" }), { type: "recordStart" });
+    expect(s.message).toBeNull();
   });
 });
