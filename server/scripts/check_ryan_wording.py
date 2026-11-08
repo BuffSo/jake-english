@@ -8,6 +8,7 @@ is printed with the rules it broke:
 - the practice called 「역할극」 instead of 「대화」, double quotes (in the model's own answer: the server drops them)
 - a particle after an English word that does not fit how the word ends in Hangul (room이, where가)
 - a pointed word missing, the whole transcript quoted, or the wrong ending (next line / conversation done)
+- a word a case requires or forbids (`must`, `never`): a wish to skip names 「건너뛰기」, an app wish never says 「말해야」
 The lines are made up (REVIEW.md), so printing them is fine. Prints tokens and cost at the end.
 
 Feedback costs about $0.0003 a call on Haiku and $0.007 on Sonnet; teacher Ryan about $0.007 on Sonnet. Tell the
