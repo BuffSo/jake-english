@@ -108,8 +108,10 @@ def test_upload_size_limited(client):
 
 
 def test_recommend_route(client):
+    from je_server.claude import JAKE_ENDINGS
+
     j = client.post("/recommend").json()
-    assert j["text"].endswith("어때요?") and len(j["audio"]) == 64
+    assert j["text"].endswith(tuple(e for e, _ in JAKE_ENDINGS)) and len(j["audio"]) == 64
 
 
 def test_recommend_route_takes_turned_down(client, fake_claude):

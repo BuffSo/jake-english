@@ -226,11 +226,11 @@ class Claude:
 
     # --- recommendation -----------------------------------------------------------------------
 
-    async def recommend(self, recent: list[str], turned_down: Sequence[str], topic: Topic) -> str:
-        """Jake's suggestion inside the topic, unlike its recent ones, its prepared list and those just turned down
-        (spec situation-topics 4)."""
+    async def recommend(self, recent: list[str], turned_down: Sequence[str], topic: Topic, ending: str) -> str:
+        """Jake's suggestion inside the topic, unlike its recent ones, its prepared list and those just turned down,
+        ending in `ending` (one of JAKE_ENDINGS, picked by the server; spec situation-topics 4)."""
         listed = "\n".join(f"- {r}" for r in recent) or "- 없음"
-        message = f"주제: {topic.scenes_en}\n예: {topic.example_ko}\n\n최근 상황:\n{listed}"
+        message = f"주제: {topic.scenes_en}\n예: {topic.example_ko}\n끝말: {ending}\n\n최근 상황:\n{listed}"
         if topic.picks:  # Jake fills in what the short list does not cover (user, 2026-11-07)
             message += "\n\n목록에 있는 상황:\n" + "\n".join(f"- {p.title_ko}" for p in topic.picks)
         if turned_down:  # suggested on the situation screen and turned down with 「다른 걸로요」 (2026-11-06)
@@ -239,6 +239,8 @@ class Claude:
         text = (data or {}).get("request_ko", "").strip() if isinstance(data, dict) else ""
         if not text:
             raise ClaudeUnavailable("empty recommendation")
+        if not text.endswith(ending):  # said as it came: no second call (plan jake-recommend-endings)
+            log.warning("recommendation did not keep the given ending")
         return text
 
     # --- the conversation sent along ---------------------------------------------------------

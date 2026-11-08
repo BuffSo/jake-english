@@ -1,4 +1,5 @@
 import json
+import logging
 import random
 from collections import Counter
 
@@ -83,7 +84,7 @@ async def test_annotate_bad_json_falls_back_to_plain():
 
 async def test_api_failure_becomes_unavailable():
     with pytest.raises(ClaudeUnavailable):
-        await Claude(FakeAnthropic([connection_error()])).recommend([], [], OTHER)
+        await Claude(FakeAnthropic([connection_error()])).recommend([], [], OTHER, "상황을 추천해요.")
 
 
 async def test_refusal_becomes_unavailable():
@@ -92,14 +93,14 @@ async def test_refusal_becomes_unavailable():
 
 
 async def test_recommend_uses_haiku_and_avoids_recent():
-    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황으로 연습해 보면 어때요?"})])
-    text = await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], [], OTHER)
-    assert text.endswith("어때요?")
+    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황을 추천해요."})])
+    text = await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], [], OTHER, "상황을 추천해요.")
+    assert text == "카페에서 주문하는 상황을 추천해요."
     r = fake.requests[0]
     # 존댓말: Jake's cloned voice swallowed the 반말 ending 「싶어.」 4 times in 5, 「싶어요.」 once (2026-11-05).
     # Jake suggests the situation to the learner, he does not ask for it on the learner's behalf (user, same day).
     system = str(r["system"])
-    assert "연습해 보면 어때요?" in system and "반말" not in system and "싶어" not in system
+    assert "끝말" in system and "반말" not in system and "싶어" not in system
     assert r["model"] == "claude-haiku-5-5" and r["thinking"] == {"type": "disabled"}
     assert "effort" not in r.get("output_config", {})
     assert "케이블카" in r["messages"][0]["content"]
@@ -108,13 +109,14 @@ async def test_recommend_uses_haiku_and_avoids_recent():
 async def test_recommend_avoids_turned_down():
     # 2026-11-06 the user: Jake's suggestion waits for 「이걸로 할게요」 or 「다른 걸로요」, and one turned down
     # with 「다른 걸로요」 must not come back
-    answer = json.dumps({"request_ko": "호텔 프런트에서 체크인하는 상황으로 연습해 보면 어때요?"})
+    answer = json.dumps({"request_ko": "호텔 프런트에서 체크인하는 상황을 추천해요."})
     fake = FakeAnthropic([answer, answer])
-    await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], ["카페에서 주문하는 상황으로 연습해 보면 어때요?"], OTHER)
+    await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], ["카페에서 주문하는 상황으로 연습해 보면 어때요?"], OTHER,
+                                 "상황을 추천해요.")
     content = fake.requests[0]["messages"][0]["content"]
     assert "케이블카" in content and "방금 거절한 상황:\n- 카페에서 주문하는" in content
     assert "turned down" in str(fake.requests[0]["system"])
-    await Claude(fake).recommend([], [], OTHER)  # nothing turned down: the message has no empty list for it
+    await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.")  # nothing turned down: the message has no empty list for it
     assert "거절" not in fake.requests[1]["messages"][0]["content"]
 
 
@@ -303,18 +305,18 @@ def test_script_prompts_end_on_the_learner_when_ryan_would_only_echo():
 
 
 async def test_recommend_stays_in_the_topic():
-    fake = FakeAnthropic([json.dumps({"request_ko": "명동에서 환전소를 묻는 상황으로 연습해 보면 어때요?"})])
-    await Claude(fake).recommend(["관광객이 길을 묻는다."], [], get("tourist"))
+    fake = FakeAnthropic([json.dumps({"request_ko": "명동에서 환전소를 묻는 상황을 골라 봤어요."})])
+    await Claude(fake).recommend(["관광객이 길을 묻는다."], [], get("tourist"), "상황을 골라 봤어요.")
     content = fake.requests[0]["messages"][0]["content"]
     t = get("tourist")
     assert t.scenes_en in content and t.example_ko in content
     assert "목록에 있는 상황:" in content and all(p.title_ko in content for p in t.picks)
-    assert "연습해 보면 어때요?" in str(fake.requests[0]["system"])
+    assert "끝말" in str(fake.requests[0]["system"])
 
 
 async def test_recommend_without_a_list_has_no_list_heading():
-    fake = FakeAnthropic([json.dumps({"request_ko": "전화로 주문을 확인하는 상황으로 연습해 보면 어때요?"})])
-    await Claude(fake).recommend([], [], OTHER)
+    fake = FakeAnthropic([json.dumps({"request_ko": "전화로 주문을 확인하는 상황을 추천해요."})])
+    await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.")
     assert "목록에 있는 상황" not in fake.requests[0]["messages"][0]["content"]
 
 
@@ -324,7 +326,7 @@ def test_recommend_system_has_no_scene_of_its_own():
     from je_server import prompts
 
     assert "케이블카" not in prompts.RECOMMEND_SYSTEM and "외국인" not in prompts.RECOMMEND_SYSTEM
-    assert "상황으로 연습해 보면 어때요?" in prompts.RECOMMEND_SYSTEM
+    assert "끝말" in prompts.RECOMMEND_SYSTEM
 
 
 async def test_script_lines_drop_stray_braces():
@@ -438,3 +440,23 @@ def test_pick_ending_any_after_an_old_form():
     rng = random.Random(5)
     got = {pick_ending(["카페에서 주문하는 상황으로 연습해 보면 어때요?"], rng) for _ in range(300)}
     assert got == {e for e, _ in JAKE_ENDINGS}
+
+
+async def test_recommend_passes_the_ending():
+    # the server picks the ending and Claude keeps it; the system lists none of them (spec situation-topics 4)
+    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황을 골라 봤어요."})])
+    text = await Claude(fake).recommend([], [], OTHER, "상황을 골라 봤어요.")
+    assert text == "카페에서 주문하는 상황을 골라 봤어요."
+    content = fake.requests[0]["messages"][0]["content"]
+    assert f"예: {OTHER.example_ko}\n끝말: 상황을 골라 봤어요.\n" in content
+    system = str(fake.requests[0]["system"])
+    assert "끝말" in system and "어때요" not in system and "볼까요" not in system and "골라 봤어요" not in system
+
+
+async def test_recommend_keeps_an_answer_with_another_ending(caplog):
+    # no second call for a missed ending: Jake says it as it came, and the log notes it without the sentence
+    fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황으로 연습해 보면 어때요?"})])
+    with caplog.at_level(logging.WARNING, logger="je_server"):
+        text = await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.")
+    assert text.endswith("어때요?") and len(fake.requests) == 1
+    assert "ending" in caplog.text and "카페" not in caplog.text
