@@ -444,9 +444,10 @@ class Engine:
                 # the text cannot tell the two apart (auto-detection also translates English into Korean).
                 try:
                     auto, lang = await self.whisper.transcribe_auto(wav)
-                except WhisperError:
-                    # only a check for Korean: the English transcript stands (todo offscript-aside minors 2)
-                    log.info("auto transcription failed")
+                except WhisperError as e:
+                    # only a check for Korean: the English transcript stands (todo offscript-aside minors 2). The
+                    # error carries the failure's type name only, never the transcript
+                    log.info("auto transcription failed: %s", e)
                     auto, lang = "", ""
                 if lang == "korean" and HANGUL.search(auto):
                     heard_ko = auto

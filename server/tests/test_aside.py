@@ -276,6 +276,19 @@ async def test_auto_transcription_failing_goes_on_in_english(engine_with_rp, spe
     assert fake_whisper.langs == ["en", "auto"]  # the second transcription was asked for and its failure passed over
 
 
+async def test_auto_transcription_failing_logs_why(engine_with_rp, speech_bytes, fake_whisper, caplog):
+    # todo teacher-answer-cut 3: the log line says what kind of failure it was, never what was heard
+    import logging
+
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "Wait, let me try that again."
+    fake_whisper.auto_fail = True
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        await run(engine, rp_id, user_idx, speech_bytes)
+    assert "auto transcription failed: fake" in caplog.messages
+    assert not any("Wait" in m for m in caplog.messages)
+
+
 async def test_auto_transcription_failing_keeps_the_macs_points(engine_with_rp, speech_bytes, fake_whisper,
                                                                fake_claude):
     engine, rp_id, user_idx = engine_with_rp

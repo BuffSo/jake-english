@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import anthropic
 import httpx2
 
+from je_server.asr import WhisperError
 from je_server.claude import ClaudeUnavailable
 from je_server.models import Frame, Syllable, ThreeLine, Word
 
@@ -265,8 +266,6 @@ class FakeWhisper:
         return self.text
 
     async def transcribe_auto(self, wav):
-        from je_server.asr import WhisperError
-
         self.calls += 1
         self.langs.append("auto")
         if self.auto_fail:
