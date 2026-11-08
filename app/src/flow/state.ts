@@ -215,10 +215,12 @@ export function leavesScreen(s: State): boolean {
 }
 
 // What the screen remembers to play a line's model once. Inside a practice it carries the practice number: the
-// screen stays mounted for a practice from the roleplay, and the same line practised again must play it again.
+// screen stays mounted for a practice from the roleplay, and the same line practised again must play it again. In the
+// roleplay a line keeps one key, so 「다시 해 보기」 does not play the model again (spec roleplay-practice; the user
+// kept it, 2026-11-08): 「🔊 다시 듣기」 plays it.
 export function modelKey(s: State): string | null {
   if (!s.line) return null;
-  return s.practice ? `${s.line.idx}:${s.mode}:${s.practiceNo}` : `${s.line.idx}:${s.mode}`;
+  return s.practice ? `${s.line.idx}:${s.mode}:${s.practiceNo}` : `${s.line.idx}`;
 }
 
 // What leaving the roleplay screen sends. From a practice it is `endPractice`, which does nothing outside one: two

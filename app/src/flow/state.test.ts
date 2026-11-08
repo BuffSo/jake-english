@@ -431,6 +431,12 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     expect([s.phase, s.line?.idx]).toEqual(["loading", 2]);
     expect(practiceFor(s, s.history.at(-1)!)).toBe("shadow");
   });
+
+  // todo practice-midway minors 3: the spec plays a line's model once; trying it again does not play it again (user)
+  test("trying the line again keeps its model key", () => {
+    const turn = midway("evaluated", { heard: "Just one, thanks.", feedback: "좋아요." });
+    expect(modelKey(reduce(turn, { type: "again" }))).toBe(modelKey(turn));
+  });
 });
 
 // --- 복습하기 (spec review-practice 1, 3, 7, 9; review-screens 2: the menu became two tabs) -------------------------
