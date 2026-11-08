@@ -1,4 +1,5 @@
-import type { Roleplay, Said, TalkEnd, TalkEvent } from "../api/types";
+import type { Roleplay, Said, ScriptLine, TalkEnd, TalkEvent } from "../api/types";
+import roleplayJson from "../../../contract/roleplay.json";
 import talkJson from "../../../contract/talk.json";
 import { NO_SPEECH } from "./state";
 import {
@@ -10,6 +11,8 @@ import {
   isCurrent,
   lineSounds,
   mayListenTalk,
+  replaysSituation,
+  savedBefore,
   talkInitial,
   talkReduce,
   turnNo,
@@ -254,4 +257,39 @@ test("lineSounds plays a reply's parts in order and a line's own sound otherwise
   expect(lineSounds({ parts, audio: null })).toEqual([key("a"), key("b"), key("c")]);
   expect(lineSounds({ parts: null, audio: key("x") })).toEqual([key("x")]);
   expect(lineSounds({ parts: null, audio: null })).toEqual([]);
+});
+
+const withLines = (lines: Partial<ScriptLine>[]) => ({ ...roleplay, lines: lines as ScriptLine[] }) as Roleplay;
+const L = (idx: number, speaker: "ryan" | "user", kind: ScriptLine["kind"], fixOf?: number): Partial<ScriptLine> => ({
+  idx,
+  speaker,
+  kind,
+  fix: fixOf === undefined ? null : { of: fixOf, said: "", why_ko: "", why_audio: null },
+});
+
+test("the line before a saved fix is Ryan's line before the turn it fixes", () => {
+  const rp = withLines([L(0, "ryan", "reply"), L(1, "user", "turn"), L(2, "ryan", "reply"), L(3, "user", "turn"), L(4, "ryan", "reply"), L(5, "user", "turn"), L(6, "ryan", "reply"), L(7, "user", "fix", 5)]);
+  expect(savedBefore(rp, rp.lines[7])?.idx).toBe(4);
+});
+
+test("the line before a saved fix skips Ryan's Korean help lines", () => {
+  const rp = withLines([L(0, "ryan", "reply"), L(1, "user", "ask"), L(2, "ryan", "help"), L(3, "user", "turn"), L(4, "user", "fix", 3)]);
+  expect(savedBefore(rp, rp.lines[4])?.idx).toBe(0);
+  const none = withLines([L(0, "ryan", "help"), L(1, "user", "turn"), L(2, "user", "fix", 1)]);
+  expect(savedBefore(none, none.lines[2])).toBeUndefined();
+});
+
+test("a roleplay line keeps the line right before it", () => {
+  const rp = withLines([L(0, "ryan", "script"), L(1, "user", "script"), L(2, "ryan", "script")]);
+  expect(savedBefore(rp, rp.lines[1])?.idx).toBe(0);
+  expect(savedBefore(rp, rp.lines[2])?.idx).toBe(1);
+  expect(savedBefore(rp, rp.lines[0])).toBeUndefined();
+});
+
+test("a free talk is not played again from saved practice", () => {
+  expect(replaysSituation(roleplay)).toBe(false);
+  expect(replaysSituation(roleplayJson as unknown as Roleplay)).toBe(true);
+  const old = { ...(roleplayJson as unknown as Roleplay) } as Partial<Roleplay>;
+  delete old.kind;
+  expect(replaysSituation(old as Roleplay)).toBe(true);
 });
