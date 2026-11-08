@@ -920,6 +920,14 @@ def test_talk_prompt_reads_a_nonsense_word_as_a_similar_sounding_one():
     assert "similar-sounding" in prompts.TALK_SYSTEM and "question back" in prompts.TALK_SYSTEM
 
 
+def test_talk_prompt_never_writes_korean_letters_and_ends_on_the_sentence_limit():
+    rules = prompts.TALK_SYSTEM
+    # Ryan's reply is voiced in English: once he wrote the Korean word he was asked about (2026-11-09 measure)
+    assert "never write Korean letters, not even the Korean word they asked about" in rules
+    # four-sentence replies rose to 12/52 as rules were added, so the limit is said again last
+    assert rules.rstrip().splitlines()[-1] == "- Whatever the case, at most three sentences."
+
+
 def test_talk_prompt_carries_on_after_a_helped_turn():
     assert prompts.TALK_HELPED == "(said with help: a sentence Sohee showed)"
     assert prompts.TALK_HELPED in prompts.TALK_SYSTEM
