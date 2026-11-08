@@ -2,13 +2,12 @@
 // bytes. Sound files cannot be committed: the commit check refuses every audio file, since it cannot tell a made tone
 // from a recording of someone, and its exceptions are not widened. The values are the draft the user picked (A), at
 // half its amplitude (-6 dB): at the draft's it was louder than Ryan's voice (todo 20261108_34 2, the numbers in the
-// test). The cancel cue was changed after: its loudness is matched to the start cue's on the phone speaker (below).
+// test).
 export type Cue = "start" | "end" | "cancel";
 
 export const CUE_RATE = 22050;
 
-// `overtones`: [multiple of hz, weight] mixed in, the note itself weighing 1; divided by the weights' sum, so the peak
-// is at most `gain` (lower, since the parts do not peak together)
+// `overtones`: [multiple of hz, weight] mixed in, the note itself weighing 1; the sum is scaled back to `gain`
 type Note = { hz: number; ms: number; decay: number; gain: number; overtones?: [number, number][] };
 type Part = Note | { gapMs: number };
 

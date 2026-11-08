@@ -24,8 +24,7 @@ export default function App() {
   const [state, dispatch] = useReducer(reduce, initial);
   const [home, setHome] = useState<Home | null>(null);
   const sounds = useMemo(() => new SoundQueue(), []);
-  // the queue goes with this root: the phone can close it and open a new one in the same process (todo 20261108_42).
-  // The app does not run under StrictMode: its mount, cleanup, mount in development would close the only queue.
+  // the queue goes with this root: the phone can close it and open a new one in the same process (todo 20261108_42)
   useEffect(() => () => sounds.close(), [sounds]);
 
   useEffect(() => {
