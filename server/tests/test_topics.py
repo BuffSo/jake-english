@@ -25,6 +25,12 @@ def test_korea_topic_is_strangers_and_either_may_start():
     assert "learner may speak first" in t.roles_en.lower()
 
 
+def test_korea_topic_example_is_a_greeting():
+    # spec korea-english-topic 5: with the made-up recent situations all asking for help, as the learner's are today,
+    # Jake's suggestions mixed in small talk 5 times in 14 with a greeting example and 2 in 14 with the old 한복 one
+    assert get("tourist").example_ko == "한강공원에서 아침 운동하다 마주친 외국인과 인사를 나누는 상황"
+
+
 def test_other_leaves_out_the_korea_topic():
     # 「그 밖의 상황」 is what the two topics do not cover; talking in Korea with a foreigner one has never met is now
     # the first topic, chatting included

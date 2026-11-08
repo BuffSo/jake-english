@@ -86,7 +86,11 @@ TOPICS: tuple[Topic, ...] = (
                    "walk, and share a greeting and small talk. Sometimes the learner speaks first: greets the "
                    "foreigner, or offers help to one who looks lost. Use real places in Korea. Never people the "
                    "learner knows, such as coworkers or friends."),
-        example_ko="인사동에서 외국인 관광객이 한복 빌리는 곳을 묻는 상황",
+        # a greeting, not a request for help: the learner's recent situations are all requests today and push Jake
+        # away from those, and the example pulls him toward its own kind. On the real model with made-up recent
+        # requests, 5 in 14 suggestions were small talk with this one and 2 in 14 with the old 한복 request
+        # (scripts/check_topic_scenes.py, 2026-11-08)
+        example_ko="한강공원에서 아침 운동하다 마주친 외국인과 인사를 나누는 상황",
         placeholder_ko="예: 공원에서 외국인에게 먼저 인사하는 상황",
         first=None,
         picks=(
