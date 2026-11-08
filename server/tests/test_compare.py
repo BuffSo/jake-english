@@ -261,3 +261,18 @@ def test_issue_ko_shows_the_words_as_written():
         "「please」 → 들리지 않았어요")
     assert issue_ko(Issue(target="ten", heard="tin"), "Wait 10 minutes.", "Wait tin minutes.") == (
         "「ten」 → 「tin」처럼 들렸어요")
+
+
+def test_numbers_of_a_million_and_more_are_notation():
+    assert words("2,500,000") == "two million five hundred thousand".split()
+    assert compare("It sold 1,000,000 copies.", "It sold one million copies.").diffs == []
+
+
+def test_a_price_read_without_dollars_is_notation():
+    # people read $5.99 as "five ninety-nine" too; the voice and the learner may do either
+    for heard in ("It's five ninety-nine.", "It's five dollars ninety-nine.", "It's five dollars and ninety-nine cents.",
+                  "It's $5.99."):
+        assert similarity("It's $5.99.", heard) == 1.0, heard
+    assert compare("That's $2.05.", "That's two oh five.").diffs == []
+    assert compare("It's five ninety-nine.", "It's $5.99.").diffs == []
+    assert compare("It's $5.99.", "It's five forty-nine.").diffs != []  # another price is still a point

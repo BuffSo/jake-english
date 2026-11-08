@@ -31,16 +31,18 @@ _TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
 _SHORT = {"wanna": "want to", "gonna": "going to", "ok": "okay"}
 _AFTER_A = frozenset({"hundred", "thousand", "dollar"})
 MAX_READING_SETS = 64  # numbers in a line and its transcript; past this, each is read the first way
+NUMBER_LIMIT = 10**12  # digits up to this are read as words; longer ones stay digits
 
 
 def _number(n: int) -> str:
-    """Words for 0 <= n < 1,000,000, the way the transcriber's digits are read out (1,000 is one thousand)."""
+    """Words for 0 <= n < NUMBER_LIMIT, the way the transcriber's digits are read out (1,000 is one thousand,
+    2,500,000 two million five hundred thousand)."""
     if n < 20:
         return _ONES[n]
     if n < 100:
         tens, ones = divmod(n, 10)
         return _TENS[tens] + (f" {_ONES[ones]}" if ones else "")
-    for size, name in ((1000, "thousand"), (100, "hundred")):
+    for size, name in ((10**9, "billion"), (10**6, "million"), (1000, "thousand"), (100, "hundred")):
         if n >= size:
             head, rest = divmod(n, size)
             return f"{_number(head)} {name}" + (f" {_number(rest)}" if rest else "")
@@ -78,10 +80,23 @@ def _readings(n: int) -> tuple[str, ...]:
 Token = str | tuple[str, ...]  # a word, or the readings of a number
 
 
+def _price(dollars: int, cents: int) -> list[Token]:
+    """$5.99 the ways people read a price: five dollars ninety nine, five ninety nine, five dollars and ninety nine
+    cents. The voice and the learner may say either (todo follow-feedback leftovers 5)."""
+    unit = "dollar" if dollars == 1 else "dollars"
+    d = _number(dollars)
+    if not cents:
+        return [d, unit]
+    c = _number(cents) if cents >= 10 else f"oh {_ONES[cents]}"  # $2.05 is two oh five, as 5:05 is
+    cent = "cent" if cents == 1 else "cents"
+    return [(f"{d} {unit} {c}", f"{d} {c}", f"{d} {unit} and {_number(cents)} {cent}")]
+
+
 def _tokens(text: str) -> list[Token]:
     t = text.lower().replace("’", "'")
     t = re.sub(r"(?<=\d),(?=\d{3})", "", t)  # 1,000 is one number
     t = re.sub(r"\b([ap])\.?m\b\.?", r"\1m", t)
+    t = re.sub(r"\$(\d{1,12})\.(\d\d)\b", r"pricex\1x\2", t)  # read below, with or without dollars
     t = re.sub(r"\$(\d+)", lambda m: f"{m[1]} dollar" + ("" if m[1] == "1" else "s"), t)
     t = re.sub(r"(\d+)%", r"\1 percent", t)
     t = re.sub(r"\b(\d{1,2}):00\b", r"\1", t)  # 9:00 is nine (o'clock is dropped below)
@@ -92,11 +107,15 @@ def _tokens(text: str) -> list[Token]:
             continue
         if w == "o'clock":
             continue
-        if (m := re.fullmatch(r"(\d+)(?:st|nd|rd|th)", w)) and int(m[1]) < 1_000_000:
+        if m := re.fullmatch(r"pricex(\d+)x(\d\d)", w):
+            for p in _price(int(m[1]), int(m[2])):
+                out += p.split() if isinstance(p, str) else [p]
+            continue
+        if (m := re.fullmatch(r"(\d+)(?:st|nd|rd|th)", w)) and int(m[1]) < NUMBER_LIMIT:
             out += _ordinal(int(m[1])).split()
         elif w.isdigit() and len(w) == 2 and w[0] == "0":  # the 05 of 5:05 is "oh five"
             out += ["oh", _ONES[int(w[1])]]
-        elif w.isdigit() and int(w) < 1_000_000:
+        elif w.isdigit() and int(w) < NUMBER_LIMIT:
             r = _readings(int(w))
             out += r[0].split() if len(r) == 1 else [r]
         else:
@@ -116,8 +135,9 @@ def _read(tokens: list[Token], picks: tuple[int, ...] = ()) -> list[str]:
 
 def words(text: str) -> list[str]:
     """Lowercase words with the transcriber's notation evened out: 10 and ten, $5 and five dollars, 11 AM and
-    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, $100 and a hundred dollars, 2nd and second, wanna and
-    want to, OK and okay are the same words. A number is read the first way (`_readings`)."""
+    eleven a.m., 9:00 and nine o'clock, 5:05 and five oh five, $100 and a hundred dollars, $5.99 and five ninety nine,
+    2nd and second, wanna and want to, OK and okay are the same words. A number or a price is read the first way
+    (`_readings`, `_price`)."""
     return _read(_tokens(text))
 
 
