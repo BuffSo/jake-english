@@ -114,7 +114,8 @@ export function SoheeHint(p: Props) {
             </Pressable>
           ))}
         </View>
-        {c.step === "hint" && c.fullFailed && <Text style={styles.note}>{keepWords(HINT_FAILED)}</Text>}
+        {/* 「다시 눌러 볼까요?」 only on the latest one, where 「전체 문장 보기」 is to press (final review T8 m1) */}
+        {p.latest && c.step === "hint" && c.fullFailed && <Text style={styles.note}>{keepWords(HINT_FAILED)}</Text>}
         {/* step 2 is for the line Ryan waits an answer to; an older one keeps only what it showed */}
         {p.latest && (c.step === "hint" || c.step === "fullLoading") && (
           <InRowButton
