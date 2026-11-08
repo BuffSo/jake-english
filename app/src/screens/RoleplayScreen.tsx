@@ -36,6 +36,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const rp = state.roleplay!;
   const [rate, setRate] = useState<Rate>(1);
   const [threes, setThrees] = useState<Record<number, ThreeLine | "loading">>({});
+  // lines to say whose notes could not be fetched: shown plain and not asked again (todo line-notes minors 3)
+  const [noNotes, setNoNotes] = useState<Record<number, true>>({});
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const played = useRef<Set<string>>(new Set());
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -134,7 +136,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // dont-wait-for-line-notes 2). Fetched as soon as the line is up, so 「읽는 법 보기」 usually opens at once.
   useEffect(() => {
     const toSay = line && (line.speaker === "user" || shadow);
-    if (toSay && state.phase === "ready" && needsNotes(line, threes[line.idx])) fetchThree(line.idx);
+    if (toSay && state.phase === "ready" && needsNotes(line, threes[line.idx], !!noNotes[line.idx])) fetchThree(line.idx, true);
   }, [shadow, line, state.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Always a moment later: on Android the new renderer runs a scroll before it adds the views committed with it, so
@@ -201,8 +203,11 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     if (state.jake) playFromBubble(api.audioSource(state.jake.audio));
   }
 
-  async function fetchThree(idx: number): Promise<boolean> {
+  // `toSay`: the line to say asked for them on its own, and a failure leaves it plain; a tap on a past bubble's
+  // 「읽는 법 보기」 asks again whenever it is tapped
+  async function fetchThree(idx: number, toSay = false): Promise<boolean> {
     setThrees((t) => ({ ...t, [idx]: "loading" }));
+    setNoNotes(({ [idx]: _, ...rest }) => rest);
     try {
       const three = await api.getThree(rp.id, idx);
       setThrees((t) => ({ ...t, [idx]: three }));
@@ -212,6 +217,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         const { [idx]: _, ...rest } = t;
         return rest;
       });
+      if (toSay) setNoNotes((n) => ({ ...n, [idx]: true }));
       return false;
     }
   }
@@ -607,7 +613,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             <View style={[styles.bubble, styles.now]}>
               <LineToSay
                 text={line.text}
-                three={lineNotes(line, threes[line.idx])}
+                three={lineNotes(line, threes[line.idx], !!noNotes[line.idx])}
                 open={state.reading}
                 onToggle={() => dispatch({ type: "toggleReading" })}
                 ko={{
