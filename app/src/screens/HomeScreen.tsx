@@ -42,14 +42,14 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
     try {
       const h = await api.getHome();
       setHome(h);
-      say(homeLines(h.lines, false));
+      say(homeLines(h, false));
     } catch (e) {
       setError(messageOf(e));
     }
   }, [say, setHome]);
 
   useEffect(() => {
-    if (opened) say(homeLines(opened.lines, true));
+    if (opened) say(homeLines(opened, true));
     else load();
   }, [opened, say, load]);
 
@@ -63,7 +63,7 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
       )}
       {home && (
         <>
-          {homeLines(home.lines, returning).map((l) => (
+          {homeLines(home, returning).map((l) => (
             <Text key={l.audio} style={[common.body, styles.say]}>
               {keepWords(l.text)}
             </Text>

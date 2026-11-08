@@ -83,7 +83,9 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
   }
 
   return {
-    getHome: () => get<Home>("/home"),
+    // asks for the day's shadowing tip: the Mac counts it said only when asked, so a plain `/home` check leaves it
+    // (spec ryan-shadowing-tip 4)
+    getHome: () => get<Home>("/home?tip=1"),
     // Jake's suggestion inside the topic (spec situation-topics 4)
     recommend: (skip: string[], topic: string) => post<Said>("/recommend", { skip, topic }),
     transcribe: async (fileUri: string) => ((await (await upload("/transcribe", fileUri)).json()) as { text: string }).text,

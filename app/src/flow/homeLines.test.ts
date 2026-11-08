@@ -15,14 +15,28 @@ const lines: Home["lines"] = {
 };
 
 test("when the app has just started Ryan greets, then asks which way to talk", () => {
-  expect(homeLines(lines, false).map((l) => l.text)).toEqual(["greeting", "ask_mode"]);
+  expect(homeLines({ lines }, false).map((l) => l.text)).toEqual(["greeting", "ask_mode"]);
 });
 
 test("coming back to the first screen Ryan only asks again, with no greeting", () => {
-  expect(homeLines(lines, true).map((l) => l.text)).toEqual(["ask_again"]);
+  expect(homeLines({ lines }, true).map((l) => l.text)).toEqual(["ask_again"]);
 });
 
 test("an older server without the ask-again line still skips the greeting", () => {
   const { ask_again, ...old } = lines;
-  expect(homeLines(old, true).map((l) => l.text)).toEqual(["ask_mode"]);
+  expect(homeLines({ lines: old }, true).map((l) => l.text)).toEqual(["ask_mode"]);
+});
+
+// spec ryan-shadowing-tip 2: the day's first start only, between the greeting and the question
+
+test("on the day's first start Ryan greets, says the shadowing tip, then asks", () => {
+  expect(homeLines({ lines, tip: said("tip") }, false).map((l) => l.text)).toEqual(["greeting", "tip", "ask_mode"]);
+});
+
+test("coming back he does not say the tip again", () => {
+  expect(homeLines({ lines, tip: said("tip") }, true).map((l) => l.text)).toEqual(["ask_again"]);
+});
+
+test("an older server without a tip greets and asks as before", () => {
+  expect(homeLines({ lines }, false).map((l) => l.text)).toEqual(["greeting", "ask_mode"]);
 });

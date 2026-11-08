@@ -69,6 +69,9 @@ export type Home = {
     ask_pick?: Said;
     ask_describe?: Said;
   };
+  // Ryan's shadowing tip: only on the Mac's day's first `/home?tip=1`, absent otherwise and on an older server
+  // (spec ryan-shadowing-tip 4)
+  tip?: Said;
   // jake: Jake's front picture, shown while his suggestion waits for the learner's pick (absent on an older server)
   images: { front: string; listening: string; jake?: string; thinking: Thinking };
   topics?: Topic[]; // absent on a server from before topics: use flow/situation `topicsOf`
