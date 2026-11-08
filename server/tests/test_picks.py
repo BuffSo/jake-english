@@ -320,3 +320,26 @@ async def test_sohee_asked_first_is_not_made_twice(engine, fake_claude, fake_voi
     assert [c for _, c in sohee_calls(fake_voice)].count((KO[1], "sohee", "korean", True)) == 1
     assert all(c[0] != KO[1] for _, c in sohee_calls(fake_voice) if not c[3])
     assert engine.store.load(rp.id).lines[1].ko_audio == key
+
+
+async def test_sohee_made_by_another_run_is_not_made_again(engine, fake_voice, monkeypatch):
+    # two runs picked before either's sounds are made: the second finds the first's files (branch review 6)
+    with_korean(monkeypatch)
+    first = await engine.create_pick(*SNEAKER)
+    second = await engine.create_pick(*SNEAKER)
+    await asyncio.gather(engine.sohees[first.id], engine.sohees[second.id])
+    assert len(sohee_calls(fake_voice)) == len(KO)
+    assert [l.ko_audio for l in engine.store.load(second.id).lines] == [audio_key("sohee", "korean", k) for k in KO]
+
+
+async def test_a_cancelled_answer_lets_sohee_go_on(engine, fake_whisper, monkeypatch, speech_bytes):
+    # a phone that drops the request mid-answer: the count goes back, or every later line would wait QUIET_WAIT
+    with_korean(monkeypatch)
+    rp = await engine.create_pick(*SNEAKER)
+    task, entered, _ = held_attempt(engine, fake_whisper, monkeypatch, speech_bytes, rp)
+    await asyncio.wait_for(entered.wait(), 5)
+    assert engine.answers_running == 1 and not engine.quiet.is_set()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert engine.answers_running == 0 and engine.quiet.is_set()

@@ -155,7 +155,12 @@ class Engine:
             await asyncio.wait(mine)  # not gather: a cancelled wait must not cancel the line's own tasks
         for idx in range(len(self.load(rp_id).lines)):
             _, line = self.get_line(rp_id, idx)
-            if not line.ko or (line.ko_audio is not None and self.voice.path(line.ko_audio).is_file()):
+            if not line.ko:
+                continue
+            made = audio_key("sohee", "korean", line.ko)
+            if self.voice.path(made).is_file():  # a tap, or another run of the pick, made it meanwhile
+                if line.ko_audio != made:
+                    await self.update_line(rp_id, idx, line.text, ko_audio=made)
                 continue
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(self.quiet.wait(), QUIET_WAIT)
