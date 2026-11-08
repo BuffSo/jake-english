@@ -66,6 +66,14 @@ export async function runThenHold(
   return did === true;
 }
 
+// A tap whose redraw puts 「건너뛰기」 where it was: 「다시 해 보기」 after a try, 「다시 시도」 after an error. It does its
+// work and holds the next tap, so the second tap of its double tap does not skip the line just chosen again (PR #45
+// review).
+export function tapThenHold(hold: ReturnType<typeof createHold>, fn: () => void): void {
+  fn();
+  hold.start();
+}
+
 // One answer per question: the first tap on either choice is taken, and later ones (the second tap of a double tap,
 // before the screen redraws) are ignored until the next question opens it. Unlike the gate it holds nothing while the
 // answer's work runs, so going back in the middle never leaves the next question shut. PR #18 review: a double tap on

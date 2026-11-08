@@ -1,4 +1,4 @@
-import { createGate, createHold, createLatch, runThenHold, stopThenSend, TAP_HOLD_MS } from "./gate";
+import { createGate, createHold, createLatch, runThenHold, stopThenSend, TAP_HOLD_MS, tapThenHold } from "./gate";
 
 test("a second call while the first runs is ignored", async () => {
   // PR #12 review: a double tap on 「■ 말하기 끝」 uploaded the same recording twice
@@ -112,4 +112,18 @@ test("nothing done holds nothing", async () => {
   const hold = createHold(() => 0);
   expect(await runThenHold(createGate(), hold, async () => false)).toBe(false);
   expect(hold.on).toBe(false);
+});
+
+// PR #45 review: 「다시 해 보기」 redraws the bar with 「건너뛰기」 where it was, so its double tap skipped the line
+test("a tap that puts 「건너뛰기」 under it holds the next tap", async () => {
+  let t = 1000;
+  const hold = createHold(() => t);
+  const again = jest.fn();
+  tapThenHold(hold, again);
+  expect(again).toHaveBeenCalledTimes(1);
+  const skip = jest.fn(async () => true);
+  expect(await runThenHold(createGate(), hold, skip)).toBe(false);
+  expect(skip).not.toHaveBeenCalled();
+  t += TAP_HOLD_MS;
+  expect(await runThenHold(createGate(), hold, skip)).toBe(true);
 });

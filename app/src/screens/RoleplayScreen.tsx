@@ -9,7 +9,7 @@ import type { SoundQueue } from "../audio/player";
 import { useAnswering } from "../audio/useAnswering";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
-import { createGate, runThenHold, stopThenSend, tapHold } from "../flow/gate";
+import { createGate, runThenHold, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
 import { askFirst, canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
@@ -340,6 +340,9 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     dispatch({ type: "recordCancel" });
     return true;
   }
+
+  // 「다시 해 보기」 redraws the bar with 「건너뛰기」 where it was: its double tap must not skip the line (PR #45 review)
+  const again = () => tapThenHold(tapHold, () => dispatch({ type: "again" }));
 
   // 「건너뛰기」: where 「다음」 goes, without a recording (spec record-cancel-skip 2)
   async function doSkip(): Promise<boolean> {
@@ -714,18 +717,18 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
               {state.phase === "evaluated" && state.aside && (
                 <View style={styles.pair}>
                   <Button label="건너뛰기" onPress={skipLine} kind="plain" />
-                  <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} grow />
+                  <Button label="다시 해 보기" onPress={again} grow />
                 </View>
               )}
               {state.phase === "evaluated" && !state.aside && (
                 <View style={styles.row}>
-                  <Button label="다시 해 보기" onPress={() => dispatch({ type: "again" })} kind="plain" />
+                  <Button label="다시 해 보기" onPress={again} kind="plain" />
                   <Button label={midway ? "대화로 돌아가기" : "다음"} onPress={() => dispatch({ type: "next" })} />
                 </View>
               )}
             </>
           )}
-          {state.phase === "error" && <Button label="다시 시도" onPress={() => dispatch({ type: "retry" })} />}
+          {state.phase === "error" && <Button label="다시 시도" onPress={() => tapThenHold(tapHold, () => dispatch({ type: "retry" }))} />}
         </View>
       )}
     </View>

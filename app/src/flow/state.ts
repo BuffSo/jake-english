@@ -43,9 +43,10 @@ export type State = {
   // the recording of this turn, from `heard` (spec three-line-listen 4); null before it and from an older server
   heardRec: TryRef | null;
   feedback: string;
-  // the line was not followed and teacher Ryan answered: only 「다시 해 보기」, which leaves nothing in the
-  // conversation and keeps the mode, so a first turn stays a turn (spec offscript-aside 5, 6). Set by `heard`;
-  // cleared by `done` when the Mac found words heard differently, which makes it a try at the line.
+  // the line was not followed and teacher Ryan answered: 「다시 해 보기」 or 「건너뛰기」, never 「다음」 (spec
+  // record-cancel-skip 2). 「다시 해 보기」 leaves nothing in the conversation and keeps the mode, so a first turn
+  // stays a turn (spec offscript-aside 5, 6). Set by `heard`; cleared by `done` when the Mac found words heard
+  // differently, which makes it a try at the line.
   aside: boolean;
   nextIdx: number | null;
   message: string | null;
