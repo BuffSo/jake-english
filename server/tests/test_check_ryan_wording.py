@@ -124,3 +124,10 @@ def test_every_listed_tip_has_halves_and_cases():
         assert a in first and a not in second and b in second and b not in first, s.name
         for cases in (cw.FEEDBACK, cw.ASIDE):
             assert any(i.explain == s.explain for c in cases for i in c.issues), s.name
+
+
+def test_a_dropped_comma_does_not_count_as_rewording():
+    # live 2026-11-08: Haiku said the tip word for word but for the comma after 「닿지만」; it reads aloud the same
+    case = next(c for c in cw.FEEDBACK if c.name == "tip")
+    said = "그런데 room이 loom처럼 들렸어요. " + cw.RL.replace("닿지만,", "닿지만") + " 한 번 더 해 볼까요?"
+    assert cw.flags(case, said, aside=False) == []

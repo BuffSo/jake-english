@@ -186,13 +186,19 @@ def flags(case: Case, text: str, aside: bool, raw: str = "") -> list[str]:
     return out
 
 
+def _plain(text: str) -> str:
+    """Commas, periods and spacing aside: a tip said with a comma left out reads aloud the same."""
+    return " ".join(re.sub(r"[,.]", " ", text).split())
+
+
 def tip_flags(case: Case, text: str) -> list[str]:
-    """How `text` (spaces already evened out) says the case's sound tips: each given tip whole and once, nothing
-    named around it, and no tip that was not given (todo 29)."""
+    """How `text` says the case's sound tips: each given tip whole and once, nothing named around it, and no tip
+    that was not given (todo 29)."""
+    text = _plain(text)
     given: dict[str, tuple[str, str]] = {}  # tip -> (the first word it came with, so the flag says which)
     for i in case.issues:
         if i.explain:
-            given.setdefault(" ".join(i.explain.split()), (i.target, i.explain))
+            given.setdefault(_plain(i.explain), (i.target, i.explain))
     rest = text
     for t in given:
         rest = rest.replace(t, " ")
