@@ -25,11 +25,15 @@ export type KoFetch = {
 
 const isKo = (e: KoEntry | undefined): e is Ko => typeof e === "object";
 
+// How long 「지금은 통역할 수 없어요」 stays before the line folds (spec korean-translation 2: 「짧게 보이고 접는다」)
+export const FAIL_SHOW_MS = 3000;
+
 export function createKoFetch(deps: KoDeps): KoFetch {
   let got: Record<number, KoEntry> = {};
   let alive = true;
   const texts: Record<number, Promise<Ko | null>> = {}; // one text request per line at a time
   const opened: Record<number, number> = {}; // the latest opening of each line: only it may play
+  const failures: Record<number, number> = {}; // the latest failure of each line: only its timer folds it
 
   function put(idx: number, e: KoEntry) {
     if (!alive) return;
@@ -51,6 +55,11 @@ export function createKoFetch(deps: KoDeps): KoFetch {
       })
       .catch(() => {
         put(idx, "failed");
+        const mine = (failures[idx] ?? 0) + 1;
+        failures[idx] = mine;
+        setTimeout(() => {
+          if (failures[idx] === mine && got[idx] === "failed") put(idx, "folded");
+        }, FAIL_SHOW_MS);
         return null;
       })
       .finally(() => {

@@ -36,6 +36,11 @@ test("on the end screen she always plays, stopping what played before", () => {
   expect(PHASES.every((p) => mayAutoPlay("end", p, true) && mayReplay("end", p, true))).toBe(true);
 });
 
+test("a folded failure shows as closed, and a tap on it opens the line again", () => {
+  expect([koView("folded", true), koView("folded", false)]).toEqual(["closed", "closed"]);
+  expect(koOpensOnTap(koView("folded", true))).toBe(true);
+});
+
 test("a tap opens a closed or failed line (a failure is tried again) and closes an open or loading one", () => {
   // one rule for every 「통역」 button: the roleplay bubbles, the line to say and the end screen (PR #24 review)
   expect([koOpensOnTap("closed"), koOpensOnTap("failed")]).toEqual([true, true]);

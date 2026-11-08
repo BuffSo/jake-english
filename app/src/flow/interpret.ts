@@ -5,7 +5,8 @@ import type { ScriptLine } from "../api/types";
 import { canReplay, mayListen, type Phase } from "./state";
 
 export type Ko = { text: string; audio: string | null };
-export type KoEntry = Ko | "loading" | "failed";
+// folded: a failure that was shown a moment and folded away (todo 20261106_10 1); the next tap tries again
+export type KoEntry = Ko | "loading" | "failed" | "folded";
 export type KoView = "closed" | "loading" | "failed" | "open";
 export type Where = "roleplay" | "end";
 
@@ -14,10 +15,10 @@ export function koOf(line: ScriptLine | undefined): Ko | undefined {
   return line?.ko ? { text: line.ko, audio: line.ko_audio } : undefined;
 }
 
-// A failure shows 「지금은 통역할 수 없어요」 until the next tap, which tries again
+// A failure shows 「지금은 통역할 수 없어요」 a moment, then the line folds (`FAIL_SHOW_MS`); a tap tries again
 export function koView(entry: KoEntry | undefined, open: boolean): KoView {
   if (entry === "failed") return "failed";
-  if (!open) return "closed";
+  if (!open || entry === "folded") return "closed";
   return entry === undefined || entry === "loading" ? "loading" : "open";
 }
 
