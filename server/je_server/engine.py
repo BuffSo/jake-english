@@ -21,7 +21,8 @@ from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
 from .tts import VoiceError
 from .phrases import PHRASES, TIPS
-from .review import first_try, group_of, latest_run, past_items, said_before, sentence_key, to_resume
+from .review import (first_try, group_of, kept_tries, latest_run, past_items, resume_start, said_on, sentence_key,
+                     to_resume)
 from .store import Store
 
 log = logging.getLogger("je_server")
@@ -646,8 +647,7 @@ class Engine:
         lines, issues_left, said = [], False, False
         for l in rp.lines:
             # asides stay off the end screen and out of its closing words (spec offscript-aside 6)
-            tries = ([a for a in rp.attempts.get(l.idx, []) if a.mode in ("turn", "retry") and not a.aside]
-                     if l.speaker == "user" else [])
+            tries = kept_tries(rp, l)
             issues_left = issues_left or bool(tries and tries[-1].issues)
             said = said or bool(tries)
             lines.append({"line": l.model_dump(mode="json"), "tries": [
@@ -677,13 +677,15 @@ class Engine:
         return {"roleplay": rp.model_dump(mode="json"), "summary": self.summary(rp.id, rps)}
 
     def resume(self) -> dict | None:
-        """The conversation to resume and where (spec resume-roleplay 1, 2): the newest roleplay with a line of mine
-        left, from its place, with what was heard on my lines before it. Read from the records; no Claude call."""
+        """The conversation to resume and where (spec resume-roleplay 1, 2; resume-unrecorded 2-5): the newest roleplay
+        with a line of mine left unrecorded, where it starts, whether it went to the end, and what was heard on every
+        recorded line of mine, so the app can show them and pass them. Read from the records; no Claude call."""
         rp = to_resume(self.store.all())
         if rp is None:
             return None
-        return {"roleplay": rp.model_dump(mode="json"), "at": rp.pos, "progress": progress_of(rp, rp.pos),
-                "said": said_before(rp, rp.pos)}
+        at, ended = resume_start(rp)
+        return {"roleplay": rp.model_dump(mode="json"), "at": at, "progress": progress_of(rp, at),
+                "said": said_on(rp), "ended": ended}
 
     def saved(self) -> list[dict]:
         """Saved sentences, newest first (spec review-practice 6). The line is found again by its sentence when the

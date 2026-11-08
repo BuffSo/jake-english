@@ -1,8 +1,8 @@
 // Screen flow as a reducer, so taps that arrive at the wrong moment (double taps, taps while Ryan is
 // still talking) are ignored in one place.
 import type { ErrorCode } from "../api/client";
-import type { AttemptEvent, AttemptMode, Progress, Resume, Roleplay, Said, ScriptLine, TryRef } from "../api/types";
-import { resumeHistory, resumeSeen } from "./resume";
+import type { AttemptEvent, AttemptMode, HeardTry, Progress, Resume, Roleplay, Said, ScriptLine, TryRef } from "../api/types";
+import { passRecorded, recordedOf, resumeHistory, resumeSeen } from "./resume";
 import type { SituationStart } from "./situation";
 
 // past and saved: the two tabs of 「복습하기」 (spec review-screens 2; it was a menu of two buttons before). The last
@@ -81,6 +81,9 @@ export type State = {
   // the mic was started in this conversation or practice: until then the turn shows 「🎤를 누르고 말하세요」 (spec
   // record-feedback 3)
   micUsed: boolean;
+  // a resumed conversation's lines of mine recorded before, by line: 「다음」 and 「건너뛰기」 pass them as bubbles on the
+  // way to the next unrecorded line (spec resume-unrecorded 3). null when the conversation was not resumed.
+  recorded: Record<number, HeardTry> | null;
 };
 
 export type Action =
@@ -146,6 +149,7 @@ export const initial: State = {
   beforeOpen: false,
   situationFrom: null,
   micUsed: false,
+  recorded: null,
 };
 
 // after the recording was thrown away for having no speech in it (spec record-feedback 4)
@@ -198,13 +202,23 @@ export function notifiesSkip(s: State): boolean {
   return !s.practice && s.line !== null;
 }
 
-// A recording whose evaluation moves the conversation's place when the Mac has finished it: the roleplay's own turn.
-// The situation screen waits for it before asking where to resume (spec resume-roleplay 4).
+// A recording whose evaluation records the line and moves the conversation's place when the Mac has finished it: the
+// roleplay's own turn. The situation screen waits for it before asking where to resume (spec resume-roleplay 4,
+// resume-unrecorded 1).
 export function movesPlace(s: State): boolean {
   return s.mode === "turn";
 }
 
 const freshTurn = { heard: null, heardRec: null, feedback: "", aside: false, message: null, errorFrom: null } as const;
+
+// The conversation moving on to line `idx` after a line of mine, with `history` so far. A resumed one passes the lines
+// of mine recorded before, as bubbles (spec resume-unrecorded 3); any other goes line by line.
+function moveOn(s: State, idx: number, history: Bubble[]): State {
+  const turn = { ...s, ...freshTurn, nextIdx: null, mode: "turn" as const, phase: "loading" as const, line: null };
+  if (!s.recorded || !s.roleplay) return { ...turn, idx, history };
+  const p = passRecorded(s.roleplay, s.recorded, idx);
+  return { ...turn, idx: p.idx, history: [...history, ...p.passed], seen: { ...s.seen, ...p.seen } };
+}
 
 // Leaving a practice. From the end screen: back on the end screen, ready for the next one. From the roleplay: the
 // roleplay exactly as it was, so nothing is said again and the evaluation on screen stays (spec 9).
@@ -389,16 +403,7 @@ export function reduce(s: State, a: Action): State {
     case "next": {
       if (s.phase !== "evaluated" || s.aside) return s;
       if (s.practice) return advance(s);
-      return {
-        ...s,
-        ...freshTurn,
-        history: [...s.history, ...exchange(s)],
-        idx: s.nextIdx ?? s.idx + 1,
-        nextIdx: null,
-        mode: "turn",
-        phase: "loading",
-        line: null,
-      };
+      return moveOn(s, s.nextIdx ?? s.idx + 1, [...s.history, ...exchange(s)]);
     }
     case "skip": {
       // where 「다음」 goes, without a recording: nothing is sent, so the line has no try (spec record-cancel-skip 2)
@@ -409,16 +414,7 @@ export function reduce(s: State, a: Action): State {
       // Ryan's answer is not kept, as after 「다시 해 보기」
       const said = s.history.some((b) => b.kind === "user" && b.idx === line.idx);
       const skipped: Bubble = { kind: "user", text: "", script: line.text, idx: line.idx, skipped: true };
-      return {
-        ...s,
-        ...freshTurn,
-        history: said ? s.history : [...s.history, skipped],
-        idx: s.nextIdx ?? s.idx + 1,
-        nextIdx: null,
-        mode: "turn",
-        phase: "loading",
-        line: null,
-      };
+      return moveOn(s, s.nextIdx ?? s.idx + 1, said ? s.history : [...s.history, skipped]);
     }
     case "startPractice":
       if (s.screen !== "end" || a.order.length === 0) return s;
@@ -516,8 +512,9 @@ export function reduce(s: State, a: Action): State {
     case "toggleBefore":
       return s.line ? { ...s, beforeOpen: !s.beforeOpen } : s;
     case "resumed": {
-      // the newest conversation from where it stopped, with what was said before it (spec resume-roleplay 2); only
-      // from the situation screen, so a second tap on the row does nothing
+      // the newest conversation from where it stopped, with what was said before it (spec resume-roleplay 2), passing
+      // its lines recorded before (spec resume-unrecorded 3); only from the situation screen, so a second tap on the
+      // row does nothing
       if (s.screen !== "situation") return s;
       const r = a.resume;
       return {
@@ -529,6 +526,7 @@ export function reduce(s: State, a: Action): State {
         seen: resumeSeen(r),
         progress: r.progress,
         phase: "loading",
+        recorded: recordedOf(r),
       };
     }
   }

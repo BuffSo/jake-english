@@ -920,6 +920,7 @@ describe("resume", () => {
     at: 2,
     progress: { no: 1, total: 1 },
     said: [{ idx: 1, heard: "I'd like a cup of coffee.", n: 1 }],
+    ended: false,
   };
   const resumed = () => reduce(situation, { type: "resumed", resume });
 
@@ -960,6 +961,58 @@ describe("resume", () => {
   test("back from a resumed roleplay goes to the topics", () => {
     const s = reduce(resumed(), { type: "back" });
     expect([s.screen, s.situationFrom, s.roleplay]).toEqual(["situation", null, null]);
+  });
+});
+
+// --- a resumed conversation passes lines recorded before (spec resume-unrecorded 3) --------------------------------
+
+describe("resume past recorded lines", () => {
+  // made up: R0 U1 R2 U3 R4, gone to the end with U1 unrecorded
+  const texts: [ScriptLine["speaker"], string][] = [
+    ["ryan", "Good morning. How can I help?"],
+    ["user", "I'd like to return this jacket."],
+    ["ryan", "Do you have the receipt?"],
+    ["user", "Yes, here it is."],
+    ["ryan", "All done. Have a nice day."],
+  ];
+  const lines5: ScriptLine[] = texts.map(([speaker, text], idx) => ({ ...userLine, idx, speaker, text }));
+  const said3 = { idx: 3, heard: "Yes, here it is.", n: 2 };
+  const ended: Resume = { roleplay: { ...rp, lines: lines5, pos: 4 }, at: 0, progress: { no: 1, total: 2 }, said: [said3], ended: true };
+  const resumedEnded = () => reduce(situation, { type: "resumed", resume: ended });
+  // Ryan's line 0, then my line 1 waiting for the mic
+  const readyAt1 = () => {
+    const s = reduce(reduce(resumedEnded(), { type: "lineLoaded", line: lines5[0] }), { type: "ryanDone" });
+    return reduce(s, { type: "lineLoaded", line: lines5[1] });
+  };
+  const evaluatedAt1 = () => {
+    let s = reduce(reduce(readyAt1(), { type: "recordStart" }), { type: "recordStop" });
+    s = reduce(s, { type: "event", e: { type: "heard", text: lines5[1].text, followed: true, n: 1 } });
+    return reduce(s, { type: "event", e: { type: "done", next: 2, issues: 0 } });
+  };
+
+  test("resuming keeps the lines recorded before", () => {
+    expect(resumedEnded().recorded).toEqual({ 3: said3 });
+    expect(initial.recorded).toBeNull();
+    expect(reduce(situation, { type: "created", roleplay: rp }).recorded).toBeNull();
+  });
+
+  test("「다음」 in a resumed conversation passes recorded lines as bubbles", () => {
+    const s = reduce(evaluatedAt1(), { type: "next" });
+    expect([s.idx, s.phase, s.mode]).toEqual([4, "loading", "turn"]);
+    expect(s.history.map((b) => b.idx)).toEqual([0, 1, 2, 3]);
+    expect(s.history[3]).toMatchObject({ kind: "user", text: said3.heard, rec: { idx: 3, n: 2 } });
+    expect(s.seen[3]).toEqual(lines5[3]);
+  });
+
+  test("a skip in a resumed conversation passes recorded lines too", () => {
+    const s = reduce(readyAt1(), { type: "skip" });
+    expect(s.idx).toBe(4);
+    expect(s.history.map((b) => [b.idx, !!b.skipped])).toEqual([[0, false], [1, true], [2, false], [3, false]]);
+  });
+
+  test("a practice from a resumed conversation comes back to it", () => {
+    const s = reduce(readyAt1(), { type: "practiseLine", kind: "shadow", idx: 0 });
+    expect(reduce(s, { type: "endPractice" }).recorded).toEqual({ 3: said3 });
   });
 });
 
