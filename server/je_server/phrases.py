@@ -23,8 +23,8 @@ PHRASES: dict[str, str] = {
     "too_long": "녹음이 너무 길어요. 한 문장씩 짧게 말해 볼까요?",
 }
 
-# Ryan's shadowing tip: one of these, in turn, between the greeting and the question on the day's first start (spec
-# docs/superpowers/specs/2026-11-08-ryan-shadowing-tip-design.md). Each has the word 「섀도잉」 (user). Wording: no
+# Ryan's shadowing tip: one of these, in turn, said after the question on the day's first start, voice only (spec
+# docs/superpowers/specs/2026-11-08-ryan-shadowing-tip-design.md 2, 3). Each has the word 「섀도잉」 (user). Wording: no
 # figures of speech, never the same thing twice, a length Ryan says comfortably (user, spec 1). Apart from PHRASES:
 # those are always the same, these are not.
 TIPS: tuple[str, ...] = (
