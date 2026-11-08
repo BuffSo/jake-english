@@ -1,0 +1,227 @@
+{
+ "id": "b1b2c3d4e5f6",
+ "created": "2026-11-08T09:00:00",
+ "situation": "자유 대화",
+ "frame": {
+  "title_ko": "자유 대화",
+  "user_role_ko": "나",
+  "ryan_role_ko": "대화 상대",
+  "place_ko": "자유 대화",
+  "goal_ko": "대본 없이 영어로 이야기하기"
+ },
+ "lines": [
+  {
+   "idx": 0,
+   "speaker": "ryan",
+   "text": "Hi! What did you do today?",
+   "kind": "reply",
+   "three": null,
+   "audio": null,
+   "ko": null,
+   "ko_audio": null,
+   "parts": [
+    {
+     "text": "Hi!",
+     "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+     "text": "What did you do today?",
+     "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+   ],
+   "heard_upto": null,
+   "fix": null
+  },
+  {
+   "idx": 1,
+   "speaker": "user",
+   "text": "주말에 한 일을 말하고 싶어요",
+   "kind": "ask",
+   "three": null,
+   "audio": null,
+   "ko": null,
+   "ko_audio": null,
+   "parts": null,
+   "heard_upto": null,
+   "fix": null
+  },
+  {
+   "idx": 2,
+   "speaker": "ryan",
+   "text": "영어로 말해 볼까요? 짧게 말해도 괜찮아요.",
+   "kind": "help",
+   "three": null,
+   "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+   "ko": null,
+   "ko_audio": null,
+   "parts": [
+    {
+     "text": "영어로 말해 볼까요? 짧게 말해도 괜찮아요.",
+     "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+   ],
+   "heard_upto": null,
+   "fix": null
+  },
+  {
+   "idx": 3,
+   "speaker": "user",
+   "text": "I walked to the park with my dog.",
+   "kind": "turn",
+   "three": null,
+   "audio": null,
+   "ko": null,
+   "ko_audio": null,
+   "parts": null,
+   "heard_upto": null,
+   "fix": null
+  },
+  {
+   "idx": 4,
+   "speaker": "ryan",
+   "text": "Sounds lovely! I like quiet parks too. Did you go far?",
+   "kind": "reply",
+   "three": null,
+   "audio": null,
+   "ko": null,
+   "ko_audio": null,
+   "parts": [
+    {
+     "text": "Sounds lovely!",
+     "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+     "text": "I like quiet parks too.",
+     "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+     "text": "Did you go far?",
+     "audio": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+   ],
+   "heard_upto": 1,
+   "fix": null
+  },
+  {
+   "idx": 5,
+   "speaker": "user",
+   "text": "Yesterday I go to the market and buy two apple.",
+   "kind": "turn",
+   "three": null,
+   "audio": null,
+   "ko": null,
+   "ko_audio": null,
+   "parts": null,
+   "heard_upto": null,
+   "fix": null
+  },
+  {
+   "idx": 6,
+   "speaker": "ryan",
+   "text": "Nice! What did you get there?",
+   "kind": "reply",
+   "three": null,
+   "audio": null,
+   "ko": null,
+   "ko_audio": null,
+   "parts": [
+    {
+     "text": "Nice!",
+     "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+     "text": "What did you get there?",
+     "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+   ],
+   "heard_upto": null,
+   "fix": null
+  },
+  {
+   "idx": 7,
+   "speaker": "user",
+   "text": "Yesterday I went to the market and bought two apples.",
+   "kind": "fix",
+   "three": null,
+   "audio": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "ko": null,
+   "ko_audio": null,
+   "parts": null,
+   "heard_upto": null,
+   "fix": {
+    "of": 5,
+    "said": "Yesterday I go to the market and buy two apple.",
+    "why_ko": "지난 일이라 go와 buy를 went와 bought로 바꿔요. 사과가 둘이라 apples예요.",
+    "why_audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   }
+  }
+ ],
+ "attempts": {
+  "1": [
+   {
+    "n": 1,
+    "mode": "turn",
+    "heard": "주말에 한 일을 말하고 싶어요",
+    "followed": false,
+    "issues": [],
+    "say_ko": "",
+    "audio": [
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ],
+    "timings": {
+     "transcribed": 0.6,
+     "total": 0.7
+    },
+    "at": "2026-11-08T09:00:10",
+    "aside": false
+   }
+  ],
+  "3": [
+   {
+    "n": 1,
+    "mode": "turn",
+    "heard": "I walked to the park with my dog.",
+    "followed": false,
+    "issues": [],
+    "say_ko": "",
+    "audio": [
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ],
+    "timings": {
+     "transcribed": 0.6,
+     "first_text": 1.4,
+     "first_audio": 2.5,
+     "total": 3.0
+    },
+    "at": "2026-11-08T09:00:00",
+    "aside": false
+   }
+  ],
+  "5": [
+   {
+    "n": 1,
+    "mode": "turn",
+    "heard": "Yesterday I go to the market and buy two apple.",
+    "followed": false,
+    "issues": [],
+    "say_ko": "",
+    "audio": [
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ],
+    "timings": {
+     "transcribed": 0.6,
+     "first_text": 1.3,
+     "first_audio": 2.4,
+     "total": 2.9
+    },
+    "at": "2026-11-08T09:00:00",
+    "aside": false
+   }
+  ]
+ },
+ "pos": 0,
+ "origin": null,
+ "topic": null,
+ "pick": null,
+ "kind": "talk"
+}

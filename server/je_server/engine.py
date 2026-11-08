@@ -231,6 +231,8 @@ class Engine:
         record and its tries stay as they are. A list pick plays its script as it is now in the repository; one
         taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
+        if old.kind == "talk":
+            raise NotFound(rp_id)  # a free talk has no script to play again (spec free-talk-design 「하지 않을 것」)
         # outside any try: a KeyError from inside create_pick is a bug, not a pick taken off the list (todo 08 1);
         # taken off the list, it is copied below
         if old.topic is not None and old.pick is not None and topics.listed(old.topic, old.pick) is not None:

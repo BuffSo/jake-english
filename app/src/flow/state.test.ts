@@ -377,7 +377,7 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     const s = midway("ready");
     expect(s.history.map((b) => practiceFor(s, b))).toEqual(["shadow", "mine", null, "shadow"]);
     expect(practiceFor(s, { kind: "user", idx: 3 })).toBeNull(); // the line on screen, tried again
-    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null, ko: null, ko_audio: null };
+    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null, ko: null, ko_audio: null, parts: null, heard_upto: null, fix: null };
     expect(practiceFor({ ...s, seen: { ...s.seen, 4: reply } }, { kind: "ryan", idx: 4 })).toBe("shadow");
     const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
     expect(practiceFor(inside, s.history[0])).toBeNull();

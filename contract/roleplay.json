@@ -18,7 +18,10 @@
    "three": null,
    "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
    "ko": null,
-   "ko_audio": null
+   "ko_audio": null,
+   "parts": null,
+   "heard_upto": null,
+   "fix": null
   },
   {
    "idx": 1,
@@ -110,7 +113,10 @@
    },
    "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
    "ko": null,
-   "ko_audio": null
+   "ko_audio": null,
+   "parts": null,
+   "heard_upto": null,
+   "fix": null
   },
   {
    "idx": 2,
@@ -120,7 +126,10 @@
    "three": null,
    "audio": null,
    "ko": null,
-   "ko_audio": null
+   "ko_audio": null,
+   "parts": null,
+   "heard_upto": null,
+   "fix": null
   }
  ],
  "attempts": {
@@ -159,5 +168,6 @@
  "pos": 2,
  "origin": null,
  "topic": "tourist",
- "pick": null
+ "pick": null,
+ "kind": "roleplay"
 }

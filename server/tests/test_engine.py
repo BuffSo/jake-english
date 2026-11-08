@@ -444,3 +444,12 @@ async def test_tips_are_made_ahead_and_checked(engine, fake_voice):
 
     await engine.warm()
     assert set(TIPS) <= set(fake_voice.checked)
+
+
+async def test_a_talk_is_not_copied(engine):
+    from fakes import talk_example
+
+    talk = talk_example()
+    engine.store.save(talk)
+    with pytest.raises(NotFound):
+        await engine.copy(talk.id)

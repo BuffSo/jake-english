@@ -4,6 +4,7 @@ import * as path from "path";
 import { NdjsonSplitter } from "./ndjson";
 import {
   EVENT_TYPES,
+  FIX_KEYS,
   HEARD_TRY_KEYS,
   ISSUE_KEYS,
   LINE_KEYS,
@@ -25,6 +26,7 @@ import past from "../../../contract/past.json";
 import saved from "../../../contract/saved.json";
 import homeTopics from "../../../contract/home-topics.json";
 import resume from "../../../contract/resume.json";
+import talk from "../../../contract/talk.json";
 
 const sorted = (a: readonly string[]) => [...a].sort();
 
@@ -74,4 +76,12 @@ test("resume example has the keys the situation screen reads", () => {
   expect(sorted(Object.keys(resume.resume.roleplay))).toEqual(sorted(ROLEPLAY_KEYS));
   expect(resume.resume.said.length).toBeGreaterThan(0);
   for (const s of resume.resume.said) expect(sorted(Object.keys(s))).toEqual(sorted(HEARD_TRY_KEYS));
+});
+
+test("talk example has the keys the talk screens read", () => {
+  expect(sorted(Object.keys(talk))).toEqual(sorted(ROLEPLAY_KEYS));
+  for (const l of talk.lines) {
+    expect(sorted(Object.keys(l))).toEqual(sorted(LINE_KEYS));
+    if (l.fix) expect(sorted(Object.keys(l.fix))).toEqual(sorted(FIX_KEYS));
+  }
 });

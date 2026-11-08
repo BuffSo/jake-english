@@ -5,16 +5,24 @@ export type Syllable = { en: string; ko: string; m: Mark; hi: string };
 export type Word = { syl: Syllable[]; emph: boolean; link: boolean };
 export type ThreeLine = { words: Word[]; reading: string };
 export type Speaker = "ryan" | "user";
+// reply: Ryan's English line; turn / ask / help / fix are free talk only: my English turn, my Korean turn, Ryan's
+// Korean answer, the corrected sentence
+export type LineKind = "script" | "reply" | "turn" | "ask" | "help" | "fix";
+export type Fix = { of: number; said: string; why_ko: string; why_audio: string | null };
 export type ScriptLine = {
   idx: number;
   speaker: Speaker;
   text: string;
-  kind: "script" | "reply";
+  kind: LineKind;
   three: ThreeLine | null;
   audio: string | null;
   // Sohee's Korean for the line and its sound key, made on the Mac only when asked (spec korean-translation 5)
   ko: string | null;
   ko_audio: string | null;
+  // free talk only (spec free-talk-design 2, 8); null on other lines and on an older server
+  parts: Said[] | null; // Ryan's answer sentence by sentence with the sound of each
+  heard_upto: number | null; // sentences heard when cut off; null when heard to the end
+  fix: Fix | null;
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };
 export type Issue = { target: string; heard: string; sound: [string, string] | null; explain: string };
@@ -47,6 +55,8 @@ export type Roleplay = {
   topic: string | null;
   // the list line's id when picked from a topic's list (spec fixed-list-scripts 5); null otherwise
   pick: string | null;
+  // "talk" for a free talk; a server from before free talk sends no kind, which is a roleplay
+  kind: "roleplay" | "talk";
 };
 export type Said = { text: string; audio: string };
 // thinking-face picture paths per person, cross-faded while the app waits (/home `images.thinking`)
@@ -116,8 +126,9 @@ export type AttemptEvent =
   | { type: "done"; next: number; issues: number };
 
 // Key lists checked against contract/ by the tests; the type checks below keep them in step with the types.
-export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin", "topic", "pick"] as const;
-export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio"] as const;
+export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin", "topic", "pick", "kind"] as const;
+export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio", "parts", "heard_upto", "fix"] as const;
+export const FIX_KEYS = ["of", "said", "why_ko", "why_audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "error", "done"] as const;
 export const SUMMARY_KEYS = ["say", "lines"] as const;
@@ -149,4 +160,5 @@ export const KEYS_MATCH: [
   Same<keyof Topic["picks"][number], (typeof PICK_KEYS)[number]>,
   Same<keyof Resume, (typeof RESUME_KEYS)[number]>,
   Same<keyof HeardTry, (typeof HEARD_TRY_KEYS)[number]>,
-] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true];
+  Same<keyof Fix, (typeof FIX_KEYS)[number]>,
+] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true];

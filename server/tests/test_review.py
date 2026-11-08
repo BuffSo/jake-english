@@ -212,3 +212,20 @@ def test_i_speak_first_from_my_first_line():
 
 def test_said_on_takes_every_recorded_line():
     assert [s["idx"] for s in said_on(seven(pos=6, said=[1, 5]))] == [1, 5]
+
+
+def test_a_talk_is_not_a_past_situation():
+    from fakes import talk_example
+
+    talk = talk_example()
+    assert past_items([talk]) == []
+    assert latest_run([talk], talk.id) is None
+
+
+def test_resume_skips_a_newer_talk():
+    from fakes import talk_example
+
+    rp = make(A, "2026-11-08T09:00:00")
+    talk = talk_example().model_copy(update={"created": "2026-11-08T10:00:00"})
+    assert to_resume([talk, rp]).id == A
+    assert to_resume([talk]) is None

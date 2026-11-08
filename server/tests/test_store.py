@@ -102,3 +102,11 @@ def test_old_record_without_pick_is_read():
            "frame": {"title_ko": "길", "user_role_ko": "나", "ryan_role_ko": "R", "place_ko": "역", "goal_ko": "묻기"},
            "lines": []}
     assert Roleplay.model_validate(raw).pick is None
+
+
+def test_recent_situations_leave_talks_out(tmp_path):
+    from fakes import talk_example
+
+    s = Store(tmp_path)
+    s.save(talk_example())
+    assert "자유 대화" not in s.recent_situations()

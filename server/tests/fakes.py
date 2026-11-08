@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import anthropic
@@ -9,7 +10,13 @@ import httpx2
 
 from je_server.asr import WhisperError
 from je_server.claude import ClaudeUnavailable
-from je_server.models import Frame, Syllable, ThreeLine, Word
+from je_server.models import Frame, Roleplay, Syllable, ThreeLine, Word
+
+
+def talk_example() -> Roleplay:
+    """The free-talk record of contract/talk.json, as the model reads it."""
+    path = Path(__file__).resolve().parents[2] / "contract" / "talk.json"
+    return Roleplay.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def noted(text: str) -> ThreeLine:

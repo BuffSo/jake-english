@@ -60,3 +60,21 @@ def test_resume_example_has_the_engine_shape():
     assert set(raw) == {"roleplay", "at", "progress", "said", "ended"} and set(raw["progress"]) == {"no", "total"}
     assert Roleplay.model_validate(raw["roleplay"]).model_dump(mode="json") == raw["roleplay"]
     assert raw["said"] and all(set(s) == {"idx", "heard", "n"} for s in raw["said"])
+
+
+def test_talk_example_matches_model():
+    raw = json.loads((CONTRACT / "talk.json").read_text(encoding="utf-8"))
+    assert Roleplay.model_validate(raw).model_dump(mode="json") == raw
+    assert raw["kind"] == "talk"
+    assert [l["kind"] for l in raw["lines"]] == ["reply", "ask", "help", "turn", "reply", "turn", "reply", "fix"]
+
+
+def test_records_from_before_read_as_roleplays():
+    raw = json.loads((CONTRACT / "roleplay.json").read_text(encoding="utf-8"))
+    del raw["kind"]
+    for l in raw["lines"]:
+        for k in ("parts", "heard_upto", "fix"):
+            del l[k]
+    rp = Roleplay.model_validate(raw)
+    assert rp.kind == "roleplay"
+    assert all(l.parts is None and l.heard_upto is None and l.fix is None for l in rp.lines)
