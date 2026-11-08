@@ -10,10 +10,14 @@ pytestmark = pytest.mark.anyio
 
 
 async def test_create_then_lines_are_prepared(engine):
+    # a line comes with its model sound; the learner's notes are made in the background and fetched (spec
+    # dont-wait-for-line-notes 1)
     rp = await engine.create("길 묻기")
     user_idx = next(l.idx for l in rp.lines if l.speaker == "user")
     line = await engine.line(rp.id, user_idx)
-    assert line.three is not None and line.audio is not None
+    assert line.audio is not None
+    three = await engine.three(rp.id, user_idx)
+    assert three.words and engine.store.load(rp.id).lines[user_idx].three == three
     ryan = await engine.line(rp.id, 0)
     assert ryan.audio is not None and ryan.three is None
 
@@ -29,9 +33,12 @@ async def test_prep_survives_restart(engine_factory, fake_claude):
     rp = await e1.create("길 묻기")
     for t in e1.tasks.values():
         t.cancel()
+    for t in e1.threes.values():
+        t.cancel()
     e2 = engine_factory()  # same data folder, no tasks in memory
     line = await e2.line(rp.id, 1)
-    assert line.three is not None and line.audio is not None
+    assert line.audio is not None
+    assert (await e2.three(rp.id, 1)).words  # the notes left half made start again
 
 
 async def test_claude_down_on_create_leaves_no_roleplay(engine, fake_claude):
@@ -46,10 +53,14 @@ async def test_claude_down_while_preparing_is_retried_next_time(engine, fake_cla
     for t in engine.tasks.values():
         t.cancel()
     engine.tasks.clear()
+    for t in engine.threes.values():
+        t.cancel()
+    engine.threes.clear()
     fake_claude.fail_next = True
-    with pytest.raises(ClaudeUnavailable):
-        await engine.line(rp.id, 1)
-    assert (await engine.line(rp.id, 1)).three is not None
+    with pytest.raises(ClaudeUnavailable):  # the notes say Claude is down...
+        await engine.three(rp.id, 1)
+    assert (await engine.line(rp.id, 1)).audio is not None  # ...but the line still comes
+    assert (await engine.three(rp.id, 1)).words  # and the next ask makes them
 
 
 async def test_ryan_three_on_demand(engine):
@@ -100,8 +111,10 @@ async def test_model_audio_starts_before_notes_finish(engine, fake_claude, fake_
     rp = await engine.create("길 묻기")
     await asyncio.sleep(0.05)
     assert any(c[0] == rp.lines[1].text for c in fake_voice.calls)  # audio asked for while notes still wait
+    line = await engine.line(rp.id, 1)  # comes while the notes still wait (spec dont-wait-for-line-notes 1)
+    assert line.audio is not None and line.three is None
     gate.set()
-    assert (await engine.line(rp.id, 1)).three is not None
+    assert (await engine.three(rp.id, 1)).words
 
 
 async def test_progress_counts_the_learners_lines(engine):
@@ -181,9 +194,9 @@ async def test_ryan_notes_asked_twice_at_once_are_made_once(engine, fake_claude)
     assert sum(1 for name, args in fake_claude.calls if name == "annotate" and args[0] == rp.lines[0].text) == 1
 
 
-async def test_a_line_whose_sound_failed_still_has_its_notes(engine, fake_claude, fake_voice):
-    # PR #15 review: a sound that failed fast while the notes were still being made returned the line without
-    # notes, and the roleplay screen never asks for them again
+async def test_a_line_whose_sound_failed_still_gets_its_notes(engine, fake_claude, fake_voice):
+    # PR #15 review: a sound that failed fast must not leave the line without notes. Since the line no longer waits
+    # for them (spec dont-wait-for-line-notes 1), it comes without its sound at once and the notes go on
     import asyncio
 
     from fakes import DRAFT_USER
@@ -191,12 +204,29 @@ async def test_a_line_whose_sound_failed_still_has_its_notes(engine, fake_claude
     fake_claude.annotate_gate = asyncio.Event()
     fake_voice.fail_text = DRAFT_USER[0]
     rp = await engine.create("길 묻기")
-    ask = asyncio.create_task(engine.line(rp.id, 1))
-    for _ in range(5):
-        await asyncio.sleep(0)
+    line = await engine.line(rp.id, 1)
+    assert line.audio is None and line.three is None
     fake_claude.annotate_gate.set()
-    line = await ask
-    assert line.audio is None and line.three is not None
+    assert (await engine.three(rp.id, 1)).words
+    # the notes went on from the background call; they were not started again
+    assert sum(1 for n, a in fake_claude.calls if n == "annotate" and a[0] == DRAFT_USER[0]) == 1
+
+
+async def test_notes_asked_while_made_in_the_background_share_one_call(engine, fake_claude):
+    import asyncio
+
+    fake_claude.annotate_gate = asyncio.Event()
+    rp = await engine.create("길 묻기")
+    await asyncio.sleep(0)
+    # made in the background as soon as the script is there, before anyone asks (spec dont-wait-for-line-notes 1)
+    assert ("annotate", (rp.lines[1].text, engine.context(rp, 1))) in fake_claude.calls
+    asks = [asyncio.create_task(engine.three(rp.id, 1)) for _ in range(2)]
+    await asyncio.sleep(0)
+    fake_claude.annotate_gate.set()
+    a, b = await asyncio.gather(*asks)
+    assert a == b
+    assert [c for c in fake_claude.calls if c == ("annotate", (rp.lines[1].text, engine.context(rp, 1)))] == [
+        ("annotate", (rp.lines[1].text, engine.context(rp, 1)))]
 
 
 # --- Sohee's interpretation (spec korean-translation 4, 5) ------------------------------------------------------
