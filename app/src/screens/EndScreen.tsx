@@ -17,6 +17,7 @@ import type { Action, State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { KoButton, KoLine, type KoProps } from "../ui/Interpret";
+import { HeardLine } from "../ui/HeardLine";
 import { keepWords } from "../ui/keepWords";
 import { PlayLabel } from "../ui/PlayIcon";
 import { StarButton, StarMark } from "../ui/Star";
@@ -351,13 +352,14 @@ function MyLine(
 }
 
 // One try inside the roleplay: what was heard, the recording, and what Ryan pointed out (only that, so the
-// screen never says more than he did). The recording's button shows on an open line only.
+// screen never says more than he did). The recording's button shows on an open line only, and what was heard is one
+// line until then (spec heard-line-collapsed 2).
 function TryView({ t, open, playing, onPlay }: { t: Try; open: boolean; playing: boolean; onPlay: () => void }) {
   const points = [...t.issues.map((i) => i.say_ko), ...(t.point_ko ? [t.point_ko] : [])];
   return (
     <View style={styles.try}>
       <View style={styles.who}>
-        <Text style={styles.heard}>{keepWords(`들린 말: ${t.heard}`)}</Text>
+        <HeardLine text={t.heard} open={open} style={styles.heard} />
         {open && (
           <Pressable onPress={onPlay} hitSlop={8}>
             <PlayLabel on={playing} label="내 녹음" style={styles.play} />
