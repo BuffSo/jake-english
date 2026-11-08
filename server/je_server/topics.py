@@ -116,12 +116,14 @@ TOPICS: tuple[Topic, ...] = (
             # many foreign tourists visit the market, people queue long at its hotteok stalls, and its known
             # vegetable hotteok has vegetables and glass noodles. No stall name and no price: prices differ by source
             # and have gone up. Nothing on taste beyond that. "glass noodles", not "noodles": plain noodles read as
-            # noodle soup (the user, 2026-11-08)
+            # noodle soup (the user, 2026-11-08). "This kind has": after "the line for hotteok?", a bare "Vegetables and
+            # glass noodles." read as what every hotteok has, and the usual one is sweet (PR #65 review; the user chose
+            # the words)
             _pick("t-market-hotteok", "남대문시장 호떡 줄에서 이야기하기",
                   "서울 남대문시장의 야채호떡 노점 앞 줄에서, 처음 보는 외국인 관광객이 호떡 줄이 맞는지 묻는다. "
                   "남대문시장은 외국인 관광객이 많이 찾고, 호떡 노점 앞에는 사람들이 오래 줄을 선다. 야채호떡에는 "
                   "채소와 당면이 들어 있다. 호떡 맛있게 먹으라고 인사한다.", "ryan",
-                  ("남대문시장에서 호떡 줄을 선 서울 사람", "남대문시장에 구경 온 외국인 관광객", "남대문시장의 호떡 노점 앞 줄",
+                  ("남대문시장에서 호떡 줄을 선 서울 사람", "남대문시장에 구경 온 외국인 관광객", "남대문시장의 야채호떡 노점 앞 줄",
                    "호떡 줄을 묻는 관광객에게 답하고 가볍게 이야기하기"),
                   (("ryan", "Excuse me, is this the line for hotteok?",
                     "실례합니다, 여기가 호떡 줄인가요?"),
@@ -129,8 +131,8 @@ TOPICS: tuple[Topic, ...] = (
                     "네, 맞아요. 사람들이 이거 먹으려고 오래 기다려요."),
                    ("ryan", "Wow, it must be good. What's inside?",
                     "와, 맛있나 보네요. 안에 뭐가 들었어요?"),
-                   ("user", "Vegetables and glass noodles. You'll love it!",
-                    "채소랑 당면이요. 분명 좋아하실 거예요."),
+                   ("user", "This kind has vegetables and glass noodles. You'll love it!",
+                    "이 종류는 채소랑 당면이 들어 있어요. 분명 좋아하실 거예요."),
                    ("ryan", "I can't wait. This market is so much fun!",
                     "빨리 먹어 보고 싶네요. 이 시장 정말 재밌어요!"),
                    ("user", "Glad you like it. Enjoy your hotteok!",

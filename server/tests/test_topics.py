@@ -129,7 +129,7 @@ def test_script_keeps_the_facts_of_its_description():
     assert all(w in said["u-seafood-walkin"] for w in ("reservation", "table for two", "30-minute wait", "bar",
                                                        "put my name down"))
     assert all(w in said["t-market-hotteok"] for w in ("line for hotteok", "wait a long time",
-                                                       "Vegetables and glass noodles"))
+                                                       "vegetables and glass noodles"))
 
 
 def test_ryans_list_lines_are_one_or_two_sentences():
@@ -259,3 +259,12 @@ def test_market_script_says_nothing_of_taste_or_price():
     # no name (spec korea-english-topic 4)
     said = " ".join(t for _, t in pick("tourist", "t-market-hotteok").script).lower()
     assert not any(w in said for w in ("sweet", " won", "$", "spicy", "price"))
+
+
+def test_market_script_says_which_hotteok_has_glass_noodles():
+    # PR #65 review: after "the line for hotteok?", "Vegetables and glass noodles." read as what every hotteok has; the
+    # usual one is sweet. The user chose "This kind has ..." (2026-11-08), and the frame names the stall
+    p = pick("tourist", "t-market-hotteok")
+    said = " ".join(t for _, t in p.script)
+    assert "This kind has vegetables and glass noodles." in said
+    assert "야채호떡" in p.frame.place_ko and "야채호떡 노점" in p.situation
