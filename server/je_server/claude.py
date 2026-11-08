@@ -33,10 +33,15 @@ WRITERS: dict[str, dict[str, Any]] = {
     "sonnet": SONNET,
     "opus": {"model": "claude-opus-5-5", "effort": "low"},
 }
+QUICK_SONNET: dict[str, Any] = {"model": "claude-sonnet-5-5", "thinking": {"type": "between_tools"}}
 QUICKS: dict[str, dict[str, Any]] = {
     "haiku": HAIKU,
-    "sonnet": {"model": "claude-sonnet-5-5", "thinking": {"type": "between_tools"}},
+    "sonnet": QUICK_SONNET,
 }
+# Jake's recommendation picks from QUICKS too (JE_CLAUDE_RECOMMEND), default Sonnet: 2026-11-08 the user chose it
+# after the three quick jobs were compared on made-up inputs. Haiku wrote odd recommendation sentences 12 times in
+# 63 (the message's 「끝말:」 copied, two endings, 「제가 …」), Sonnet twice; Sohee's interpretation and Ryan's
+# feedback came out about the same and Sonnet was slower there, so they stay on the quick model.
 
 log = logging.getLogger("je_server")
 USER_TURNS = (3, 3)  # 2026-11-05 the user tried 5 on the phone, found it too many, chose 3
@@ -111,6 +116,19 @@ def strip_endings(text: str) -> str | None:
     return re.sub(rf"(?:[\s,]*{SITUATION})*[\s,]*$", "", stem).strip()
 
 
+# The labels of the lines in Jake's recommendation message (`Claude.recommend`). A model sometimes says one back
+# (todo 21: 「…상황을 골라 봤어요. 끝말: 상황을 골라 봤어요.」, read out in Jake's voice). Only a label word
+# standing alone before a colon goes, also right after an end mark (「…봤어요.끝말:」, Haiku drops spaces): 「예약:」
+# or 「주제곡」 stay.
+MESSAGE_LABELS = ("주제", "예", "끝말")
+_LABEL = re.compile(rf"(?<![가-힣A-Za-z0-9])(?:{'|'.join(MESSAGE_LABELS)})\s*:\s*")
+
+
+def drop_labels(text: str) -> str:
+    """`text` without the message's line labels said back, spaces tidied where one was taken out."""
+    return " ".join(_LABEL.sub(" ", text).split()) if _LABEL.search(text) else text
+
+
 def heard_ending(text: str) -> str | None:
     """The one of JAKE_ENDINGS a learner hears at the end of `text`: the one whose last word ends the ending there,
     spaces and end marks aside, so a mixed 「…상황을 연습해 볼까요?」 is heard as 「…상황으로 연습해 볼까요?」. None for
@@ -137,10 +155,12 @@ def _spoken(text: str) -> str:
 
 
 class Claude:
-    def __init__(self, client: Any, writer: dict[str, Any] = SONNET, quick: dict[str, Any] = HAIKU):
+    def __init__(self, client: Any, writer: dict[str, Any] = SONNET, quick: dict[str, Any] = HAIKU,
+                 recommender: dict[str, Any] = QUICK_SONNET):
         self.client = client
         self.writer = writer
         self.quick = quick
+        self.recommender = recommender
 
     def _request(self, model: dict[str, Any], output_config: dict[str, Any]) -> dict[str, Any]:
         kw = {k: v for k, v in model.items() if k != "effort"}
@@ -283,8 +303,11 @@ class Claude:
             message += "\n\n목록에 있는 상황:\n" + "\n".join(f"- {p.title_ko}" for p in topic.picks)
         if turned_down:  # suggested on the situation screen and turned down with 「다른 걸로요」 (2026-11-06)
             message += "\n\n방금 거절한 상황:\n" + "\n".join(f"- {t}" for t in turned_down)
-        data = await self._json(self.quick, prompts.RECOMMEND_SYSTEM, message, prompts.RECOMMEND_SCHEMA, 300)
+        data = await self._json(self.recommender, prompts.RECOMMEND_SYSTEM, message, prompts.RECOMMEND_SCHEMA, 300)
         text = (data or {}).get("request_ko", "").strip() if isinstance(data, dict) else ""
+        if (dropped := drop_labels(text)) != text:
+            log.info("recommendation label dropped")
+            text = dropped
         if not text:
             raise ClaudeUnavailable("empty recommendation")
         # no second call: put the given ending on in place of the one there, say anything else as it came

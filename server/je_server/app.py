@@ -63,9 +63,10 @@ def build_services(settings: Settings) -> Services:
     whisper = Whisper(settings.whisper_exe, settings.whisper_model, settings.whisper_port)
     voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir, hear=whisper.hear)
     writer, quick = WRITERS[settings.claude_writer], QUICKS[settings.claude_quick]
-    log.info("claude models: writer %s, quick %s", writer["model"], quick["model"])
+    recommender = QUICKS[settings.claude_recommend]
+    log.info("claude models: writer %s, quick %s, recommend %s", writer["model"], quick["model"], recommender["model"])
     claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30),
-                    writer=writer, quick=quick)
+                    writer=writer, quick=quick, recommender=recommender)
     return Services(engine=Engine(store, claude, voice, whisper), voice=voice, whisper=whisper)
 
 

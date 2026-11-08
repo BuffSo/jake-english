@@ -92,7 +92,7 @@ async def test_refusal_becomes_unavailable():
         await Claude(FakeAnthropic([refusal_response()])).make_script("길 묻기", OTHER)
 
 
-async def test_recommend_uses_haiku_and_avoids_recent():
+async def test_recommend_uses_sonnet_and_avoids_recent():
     fake = FakeAnthropic([json.dumps({"request_ko": "카페에서 주문하는 상황을 추천해요."})])
     text = await Claude(fake).recommend(["길에서 케이블카 타는 곳을 묻는 상황"], [], OTHER, "상황을 추천해요.")
     assert text == "카페에서 주문하는 상황을 추천해요."
@@ -101,7 +101,8 @@ async def test_recommend_uses_haiku_and_avoids_recent():
     # Jake suggests the situation to the learner, he does not ask for it on the learner's behalf (user, same day).
     system = str(r["system"])
     assert "끝말" in system and "반말" not in system and "싶어" not in system
-    assert r["model"] == "claude-haiku-5-5" and r["thinking"] == {"type": "disabled"}
+    # 2026-11-08 the user moved it to Sonnet after a comparison (Haiku wrote odd sentences 12 times in 63)
+    assert r["model"] == "claude-sonnet-5-5" and r["thinking"] == {"type": "between_tools"}
     assert "effort" not in r.get("output_config", {})
     assert "케이블카" in r["messages"][0]["content"]
 
@@ -574,6 +575,36 @@ async def test_recommend_keeps_a_long_tail_after_situation(caplog):
     with caplog.at_level(logging.WARNING, logger="je_server"):
         assert await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.") == s
     assert "did not keep" in caplog.text
+
+
+@pytest.mark.parametrize("answer, ending, said", [
+    # todo 21: a real recommendation (Haiku, 2026-11-08) echoed the message's 「끝말:」 line after the sentence;
+    # the comparison the same day saw it again (made-up lines here)
+    ("카페에서 주문하는 상황을 추천해요. 끝말: 상황을 추천해요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+    ("카페에서 주문하는 상황을 골라 봤어요. 끝말: 상황을 골라 봤어요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+    # a label in front: only the label goes
+    ("끝말: 공항에서 짐을 찾는 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
+    ("예: 공항에서 짐을 찾는 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
+    ("주제 : 공항에서 짐을 찾는 상황을 추천해요.", "상황을 추천해요.", "공항에서 짐을 찾는 상황을 추천해요."),
+    # glued to the end mark before it: Haiku has dropped spaces (final review, 2026-11-08)
+    ("카페에서 주문하는 상황을 골라 봤어요.끝말: 상황을 골라 봤어요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+    ("카페에서 주문하는 상황을 추천해요.\n끝말:상황을 추천해요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+])
+async def test_recommend_drops_message_labels(caplog, answer, ending, said):
+    fake = FakeAnthropic([json.dumps({"request_ko": answer})])
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        text = await Claude(fake).recommend([], [], OTHER, ending)
+    assert text == said and len(fake.requests) == 1
+    assert "label" in caplog.text and "상황" not in caplog.text
+
+
+@pytest.mark.parametrize("answer", ["호텔 예약을 바꾸는 상황을 추천해요.", "공연장에서 주제곡을 묻는 상황을 추천해요.",
+                                    "호텔 예약: 체크인 시간을 묻는 상황을 추천해요."])
+async def test_recommend_keeps_words_that_only_look_like_labels(caplog, answer):
+    fake = FakeAnthropic([json.dumps({"request_ko": answer})])
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        assert await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.") == answer
+    assert "label" not in caplog.text
 
 
 def test_recommend_system_shows_no_ending_of_its_own():
