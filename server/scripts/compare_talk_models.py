@@ -13,14 +13,18 @@ import argparse
 import asyncio
 import re
 import statistics
+import sys
 import time
+from pathlib import Path
 
-import anthropic
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # the server package, as in try_talk.py
 
-from je_server.claude import QUICKS, WRITERS, Claude
-from je_server.config import load_settings
-from je_server.prompts import TALK_ECHO, TALK_KOREAN, TALK_START, TALK_SYSTEM  # the prompt that ships
-from je_server.sentences import SentenceBuffer
+import anthropic  # noqa: E402
+
+from je_server.claude import QUICKS, WRITERS, Claude  # noqa: E402
+from je_server.config import load_settings  # noqa: E402
+from je_server.prompts import TALK_ECHO, TALK_KOREAN, TALK_START, TALK_SYSTEM  # noqa: E402  (the prompt that ships)
+from je_server.sentences import SentenceBuffer  # noqa: E402
 
 
 # (name, conversation so far: Ryan's opener first, then turns alternating learner / Ryan, ending with the learner)

@@ -12,7 +12,7 @@ reading the output.
 Money: Sonnet about 0.5 cent a call, Haiku a tenth of that; the default 11 cases x 3 runs x 2 models is 66 calls,
 about $0.18 (real API credit, outside the subscription). Say so before running (AGENTS.md).
 
-    uv run python scripts/compare_fix_models.py [--runs 3] [--only N]    (PYTHONPATH=. if je_server is not found)
+    uv run python scripts/compare_fix_models.py [--runs 3] [--only N]
 """
 from __future__ import annotations
 

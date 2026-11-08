@@ -10,7 +10,7 @@ and natural is judged by reading the output.
 Money: Haiku a fraction of a cent a call, Sonnet about a cent; the default 8 cases x 2 runs x 2 models is 32 calls,
 a few cents (real API credit, outside the subscription). Say so before running (AGENTS.md).
 
-    uv run python scripts/compare_hint_models.py [--runs 2]    (PYTHONPATH=. if je_server is not found)
+    uv run python scripts/compare_hint_models.py [--runs 2]
 """
 from __future__ import annotations
 
@@ -18,14 +18,18 @@ import argparse
 import asyncio
 import json
 import statistics
+import sys
 import time
+from pathlib import Path
 
-import anthropic
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # the server package, as in try_talk.py
 
-from je_server import hints
-from je_server.claude import QUICKS, Claude
-from je_server.config import load_settings
-from je_server.prompts import HINT_SCHEMA, HINT_SYSTEM  # the prompt that ships
+import anthropic  # noqa: E402
+
+from je_server import hints  # noqa: E402
+from je_server.claude import QUICKS, Claude  # noqa: E402
+from je_server.config import load_settings  # noqa: E402
+from je_server.prompts import HINT_SCHEMA, HINT_SYSTEM  # noqa: E402  (the prompt that ships)
 
 # (name, the talk so far: Ryan's line first and last, the learner's between)
 CASES: list[tuple[str, list[str]]] = [
