@@ -143,6 +143,12 @@ def test_helped_fix_without_the_words_is_dropped():
     assert f.why_ko == "Light처럼 들렸어요. " + R_L
 
 
+def test_helped_fix_that_says_what_was_said_is_dropped():
+    # the transcript may be wrong: what was heard, never what I said (spec 7, as `_guess`)
+    for why in ("light라고 말했어요.", "right를 light라고 말했는데 R이에요."):
+        assert check([item(9, "", "", why=why)], TURNS, HELPED) == []
+
+
 def test_claudes_grammar_pick_on_a_helped_turn_is_dropped():
     grammar = item(9, "I turned light at the bank.", "I turned right at the bank yesterday.",
                    why="지난 일이라 yesterday를 더하면 자연스러워요.")

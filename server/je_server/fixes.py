@@ -69,8 +69,8 @@ def _names(why: str, issues: list[Issue]) -> bool:
 
 def _helped(items: list[dict], helped: dict[int, Helped]) -> list[Found]:
     """The helped turns Claude worded: Sohee's sentence as the fix, what was heard as what I said, and Claude's Korean
-    (it names a point) with each point's sound explanation once. Claude's own said and fixed are not used; an item
-    that does not hold up gives way to the next one on the same turn."""
+    (it names a point, and never says what I said) with each point's sound explanation once. Claude's own said and
+    fixed are not used; an item that does not hold up gives way to the next one on the same turn."""
     kept: dict[int, Found] = {}
     for it in items:
         idx = it.get("idx")
@@ -78,7 +78,8 @@ def _helped(items: list[dict], helped: dict[int, Helped]) -> list[Found]:
             continue
         h = helped[idx]
         why = str(it.get("why_ko") or "").strip()
-        if not _HANGUL.search(why) or not _names(why, h.issues):
+        # what was heard, never what I said: the transcript may be wrong (as in `_guess`)
+        if not _HANGUL.search(why) or not _names(why, h.issues) or "말했" in why:
             continue
         explains: list[str] = []
         for i in h.issues:
