@@ -164,6 +164,27 @@ describe("back goes to the screen before", () => {
   test("home has nothing before it", () => {
     expect(reduce(initial, { type: "back" })).toBe(initial);
   });
+
+  test("back from the free talk goes home", () => {
+    const talk = reduce(initial, { type: "openTalk" });
+    expect(reduce(talk, { type: "back" })).toEqual(initial);
+  });
+});
+
+// --- free talk (spec free-talk-design 1, 2) ------------------------------------------------------------------------
+
+test("openTalk opens the free talk from home", () => {
+  const s = reduce(initial, { type: "openTalk" });
+  expect(s.screen).toBe("talk");
+  expect(s).toEqual({ ...initial, screen: "talk" });
+});
+
+test("openTalk elsewhere does nothing", () => {
+  // the second tap of a double tap on the card finds the talk open already, so one talk is made
+  const talk = reduce(initial, { type: "openTalk" });
+  expect(reduce(talk, { type: "openTalk" })).toBe(talk);
+  expect(reduce(situation, { type: "openTalk" })).toBe(situation);
+  expect(reduce(at("ready"), { type: "openTalk" }).screen).toBe("roleplay");
 });
 
 // --- practice after the roleplay (spec roleplay-practice 1, 2, 4, 5, 6) --------------------------------------------
@@ -377,7 +398,7 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     const s = midway("ready");
     expect(s.history.map((b) => practiceFor(s, b))).toEqual(["shadow", "mine", null, "shadow"]);
     expect(practiceFor(s, { kind: "user", idx: 3 })).toBeNull(); // the line on screen, tried again
-    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null, ko: null, ko_audio: null };
+    const reply: ScriptLine = { idx: 4, speaker: "ryan", text: "Sure thing!", kind: "reply", three: null, audio: null, ko: null, ko_audio: null, parts: null, heard_upto: null, fix: null };
     expect(practiceFor({ ...s, seen: { ...s.seen, 4: reply } }, { kind: "ryan", idx: 4 })).toBe("shadow");
     const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
     expect(practiceFor(inside, s.history[0])).toBeNull();

@@ -252,3 +252,59 @@ async def test_without_prints_the_keys_stay_as_they_were(voice):
     # an older worker, or none yet: every sound made so far keeps its key
     assert voice.key("ryan", "english", "Hello.") == audio_key("ryan", "english", "Hello.")
     assert audio_key("ryan", "english", "Hello.", "") == audio_key("ryan", "english", "Hello.")
+
+
+async def test_a_demoted_urgent_job_waits_behind_a_new_urgent_one(voice, tmp_path):
+    busy = asyncio.create_task(voice.say("busy", "ryan", "english", urgent=True))
+    await asyncio.sleep(0.02)  # the worker has taken "busy"; the rest queue behind it
+    old = asyncio.create_task(voice.say("old rest", "ryan", "english", urgent=True))
+    await asyncio.sleep(0)
+    voice.demote([audio_key("ryan", "english", "old rest")])
+    new = asyncio.create_task(voice.say("new first", "ryan", "english", urgent=True))
+    await asyncio.gather(busy, old, new)
+    assert calls(tmp_path).index("new first") < calls(tmp_path).index("old rest")
+
+
+async def test_a_demoted_job_is_still_made(voice, tmp_path):
+    busy = asyncio.create_task(voice.say("busy", "ryan", "english", urgent=True))
+    await asyncio.sleep(0.02)
+    key = audio_key("ryan", "english", "old rest")
+    old = asyncio.create_task(voice.say("old rest", "ryan", "english", urgent=True))
+    await asyncio.sleep(0)
+    voice.demote([key])
+    assert voice.demoted == {key}
+    await asyncio.gather(busy, old)
+    assert voice.path(key).exists() and voice.demoted == set()
+
+
+async def test_demoting_a_sound_already_made_does_nothing(voice):
+    key = await voice.say("Done.", "ryan", "english", urgent=True)
+    voice.demote([key])
+    assert voice.demoted == set()
+
+
+async def test_demoted_jobs_still_go_before_prepared_ones(voice, tmp_path):
+    busy = asyncio.create_task(voice.say("busy", "ryan", "english", urgent=True))
+    await asyncio.sleep(0.02)
+    prepared = asyncio.create_task(voice.say("prepared", "ryan", "english", urgent=False))
+    old = asyncio.create_task(voice.say("old rest", "ryan", "english", urgent=True))
+    await asyncio.sleep(0)
+    voice.demote([audio_key("ryan", "english", "old rest")])
+    await asyncio.gather(busy, prepared, old)
+    assert calls(tmp_path).index("old rest") < calls(tmp_path).index("prepared")
+
+
+async def test_an_urgent_say_of_a_demoted_key_is_not_pushed_back(voice, tmp_path):
+    # a new reply whose first sentence equals an unmade sentence of the cut-off reply is the new reply's first sound
+    busy = asyncio.create_task(voice.say("busy", "ryan", "english", urgent=True))
+    await asyncio.sleep(0.02)
+    other = asyncio.create_task(voice.say("other old", "ryan", "english", urgent=True))
+    same = asyncio.create_task(voice.say("same text", "ryan", "english", urgent=True))
+    await asyncio.sleep(0)
+    key = audio_key("ryan", "english", "same text")
+    voice.demote([audio_key("ryan", "english", "other old"), key])
+    again = asyncio.create_task(voice.say("same text", "ryan", "english", urgent=True))
+    await asyncio.sleep(0)
+    assert key not in voice.demoted
+    await asyncio.gather(busy, other, same, again)
+    assert calls(tmp_path).index("same text") < calls(tmp_path).index("other old")

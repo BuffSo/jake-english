@@ -7,7 +7,8 @@ import pytest
 
 from fakes import (FakeAnthropic, connection_error, refusal_response, script_json, three_json,
                    three_json_with_wrong_stress)
-from je_server.claude import JAKE_ENDINGS, Claude, ClaudeUnavailable, pick_ending
+from je_server import prompts
+from je_server.claude import JAKE_ENDINGS, LIVE_OPTIONS, WRITERS, Claude, ClaudeUnavailable, pick_ending
 from je_server.threeline import check
 from je_server.topics import get
 
@@ -708,6 +709,63 @@ def test_recommend_system_shows_no_ending_of_its_own():
     from je_server import prompts
 
     assert not any(e in prompts.RECOMMEND_SYSTEM for e, _ in JAKE_ENDINGS) and "추천해요" not in prompts.RECOMMEND_SYSTEM
+
+
+# --- free talk partner (spec free-talk 3, 4) ------------------------------------------------------------
+
+TALK_TURNS = [{"role": "user", "content": prompts.TALK_START}, {"role": "assistant", "content": "Hi!"},
+              {"role": "user", "content": "I ate rice."}]
+
+
+async def test_talk_streams_the_turns_on_the_talk_model():
+    fake = FakeAnthropic([["Nice! ", "What did you eat?"]])
+    out = [t async for t in Claude(fake, talker=WRITERS["haiku"]).talk(TALK_TURNS)]
+    assert out == ["Nice! ", "What did you eat?"]
+    r = fake.requests[0]
+    assert r["messages"] == TALK_TURNS
+    assert r["system"] == prompts.TALK_SYSTEM
+    assert r["model"] == "claude-haiku-5-5"
+    assert r["max_tokens"] == 300
+    assert fake.options == [LIVE_OPTIONS]
+
+
+async def test_talk_drops_double_quotes():
+    fake = FakeAnthropic([['He said "hi". ', "Fun?"]])
+    out = "".join([t async for t in Claude(fake).talk(TALK_TURNS)])
+    assert '"' not in out and "hi" in out
+
+
+async def test_talk_is_unavailable_when_the_connection_fails():
+    with pytest.raises(ClaudeUnavailable):
+        [t async for t in Claude(FakeAnthropic([connection_error()])).talk(TALK_TURNS)]
+
+
+def test_talk_prompt_answers_how_to_say():
+    assert "how to say" in prompts.TALK_SYSTEM.lower()
+    assert "Never correct" in prompts.TALK_SYSTEM
+
+
+FIX_ITEMS = [{"idx": 3, "said": "I go.", "fixed": "I went.", "why_ko": "지난 일이에요.",
+              "sound": {"heard": "", "meant": "", "say_ko": ""}}]
+
+
+async def test_fixes_sends_the_conversation_and_reads_items():
+    fake = FakeAnthropic([json.dumps({"items": FIX_ITEMS})])
+    conversation = [{"차례": 0, "말한 사람": "라이언", "말": "Hi!"}, {"차례": 3, "말한 사람": "학습자", "말": "I go."}]
+    out = await Claude(fake).fixes(conversation)
+    assert out == FIX_ITEMS
+    r = fake.requests[0]
+    assert r["system"] == prompts.FIX_SYSTEM and r["model"] == "claude-sonnet-5-5"
+    assert r["output_config"]["format"]["schema"] == prompts.FIX_SCHEMA
+    assert r["max_tokens"] == 1500 and fake.options == []
+    assert json.loads(r["messages"][0]["content"]) == {"대화": conversation}
+
+
+async def test_fixes_bad_json_is_unavailable():
+    with pytest.raises(ClaudeUnavailable):
+        await Claude(FakeAnthropic(["not json"])).fixes([])
+    with pytest.raises(ClaudeUnavailable):
+        await Claude(FakeAnthropic([json.dumps({"other": []})])).fixes([])
 
 
 async def _aside_out(pieces) -> list[str]:

@@ -55,3 +55,26 @@ def test_tips_say_shadowing_and_are_not_fixed_lines():
     assert len(TIPS) == 5 and all("섀도잉" in t for t in TIPS)
     assert TIPS[4] == "섀도잉하기 전에, 어디를 세게 읽고 어디를 이어 읽는지 잘 들어 보세요."
     assert not set(TIPS) & set(PHRASES.values())
+
+
+def test_openers_are_short_everyday_questions():
+    # spec free-talk-design 2: ten light questions, no Korean, each easy to answer in a few words
+    import re
+
+    from je_server.phrases import TALK_OPENERS
+
+    assert len(TALK_OPENERS) == 10 and len(set(TALK_OPENERS)) == 10
+    for q in TALK_OPENERS:
+        assert q.endswith("?") and len(q.split()) <= 12 and not re.search(r"[가-힣]", q)
+
+
+def test_talk_phrases():
+    import re
+
+    from je_server.phrases import TALK_ENGLISH
+
+    # inside a free talk Ryan speaks only English (2026-11-08 user): one easy English line, not in the Korean table
+    assert "talk_english" not in PHRASES
+    assert TALK_ENGLISH == "Could you try that in English? Short is fine."
+    assert not re.search(r"[가-힣]", TALK_ENGLISH) and len(TALK_ENGLISH.split()) <= 12
+    assert PHRASES["talk_no_fixes"] == "이번 대화에서는 고칠 곳을 찾지 못했어요. 수고했어요."

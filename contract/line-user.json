@@ -88,5 +88,8 @@
  },
  "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
  "ko": "커피 한 잔 주세요.",
- "ko_audio": null
+ "ko_audio": null,
+ "parts": null,
+ "heard_upto": null,
+ "fix": null
 }

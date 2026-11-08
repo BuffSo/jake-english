@@ -110,6 +110,25 @@ class Store:
     def save_tip(self, day: str, next_: int) -> None:
         self._write(self.root / "tip.json", json.dumps({"day": day, "next": next_}))
 
+    # --- free talk: the turn of Ryan's next first question (spec free-talk-design 2) ---------------------------------
+
+    def load_talk(self) -> int:
+        """The turn of the next first question. A missing or unreadable file reads as the first one."""
+        path = self.root / "talk.json"
+        if not path.exists():
+            return 0
+        try:
+            nxt = json.loads(path.read_text(encoding="utf-8"))["next"]
+            if not isinstance(nxt, int) or isinstance(nxt, bool) or nxt < 0:
+                raise ValueError
+        except (ValueError, TypeError, KeyError):
+            log.warning("unreadable talk.json: starting the first questions over")
+            return 0
+        return nxt
+
+    def save_talk(self, next_: int) -> None:
+        self._write(self.root / "talk.json", json.dumps({"next": next_}))
+
     def load(self, rp_id: str) -> Roleplay:
         path = self._dir(rp_id) / "roleplay.json"
         if not path.exists():
@@ -129,7 +148,7 @@ class Store:
 
     def recent_situations(self, n: int = 10, topic: str = topics.OTHER) -> list[str]:
         """The topic's latest situations, for Jake to avoid. A roleplay from before topics counts as 「그 밖의 상황」."""
-        found = [(rp.created, rp.situation) for rp in self.all() if (rp.topic or topics.OTHER) == topic]
+        found = [(rp.created, rp.situation) for rp in self.all() if rp.kind != "talk" and (rp.topic or topics.OTHER) == topic]
         return [s for _, s in sorted(found, reverse=True)[:n]]
 
     def next_rec(self, rp_id: str, idx: int) -> tuple[int, Path]:

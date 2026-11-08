@@ -19,6 +19,9 @@ const lines: ScriptLine[] = texts.map(([speaker, text], idx) => ({
   audio: null,
   ko: null,
   ko_audio: null,
+  parts: null,
+  heard_upto: null,
+  fix: null,
 }));
 const roleplay: Roleplay = {
   id: RP,
@@ -31,6 +34,7 @@ const roleplay: Roleplay = {
   origin: null,
   topic: null,
   pick: null,
+  kind: "roleplay",
 };
 const resume = (at: number, said: Resume["said"], ended = false): Resume => ({
   roleplay: { ...roleplay, pos: at },

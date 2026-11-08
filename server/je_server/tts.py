@@ -16,7 +16,7 @@ import json
 import logging
 import os
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from pathlib import Path
 from typing import Literal
 
@@ -93,6 +93,8 @@ class Voice:
         # the reference recordings' fingerprints by worker voice and language, from the worker's {"ready": true}
         # (`tts_worker.ref_prints`); read again whenever a worker starts, so a new recording counts after a restart
         self.refs: dict[str, dict[str, str]] = {}
+        # keys of urgent sounds not made yet whose reply was cut off (`demote`); dropped once made
+        self.demoted: set[str] = set()
 
     def path(self, key: str) -> Path:
         return self.audio_dir / f"{key}.m4a"
@@ -140,17 +142,31 @@ class Voice:
         if fut is None:
             fut = asyncio.get_running_loop().create_future()
             self.inflight[key] = fut
+        if urgent:
+            # a new reply's sound is not the cut-off reply's rest, even when the sentence is the same
+            self.demoted.discard(key)
         # an urgent ask for a queued prepared job queues it again in front; the consumer skips duplicates
         self.queue.put_nowait((0 if urgent else 1, 0 if urgent else rank, next(self.seq), key, text, voice, lang,
                                check))
         await asyncio.shield(fut)
         return key
 
+    def demote(self, keys: Iterable[str]) -> None:
+        """Puts the rest of a cut-off reply's urgent sounds behind newer urgent ones (and still before prepared ones).
+        Spec free-talk 2 「끊은 말의 남은 소리」: there is one voice worker, so the 1-3 s the rest of the old reply
+        still needs would sit in front of the first sentence of the new reply. Only keys not made yet count."""
+        self.demoted.update(k for k in keys if not self.path(k).exists())
+
     async def _consume(self) -> None:
         while True:
-            _, _, _, key, text, voice, lang, check = await self.queue.get()
+            pri, rank, seq, key, text, voice, lang, check = await self.queue.get()
             fut = self.inflight.get(key)
             if fut is None or fut.done():
+                self.demoted.discard(key)
+                continue
+            if pri == 0 and rank == 0 and key in self.demoted:
+                # urgent ranks are always 0, so rank 1 puts it behind every new urgent job, before prepared ones
+                self.queue.put_nowait((0, 1, seq, key, text, voice, lang, check))
                 continue
             try:
                 await self._make(key, text, voice, lang, check)
@@ -159,6 +175,7 @@ class Voice:
                 fut.set_exception(e if isinstance(e, VoiceError) else VoiceError(type(e).__name__))
             finally:
                 self.inflight.pop(key, None)
+                self.demoted.discard(key)
 
     async def _make(self, key: str, text: str, voice: str, lang: str, check: bool = False) -> None:
         tmp = self.tmp_dir / f"{key}.m4a"

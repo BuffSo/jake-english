@@ -14,7 +14,7 @@ function deferred<T>(): Deferred<T> {
 }
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
-const plain: ScriptLine = { idx: 2, speaker: "ryan", text: "What can I get you?", kind: "script", three: null, audio: null, ko: null, ko_audio: null };
+const plain: ScriptLine = { idx: 2, speaker: "ryan", text: "What can I get you?", kind: "script", three: null, audio: null, ko: null, ko_audio: null, parts: null, heard_upto: null, fix: null };
 const KEY = "c".repeat(64);
 
 function setup(allowed = true) {

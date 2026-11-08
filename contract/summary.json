@@ -13,7 +13,10 @@
     "three": null,
     "audio": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "ko": null,
-    "ko_audio": null
+    "ko_audio": null,
+    "parts": null,
+    "heard_upto": null,
+    "fix": null
    },
    "tries": [],
    "first": null
@@ -27,7 +30,10 @@
     "three": null,
     "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "ko": null,
-    "ko_audio": null
+    "ko_audio": null,
+    "parts": null,
+    "heard_upto": null,
+    "fix": null
    },
    "tries": [
     {
@@ -56,7 +62,10 @@
     "three": null,
     "audio": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "ko": null,
-    "ko_audio": null
+    "ko_audio": null,
+    "parts": null,
+    "heard_upto": null,
+    "fix": null
    },
    "tries": [],
    "first": null
@@ -70,7 +79,10 @@
     "three": null,
     "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     "ko": null,
-    "ko_audio": null
+    "ko_audio": null,
+    "parts": null,
+    "heard_upto": null,
+    "fix": null
    },
    "tries": [
     {

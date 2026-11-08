@@ -43,7 +43,7 @@ def spoken(rp: Roleplay) -> bool:
 def _groups(rps: list[Roleplay]) -> dict[str, list[Roleplay]]:
     out: dict[str, list[Roleplay]] = {}
     for rp in rps:
-        if spoken(rp):
+        if rp.kind != "talk" and spoken(rp):
             out.setdefault(group_of(rp), []).append(rp)
     return out
 
@@ -103,6 +103,8 @@ def unrecorded(rp: Roleplay) -> list[int]:
 def to_resume(rps: list[Roleplay]) -> Roleplay | None:
     """The newest roleplay, when a line of mine is left unrecorded in it. Only the newest: an older one is not looked
     for, since a new conversation was started after it (spec resume-roleplay 1, resume-unrecorded 2)."""
+    # a free talk is left out, so doing one does not hide the roleplay left midway (spec free-talk-design 8)
+    rps = [r for r in rps if r.kind != "talk"]
     if not rps:
         return None
     rp = max(rps, key=lambda r: (r.created, r.id))

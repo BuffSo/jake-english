@@ -159,3 +159,58 @@ describe("다시 연습 calls", () => {
     expect(JSON.parse(init.body as string)).toEqual({ rp_id: "a1b2c3d4e5f6", idx: 2, on: true });
   });
 });
+
+test("talkTurn posts the recording with how much of Ryan was heard", async () => {
+  const f = jest.fn(async () =>
+    streamOf(['{"type":"heard","text":"hi","n":1,"idx":1,"korean":false}\n{"type":"text","delta":"Nice"}\n', '{"type":"done","idx":2}\n']),
+  );
+  const events: unknown[] = [];
+  await makeApi(URL, TOKEN, f as never, noFile).talkTurn("x", "file:///rec.m4a", 1, (e) => events.push(e));
+  const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe(`${URL}/talks/x/turns?heard=1`);
+  expect(init.method).toBe("POST");
+  expect((init.headers as Record<string, string>)["Content-Type"]).toBe("audio/mp4");
+  expect(events.map((e) => (e as { type: string }).type)).toEqual(["heard", "text", "done"]);
+});
+
+test("talkTurn without a cut has no query", async () => {
+  const f = jest.fn(async () => streamOf([]));
+  await makeApi(URL, TOKEN, f as never, noFile).talkTurn("x", "file:///rec.m4a", null, () => {});
+  expect((f.mock.calls[0] as unknown as [string])[0]).toBe(`${URL}/talks/x/turns`);
+});
+
+test("endTalk posts and reads the fixes", async () => {
+  const end = { items: [], say: null };
+  const f = jest.fn(async () => json(200, end));
+  expect(await makeApi(URL, TOKEN, f as never, noFile).endTalk("x", null)).toEqual(end);
+  const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe(`${URL}/talks/x/end`);
+  expect(init.method).toBe("POST");
+  await makeApi(URL, TOKEN, f as never, noFile).endTalk("x", 2);
+  expect((f.mock.calls[1] as unknown as [string])[0]).toBe(`${URL}/talks/x/end?heard=2`);
+});
+
+test("createTalk posts", async () => {
+  const f = jest.fn(async () => json(200, { id: "x" }));
+  expect(await makeApi(URL, TOKEN, f as never, noFile).createTalk()).toEqual({ id: "x" });
+  const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe(`${URL}/talks`);
+  expect(init.method).toBe("POST");
+});
+
+test("createTalk on an old server (404) rejects as not_found", async () => {
+  const f = jest.fn(async () => json(404, {}));
+  const err = await makeApi(URL, TOKEN, f as never, noFile).createTalk().catch((e) => e);
+  expect(err).toBeInstanceOf(ApiError);
+  expect(err.code).toBe("not_found");
+});
+
+test("endTalk surfaces a 409 and a 503", async () => {
+  const busy = await makeApi(URL, TOKEN, (async () => json(409, {})) as never, noFile).endTalk("x", null).catch((e) => e);
+  expect(busy).toBeInstanceOf(ApiError);
+  expect(busy.code).toBe("unknown");
+  const down = await makeApi(URL, TOKEN, (async () => json(503, { code: "claude_unavailable" })) as never, noFile)
+    .endTalk("x", null)
+    .catch((e) => e);
+  expect(down.code).toBe("claude_unavailable");
+});

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import anthropic
@@ -9,7 +10,13 @@ import httpx2
 
 from je_server.asr import WhisperError
 from je_server.claude import ClaudeUnavailable
-from je_server.models import Frame, Syllable, ThreeLine, Word
+from je_server.models import Frame, Roleplay, Syllable, ThreeLine, Word
+
+
+def talk_example() -> Roleplay:
+    """The free-talk record of contract/talk.json, as the model reads it."""
+    path = Path(__file__).resolve().parents[2] / "contract" / "talk.json"
+    return Roleplay.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def noted(text: str) -> ThreeLine:
@@ -159,6 +166,13 @@ class FakeClaude:
         # pieces given before aside() fails; 0 fails at once. Not fail_next: background notes may take that first.
         self.aside_fail_after: int | None = None
         self.endings: list[str] = []  # the ending recommend() was given, in order
+        self.talk_calls: list[list[dict]] = []  # the messages each talk() was given
+        self.talk_gate = None  # an asyncio.Event to hold talk before its first piece until set
+        self.talk_pieces = ["Sounds fun! ", "I walk there too. ", "Was it busy?"]
+        self.talk_fail_after: int | None = None  # pieces given before talk() fails
+        self.fix_calls: list[list[dict]] = []  # the conversation each fixes() was given
+        self.fix_items: list[dict] = []  # what fixes() picks
+        self.fix_gate = None  # an asyncio.Event to hold fixes until set
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -210,6 +224,37 @@ class FakeClaude:
             yield piece
 
 
+def _talk_method():
+    async def talk(self, messages):
+        self.talk_calls.append(messages)
+        self._maybe_fail()
+        if self.talk_gate is not None:
+            await self.talk_gate.wait()
+        for n, piece in enumerate(self.talk_pieces):
+            if self.talk_fail_after is not None and n >= self.talk_fail_after:
+                raise ClaudeUnavailable("fake")
+            yield piece
+
+    return talk
+
+
+FakeClaude.talk = _talk_method()
+
+
+def _fixes_method():
+    async def fixes(self, conversation):
+        self.fix_calls.append(conversation)
+        self._maybe_fail()
+        if self.fix_gate is not None:
+            await self.fix_gate.wait()
+        return self.fix_items
+
+    return fixes
+
+
+FakeClaude.fixes = _fixes_method()
+
+
 class FakeVoice:
     """Returns sound keys without making sound; writes a small placeholder so file routes work."""
 
@@ -223,6 +268,10 @@ class FakeVoice:
         self.fail_text: str | None = None
         # the worker's reference fingerprints by its voice name and language (`tts.Voice.refs`); none by default
         self.refs: dict[str, dict[str, str]] = {}
+        self.demoted: list[str] = []  # keys passed to `demote` (`tts.Voice.demote`)
+
+    def demote(self, keys):
+        self.demoted.extend(keys)
 
     async def start(self):
         self.audio_dir.mkdir(parents=True, exist_ok=True)
@@ -263,6 +312,8 @@ class FakeWhisper:
         self.langs: list[str] = []
         self.auto_text: str | None = None  # what auto-detection hears; None: the same as `text`
         self.auto_lang = "english"
+        self.by_lang: dict[str, str] = {}  # what transcribe hears by language; `text` for the rest
+        self.fail_lang: str | None = None  # transcribe in this language raises WhisperError
         self.auto_fail = False  # transcribe_auto raises WhisperError, as when whisper-server cannot answer
 
     async def start(self):
@@ -274,7 +325,9 @@ class FakeWhisper:
     async def transcribe(self, wav, lang):
         self.calls += 1
         self.langs.append(lang)
-        return self.text
+        if lang == self.fail_lang:
+            raise WhisperError("fake")
+        return self.by_lang.get(lang, self.text)
 
     async def transcribe_auto(self, wav):
         self.calls += 1

@@ -4,6 +4,7 @@ import * as path from "path";
 import { NdjsonSplitter } from "./ndjson";
 import {
   EVENT_TYPES,
+  FIX_KEYS,
   HEARD_TRY_KEYS,
   ISSUE_KEYS,
   LINE_KEYS,
@@ -14,6 +15,9 @@ import {
   SAVED_KEYS,
   SUMMARY_KEYS,
   SYLLABLE_KEYS,
+  TALK_END_KEYS,
+  TALK_EVENT_TYPES,
+  TALK_ITEM_KEYS,
   TOPIC_KEYS,
   TRANSCRIPT_KEYS,
   TRY_KEYS,
@@ -25,6 +29,8 @@ import past from "../../../contract/past.json";
 import saved from "../../../contract/saved.json";
 import homeTopics from "../../../contract/home-topics.json";
 import resume from "../../../contract/resume.json";
+import talk from "../../../contract/talk.json";
+import talkEnd from "../../../contract/talk-end.json";
 
 const sorted = (a: readonly string[]) => [...a].sort();
 
@@ -74,4 +80,29 @@ test("resume example has the keys the situation screen reads", () => {
   expect(sorted(Object.keys(resume.resume.roleplay))).toEqual(sorted(ROLEPLAY_KEYS));
   expect(resume.resume.said.length).toBeGreaterThan(0);
   for (const s of resume.resume.said) expect(sorted(Object.keys(s))).toEqual(sorted(HEARD_TRY_KEYS));
+});
+
+test("talk example has the keys the talk screens read", () => {
+  expect(sorted(Object.keys(talk))).toEqual(sorted(ROLEPLAY_KEYS));
+  for (const l of talk.lines) {
+    expect(sorted(Object.keys(l))).toEqual(sorted(LINE_KEYS));
+    if (l.fix) expect(sorted(Object.keys(l.fix))).toEqual(sorted(FIX_KEYS));
+  }
+});
+
+test("talk events example types are known", () => {
+  const text = fs.readFileSync(path.join(__dirname, "../../../contract/talk-events.ndjson"), "utf8");
+  const events = new NdjsonSplitter().push(text) as { type: string }[];
+  expect(events.length).toBeGreaterThan(3);
+  for (const e of events) expect(TALK_EVENT_TYPES).toContain(e.type);
+});
+
+test("talk end example has the keys the review screen reads", () => {
+  expect(sorted(Object.keys(talkEnd))).toEqual(sorted(TALK_END_KEYS));
+  expect(talkEnd.items.length).toBeGreaterThan(0);
+  for (const i of talkEnd.items) {
+    expect(sorted(Object.keys(i))).toEqual(sorted(TALK_ITEM_KEYS));
+    expect(sorted(Object.keys(i.line))).toEqual(sorted(LINE_KEYS));
+    expect(sorted(Object.keys(i.line.fix))).toEqual(sorted(FIX_KEYS));
+  }
 });

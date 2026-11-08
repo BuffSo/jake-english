@@ -21,7 +21,29 @@ PHRASES: dict[str, str] = {
     "retry_offscript": "이번에는 대사를 그대로 따라 말해 볼까요?",
     "claude_down": "지금은 제가 대답할 수 없어요. 맥의 인터넷 연결을 확인해 주세요.",
     "too_long": "녹음이 너무 길어요. 한 문장씩 짧게 말해 볼까요?",
+    # free talk (spec free-talk-design 2): said when the talk had nothing to fix
+    "talk_no_fixes": "이번 대화에서는 고칠 곳을 찾지 못했어요. 수고했어요.",
 }
+
+# Said when the 「말하기」 of a free talk came out in Korean (spec free-talk-design 3). English, in Ryan's English voice:
+# inside a free talk Ryan speaks only English (2026-11-08 user). Easy words; not in PHRASES, which are Korean.
+TALK_ENGLISH = "Could you try that in English? Short is fine."
+
+# Ryan's first question in a free talk (spec free-talk-design 2): a light everyday question, no Korean introduction,
+# taken in turn, not at random. The turn of the next one is kept in the Mac's records folder (`Store.load_talk`), so a
+# restart goes on from where it was. Made up: no real people or places.
+TALK_OPENERS: tuple[str, ...] = (
+    "Hi! What did you do today?",
+    "What did you have for lunch today?",
+    "Do you have any plans for this weekend?",
+    "What have you been enjoying lately?",
+    "How was your morning?",
+    "What did you do last weekend?",
+    "Are you a morning person or a night person?",
+    "What do you usually do after work?",
+    "Have you watched anything good recently?",
+    "What's the weather like where you are today?",
+)
 
 # Ryan's shadowing tip: one of these, in turn, said after the question on the day's first start, voice only (spec
 # docs/superpowers/specs/2026-11-08-ryan-shadowing-tip-design.md 2, 3). Each has the word 「섀도잉」 (user). Wording: no

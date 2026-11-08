@@ -36,21 +36,48 @@ class Frame(BaseModel):
     goal_ko: str
 
 
+class Said(BaseModel):
+    text: str
+    audio: str
+
+
 Speaker = Literal["ryan", "user"]
 Draft = list[tuple[Speaker, str]]
+
+# script: a roleplay's line. reply: Ryan's English line (in a free talk also the first question); in records from before
+# 2026-11-07 it is also Ryan's in-role answer to something said differently from the line. The rest are free talk only
+# (spec free-talk-design 2): turn is my English turn, ask my Korean turn, help Ryan's fixed English line after it
+# (`TALK_ENGLISH`, asking for English), and fix the corrected sentence (said by `user`) that the closing 「대화 돌아보기」
+# shows.
+LineKind = Literal["script", "reply", "turn", "ask", "help", "fix"]
+
+
+class Fix(BaseModel):
+    """What the closing review says about one of my English turns (spec free-talk-design 2). The line's `text` is the
+    corrected sentence and its `audio` the model sound of it."""
+
+    of: int  # the line number of my turn that was corrected
+    said: str  # the one sentence of that turn that had the problem, as it was heard
+    why_ko: str  # Ryan's explanation in Korean, with the sound list's explanation when a mispronunciation is guessed
+    why_audio: str | None = None  # sound key of Ryan saying why_ko in Korean
 
 
 class ScriptLine(BaseModel):
     idx: int
     speaker: Speaker
     text: str
-    kind: Literal["script", "reply"] = "script"
+    kind: LineKind = "script"
     three: ThreeLine | None = None
     audio: str | None = None  # sound key (sha256 hex) of Ryan reading the line
     # Sohee's Korean for the line and the sound key of her saying it (spec korean-translation 5): made when asked, but a
     # list pick's lines start with the Korean written in the repository and their sound is made ahead (todo 13)
     ko: str | None = None
     ko_audio: str | None = None
+    # free talk only (spec free-talk-design 2, 8): Ryan's answer sentence by sentence with the sound of each
+    parts: list[Said] | None = None
+    # how many sentences of the answer were heard when I cut it off; None when heard to the end
+    heard_upto: int | None = None
+    fix: Fix | None = None
 
 
 class Issue(BaseModel):
@@ -100,6 +127,9 @@ class Roleplay(BaseModel):
     # the list line's id (je_server.topics) when picked from a topic's list; runs of one pick share one group
     # (spec fixed-list-scripts 5, ADR-0013). None on other roleplays and on records from before.
     pick: str | None = None
+    # a free talk has no script and stays out of the past-situation list, resuming, recent situations and copying;
+    # records from before free talk are roleplays
+    kind: Literal["roleplay", "talk"] = "roleplay"
 
 
 class Saved(BaseModel):
@@ -110,8 +140,3 @@ class Saved(BaseModel):
     rp_id: str
     idx: int
     at: str  # when it was saved, ISO to the second
-
-
-class Said(BaseModel):
-    text: str
-    audio: str

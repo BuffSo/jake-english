@@ -20,7 +20,9 @@ from .auth import RequestGuard, token_checker
 from .claude import ClaudeUnavailable
 from .config import Settings
 from .engine import Engine, NotFound, TooLong
+from .asr import WhisperError
 from .models import Mode
+from .talk import Talks, TalkBusy, TalkEnded
 from .tts import VoiceError
 
 log = logging.getLogger("je_server")
@@ -40,6 +42,12 @@ class Services:
     engine: Engine
     voice: Any
     whisper: Any
+    talks: Talks | None = None
+
+    def __post_init__(self) -> None:
+        # one Talks for the whole app: its busy and ending guards are per instance (spec 2, 6)
+        if self.talks is None:
+            self.talks = Talks(self.engine)
 
     async def start(self) -> None:
         await self.whisper.start()
@@ -55,7 +63,7 @@ def build_services(settings: Settings) -> Services:
     import anthropic
 
     from .asr import Whisper
-    from .claude import QUICKS, WRITERS, Claude
+    from .claude import QUICKS, TALKERS, WRITERS, Claude
     from .store import Store
     from .tts import Voice
 
@@ -64,9 +72,11 @@ def build_services(settings: Settings) -> Services:
     voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir, hear=whisper.hear)
     writer, quick = WRITERS[settings.claude_writer], QUICKS[settings.claude_quick]
     recommender = QUICKS[settings.claude_recommend]
-    log.info("claude models: writer %s, quick %s, recommend %s", writer["model"], quick["model"], recommender["model"])
+    talker = TALKERS[settings.claude_talk]
+    log.info("claude models: writer %s, quick %s, recommend %s, talk %s", writer["model"], quick["model"],
+             recommender["model"], talker["model"])
     claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30),
-                    writer=writer, quick=quick, recommender=recommender)
+                    writer=writer, quick=quick, recommender=recommender, talker=talker)
     return Services(engine=Engine(store, claude, voice, whisper), voice=voice, whisper=whisper)
 
 
@@ -156,6 +166,11 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
 
     def claude_down() -> ApiError:
         return ApiError(503, "claude_unavailable", engine().said("claude_down").model_dump())
+
+    def talks() -> Talks:
+        if services is None:
+            raise ApiError(503, "not_ready")
+        return services.talks
 
     @router.get("/health")
     def health() -> dict:
@@ -332,6 +347,47 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
             return engine().summary(rp_id)
         except NotFound:
             raise ApiError(404, "not_found") from None
+
+    # --- free talk (spec free-talk-design 2, 6, 7). Like every route, behind the token; the recording comes through
+    # `read_body` (5 MB); ids are checked by `ID`, `heard` is a count 0..50 ---------------------------------------
+
+    @router.post("/talks")
+    async def create_talk() -> dict:
+        return (await talks().create()).model_dump(mode="json")  # a VoiceError is kept inside `create`
+
+    @router.post("/talks/{rp_id}/turns")
+    async def talk_turn(request: Request, rp_id: str = PathParam(pattern=ID),
+                        heard: int | None = Query(None, ge=0, le=50)):
+        body = await read_body(request)
+        try:
+            talks().check_open(rp_id)  # before streaming, so a refusal is a status and not a line
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except TalkEnded:
+            raise ApiError(409, "ended") from None
+        except TalkBusy:
+            raise ApiError(409, "busy") from None
+
+        async def lines():
+            try:
+                async for ev in talks().turn(rp_id, body, heard):
+                    yield json.dumps(ev, ensure_ascii=False) + "\n"
+            except WhisperError:
+                # whisper could not hear it: an error event the app shows, not a stream that breaks off
+                yield json.dumps(engine().error("no_speech"), ensure_ascii=False) + "\n"
+
+        return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+    @router.post("/talks/{rp_id}/end")
+    async def end_talk(rp_id: str = PathParam(pattern=ID), heard: int | None = Query(None, ge=0, le=50)) -> dict:
+        try:
+            return await talks().end(rp_id, heard)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except TalkBusy:
+            raise ApiError(409, "busy") from None
+        except ClaudeUnavailable:
+            raise claude_down() from None
 
     app.include_router(router)
     return app

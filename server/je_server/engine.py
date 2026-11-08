@@ -8,20 +8,22 @@ import os
 import re
 import threading
 import time
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from datetime import date, datetime
 from pathlib import Path
+from typing import Literal
 
 from . import audio
 from .asr import WhisperError
 from .claude import ClaudeUnavailable, pick_ending
 from . import topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, korean_said, praise_candidates, similarity, words
+from .fixes import line_before
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
 from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
 from .tts import VoiceError
-from .phrases import PHRASES, TIPS
+from .phrases import PHRASES, TALK_ENGLISH, TALK_OPENERS, TIPS
 from .review import (first_try, group_of, kept_tries, latest_run, past_items, resume_start, said_on, sentence_key,
                      to_resume)
 from .store import Store
@@ -74,6 +76,10 @@ class Engine:
     def said(self, name: str) -> Said:
         return self._ryan_said(PHRASES[name])
 
+    def talk_english(self) -> Said:
+        """The fixed line for Korean said in a free talk: English, in Ryan's English voice (2026-11-08 user)."""
+        return Said(text=TALK_ENGLISH, audio=self.voice.key("ryan", "english", TALK_ENGLISH))
+
     def _ryan_said(self, text: str) -> Said:
         return Said(text=text, audio=self.voice.key("ryan", "korean", text))
 
@@ -98,6 +104,8 @@ class Engine:
         # made once and played many times, so heard back (check); the tips too, said once a day
         for text in [*PHRASES.values(), *TIPS]:
             await self.voice.say(text, "ryan", "korean", urgent=False, check=True)
+        for text in (*TALK_OPENERS, TALK_ENGLISH):  # Ryan's first questions of a free talk and the line for Korean
+            await self.voice.say(text, "ryan", "english", urgent=False, check=True)
 
     # --- helpers ------------------------------------------------------------------------------
 
@@ -118,8 +126,14 @@ class Engine:
 
     @staticmethod
     def context(rp: Roleplay, idx: int) -> str:
-        near = [f"{l.speaker}: {l.text}" for l in rp.lines[max(idx - 1, 0): idx + 2] if l.idx != idx]
-        return f"장소: {rp.frame.place_ko}. " + " / ".join(near)
+        if rp.lines[idx].fix is not None:
+            # a fix line stands in for the turn it fixes, so its 「앞 대사」 is Ryan's line before that turn and nothing
+            # follows it (spec free-talk-design 8)
+            before = line_before(rp, idx)
+            near = [before] if before is not None else []
+        else:
+            near = [l for l in rp.lines[max(idx - 1, 0): idx + 2] if l.idx != idx]
+        return f"장소: {rp.frame.place_ko}. " + " / ".join(f"{l.speaker}: {l.text}" for l in near)
 
     async def update_line(self, rp_id: str, idx: int, text: str, **changes) -> None:
         async with self.lock(rp_id):
@@ -232,6 +246,8 @@ class Engine:
         record and its tries stay as they are. A list pick plays its script as it is now in the repository; one
         taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
+        if old.kind == "talk":
+            raise NotFound(rp_id)  # a free talk has no script to play again (spec free-talk-design 「하지 않을 것」)
         # outside any try: a KeyError from inside create_pick is a bug, not a pick taken off the list (todo 08 1);
         # taken off the list, it is copied below
         if old.topic is not None and old.pick is not None and topics.listed(old.topic, old.pick) is not None:
@@ -264,17 +280,23 @@ class Engine:
 
     @staticmethod
     def ready(line: ScriptLine) -> bool:
-        """The line can be shown: its model sound is made. The learner's notes come apart (spec
+        """The line can be shown: its model sound is made, and for a fix line also Ryan's explanation, which the
+        closing review plays as it opens (spec free-talk-design 7). The learner's notes come apart (spec
         dont-wait-for-line-notes 1): the line starts as plain text and they open only when asked."""
-        return line.audio is not None
+        return line.audio is not None and (line.fix is None or line.fix.why_audio is not None)
 
     @staticmethod
     def prepared(line: ScriptLine) -> bool:
-        """Nothing is left to make: the sound, and the notes of a learner's line (Ryan's are made when asked)."""
-        return line.audio is not None and (line.speaker == "ryan" or line.three is not None)
+        """Nothing is left to make: the sounds (`ready`), and the notes of a learner's line (Ryan's are made when
+        asked). A fix line whose explanation sound failed once is made again when it is asked for."""
+        return Engine.ready(line) and (line.speaker == "ryan" or line.three is not None)
 
     async def _sound(self, rp_id: str, idx: int) -> None:
         _, line = self.get_line(rp_id, idx)
+        if line.fix is not None and line.fix.why_audio is None:
+            # Ryan's Korean explanation first: the closing review says it before the model sound is asked for
+            why = await self.voice.say(line.fix.why_ko, "ryan", "korean", urgent=False, rank=idx)
+            await self.update_line(rp_id, idx, line.text, fix=line.fix.model_copy(update={"why_audio": why}))
         if line.audio is None:
             key = await self.voice.say(line.text, "ryan", "english", urgent=False, rank=idx)
             await self.update_line(rp_id, idx, line.text, audio=key)
@@ -388,11 +410,17 @@ class Engine:
 
     async def _make_ko(self, rp_id: str, idx: int) -> str:
         rp, line = self.get_line(rp_id, idx)
-        # the lines around it as the conversation went: in a record from before 2026-11-07, Ryan's in-role reply
-        # answers what the learner actually said (spec 3)
-        went = self.history(rp, len(rp.lines))
-        before = went[idx - 1] if idx > 0 else None
-        after = went[idx + 1] if idx + 1 < len(went) else None
+        if line.fix is not None:
+            # a fix line stands in for the turn it fixes: Ryan's line before that turn, and nothing after (spec
+            # free-talk-design 8 「앞 대사」)
+            prev = line_before(rp, idx)
+            before, after = ((prev.speaker, prev.text) if prev is not None else None), None
+        else:
+            # the lines around it as the conversation went: in a record from before 2026-11-07, Ryan's in-role reply
+            # answers what the learner actually said (spec 3)
+            went = self.history(rp, len(rp.lines))
+            before = went[idx - 1] if idx > 0 else None
+            after = went[idx + 1] if idx + 1 < len(went) else None
         ko = await self.claude.interpret(rp.frame, (line.speaker, line.text), before, after)
         await self.update_line(rp_id, idx, line.text, ko=ko)
         return ko
@@ -548,7 +576,12 @@ class Engine:
             tries = rp.attempts.get(idx, [])
             last = next((i for i in range(len(tries) - 1, -1, -1) if not tries[i].aside), None)
             kept = ([tries[last]] if last is not None else []) + tries[0 if last is None else last + 1:][-ASIDES_KEPT:]
-            text = self._aside(self.claude.aside(rp.frame, self.history(rp, idx), line.text, heard, heard_ko, issues,
+            # a fix line is said in place of the turn it fixes, so the talk goes up to that turn (spec free-talk-design
+            # 8 「앞 대사」); a free talk is Ryan's English replies and my English turns, as Claude was given them
+            went = self.history(rp, line.fix.of if line.fix is not None else idx)
+            if rp.kind == "talk":
+                went = [(who, said_as) for (who, said_as), l in zip(went, rp.lines) if l.kind in ("reply", "turn")]
+            text = self._aside(self.claude.aside(rp.frame, went, line.text, heard, heard_ko, issues,
                                                  [(a.heard, a.issues, a.say_ko) for a in kept]))
             # a try at the line with points moves on like a followed one, so a line whisper keeps mishearing never
             # traps the learner (user, 2026-11-07); anything else is an aside and stays on the line
@@ -608,8 +641,12 @@ class Engine:
         yield NewSentence(("" if sent != sent.rstrip() else " ") + fixed)
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
-                    timings: dict[str, float], t0: float) -> AsyncIterator[dict]:
-        """Streams text events as they come and an audio event per finished sentence, in order."""
+                    timings: dict[str, float], t0: float, lang: Literal["korean", "english"] = "korean",
+                    on_text_end: Callable[[str], Awaitable[dict | None]] | None = None) -> AsyncIterator[dict]:
+        """Streams text events as they come and an audio event per finished sentence in Ryan's `lang` voice, in
+        order: feedback and teacher Ryan in Korean, a free-talk reply in English from its first sentence on (spec
+        free-talk-design 4). Once the text has ended without an error, `on_text_end` is given all of it and the event
+        it returns goes out at once, maybe between audio events: a free-talk reply is saved there (spec 2)."""
         out: asyncio.Queue = asyncio.Queue()
         sentences: asyncio.Queue = asyncio.Queue()
 
@@ -628,6 +665,8 @@ class Engine:
                         await sentences.put(s)
                 for s in buf.flush():
                     await sentences.put(s)
+                if on_text_end is not None and (ev := await on_text_end("".join(said))) is not None:
+                    await out.put(ev)
             except ClaudeUnavailable:
                 await out.put(self.error("claude_unavailable", "claude_down"))
             finally:
@@ -636,7 +675,7 @@ class Engine:
         async def make_audio():
             while (s := await sentences.get()) is not None:
                 try:
-                    key = await self.voice.say(s, "ryan", "korean", urgent=True)
+                    key = await self.voice.say(s, "ryan", lang, urgent=True)
                 except VoiceError:
                     log.info("feedback sentence voice failed")
                     continue

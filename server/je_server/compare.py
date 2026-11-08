@@ -230,6 +230,14 @@ def _listed(target_word: str, heard_word: str) -> tuple[tuple[str, str], str] | 
     return None
 
 
+def listed_sound(meant: str, heard: str) -> tuple[tuple[str, str], str] | None:
+    """`_listed` for one word each (free talk's sound guess): the dictionary sounds differ by two or fewer and the
+    changed sound is on the sound list. Several words on either side are not a guess the Mac can check."""
+    if len(meant.split()) != 1 or len(heard.split()) != 1:
+        return None
+    return _listed(meant, heard)
+
+
 def _issue(target: list[str], heard: list[str], found: tuple[tuple[str, str], str] | None) -> Issue:
     return Issue(target=" ".join(target), heard=" ".join(heard),
                  sound=found[0] if found else None, explain=found[1] if found else "")
