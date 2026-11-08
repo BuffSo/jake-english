@@ -2,12 +2,15 @@
 // (spec roleplay-practice 9). expo-audio's player is replaced by one the test finishes by hand.
 const mockFinish: ((s: { didJustFinish: boolean }) => void)[] = [];
 const mockPlayed: unknown[] = [];
+// what the queue asked of the player's pause and remove, in order
+const mockCalls: string[] = [];
 jest.mock("expo-audio", () => ({
   createAudioPlayer: () => ({
     addListener: (_: string, cb: (s: { didJustFinish: boolean }) => void) => mockFinish.push(cb),
     replace: (src: unknown) => mockPlayed.push(src),
     play: () => {},
-    pause: () => {},
+    pause: () => mockCalls.push("pause"),
+    remove: () => mockCalls.push("remove"),
   }),
 }));
 
@@ -16,6 +19,7 @@ import { SoundQueue } from "./player";
 beforeEach(() => {
   mockFinish.length = 0;
   mockPlayed.length = 0;
+  mockCalls.length = 0;
   jest.useFakeTimers();
 });
 
@@ -215,4 +219,47 @@ test("buffering reports with no progress do not hold the watchdog off", () => {
     report({ didJustFinish: false, playing: true, currentTime: 0, error: null });
   }
   expect(q.nowTag().tag).toBeNull();
+});
+
+// todo 20261108_42: a phone reinstall opened the app twice in one process. The first app root was closed, but its
+// queue played on: its greeting, asked for before the close, arrived after it, so Ryan's two lines sounded twice.
+describe("close", () => {
+  test("stops what plays and drops what waits", () => {
+    const q = new SoundQueue();
+    q.enqueue("a");
+    q.enqueue("b");
+    q.close();
+    finish();
+    expect(mockPlayed).toEqual(["a"]);
+    expect(q.isPlaying()).toBe(false);
+  });
+
+  test("a sound asked for after the close is not played", () => {
+    const q = new SoundQueue();
+    q.close();
+    q.enqueue("late");
+    q.enqueuePause(600);
+    expect(mockPlayed).toEqual([]);
+    expect(q.isPlaying()).toBe(false);
+  });
+
+  // expo-audio's `remove()` on Android only lets the player go: a greeting already playing plays on unless it is
+  // paused first (final review)
+  test("pauses what plays, then lets the phone's player go", () => {
+    const q = new SoundQueue();
+    q.enqueue("a");
+    q.close();
+    expect(mockCalls).toEqual(["pause", "remove"]);
+  });
+
+  // the screens under the root are taken down after it, and may still stop the queue or wait for quiet
+  test("after the close the player is left alone, and waiting for quiet ends at once", () => {
+    const q = new SoundQueue();
+    q.close();
+    q.clear();
+    expect(mockCalls).toEqual(["pause", "remove"]);
+    const done = jest.fn();
+    q.onIdle(done);
+    expect(done).toHaveBeenCalled();
+  });
 });

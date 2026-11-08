@@ -382,7 +382,8 @@ async def test_aside_streams_korean_on_the_writer_and_sends_only_text():
     issue = Issue(target="large", heard="launch", sound=("R", "N"), explain="")
     out = [d async for d in Claude(fake).aside(
         Frame(**FRAME), [("ryan", "What size?")], "A large one, please.", "A launch one, peace.", None,
-        [issue], [("다시 할게요", "괜찮아요. 다시 해 볼까요?")])]
+        [issue], [("A launch one, please.", [issue], "large가 launch처럼 들렸어요. 한 번 더 해 볼까요?"),
+                  ("다시 할게요", [], "괜찮아요. 다시 해 볼까요?")])]
     assert out == ["괜찮아요. ", "다시 해 볼까요?"]
     req = fake.requests[0]
     assert req["model"] == "claude-sonnet-5-5" and req["system"] == prompts.ASIDE_SYSTEM
@@ -391,7 +392,12 @@ async def test_aside_streams_korean_on_the_writer_and_sends_only_text():
     assert body["대사"] == "A large one, please." and body["들린 말(영어 받아쓰기)"] == "A launch one, peace."
     assert body["들린 말(한국어 받아쓰기)"] == ""
     assert body["짚을 것"] == [{"대사 낱말": "large", "들린 낱말": "launch", "소리 내는 법": ""}]
-    assert body["앞서 선생님에게 한 말"] == [{"들린 말": "다시 할게요", "라이언의 답": "괜찮아요. 다시 해 볼까요?"}]
+    # todo 40 1: the line's last try goes with what it pointed out, so a question about that point can be answered
+    assert body["이 대사의 앞 시도"] == [
+        {"들린 말": "A launch one, please.", "짚은 것": [{"대사 낱말": "large", "들린 낱말": "launch"}],
+         "라이언의 답": "large가 launch처럼 들렸어요. 한 번 더 해 볼까요?"},
+        {"들린 말": "다시 할게요", "짚은 것": [], "라이언의 답": "괜찮아요. 다시 해 볼까요?"}]
+    assert "앞서 선생님에게 한 말" not in body
     assert body["지금까지 대화"] == [{"speaker": "ryan", "text": "What size?"}]
 
 
@@ -434,6 +440,39 @@ def test_aside_prompt_keeps_a_given_tip_whole():
     p = prompts.ASIDE_SYSTEM
     assert "처음부터 끝까지 그대로 말해요" in p and "한쪽 소리만" in p
     assert '"짚을 것", "소리 내는 법", "받아쓰기"' in p
+
+
+def test_aside_prompt_answers_about_an_earlier_point():
+    # todo 40 1: asked about a point the try before made, teacher Ryan said he had pointed out nothing
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert '"이 대사의 앞 시도"' in p and "물을 때만" in p and "이어서 빨리 말하면" in p
+    # live, after the first fix: 「낱말 끝의 t 소리가 약하게 나면 lake처럼 들리기도 해요」, a sound guessed at
+    assert "어느 소리가 어떻게 났는지는 짐작해 말하지 않아요" in p
+    # todo 40 2's answer and a recording test after the fix told the learner to speak slowly or 또박또박
+    assert "천천히, 또박또박처럼 받지\n  않은 조언도 하지 않아요" in p
+    assert "앞서 선생님에게 한 말" not in p
+
+
+def test_aside_prompt_covers_a_try_without_points():
+    # todo 40 2: a try at the line heard as Korean came with no points; between 「only the points given」 and 「never
+    # say there are none」 teacher Ryan read his rules out (the material's name and what he would not say)
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert "받은 짚을 것이 없으면" in p and "대사와 조금 다르게 들렸어요" in p
+    rules = p[p.index("규칙:"):]
+    assert rules.splitlines()[1].startswith("- 답에는 학습자에게 하는 말만 써요")
+
+
+def test_aside_prompt_answers_a_remark_to_oneself():
+    # live after todo 40's first fixes: a sleepy remark got 「대사와는 상관없는 말로 들렸어요」 in 3 of 3; an example of
+    # answering the remark itself, like the app wish one
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert "짧게 맞장구치고" in p and "예(상황과 상관없는 혼잣말일 때)" in p
 
 
 def test_aside_prompt_points_to_skip():
@@ -718,3 +757,72 @@ async def test_fixes_bad_json_is_unavailable():
         await Claude(FakeAnthropic(["not json"])).fixes([])
     with pytest.raises(ClaudeUnavailable):
         await Claude(FakeAnthropic([json.dumps({"other": []})])).fixes([])
+
+
+async def _aside_out(pieces) -> list[str]:
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    return [d async for d in Claude(FakeAnthropic([pieces])).aside(Frame(**FRAME), [], "a", "b", None, [], [])]
+
+
+async def test_aside_drops_sentences_that_name_its_materials(caplog):
+    # todo 40 2: teacher Ryan read his rules out (the material's name, what he would not say); such a sentence
+    # never reaches the learner, and the log keeps only that one was dropped
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        out = await _aside_out(["짚을 것이 없으니 말하지 ", "않을게요. 갈래를 ", "갈라 말하지 않아요. 한 번 ",
+                                "더 해 볼까요?"])
+    assert "".join(out) == "한 번 더 해 볼까요?"
+    assert caplog.text.count("aside sentence dropped") == 2 and "짚을" not in caplog.text
+
+
+async def test_aside_drops_how_the_recording_was_sorted():
+    # live after todo 40's first fixes: the prompt's sorting and its word for the learner, said to the learner
+    out = await _aside_out(["학습자가 한국어로 혼잣말을 한 경우. ", "대사와는 상관없는 말로 들렸어요. ",
+                            "졸리신가 봐요. ", "다시 해 볼까요?"])
+    assert "".join(out) == "졸리신가 봐요. 다시 해 볼까요?"
+
+
+async def test_aside_keeps_a_sentence_that_only_ends_in_garae():
+    # PR #62 review: 「갈래」 alone also dropped 「넘어갈래요」, so the skip guidance could vanish
+    said = "「건너뛰기」를 누르면 다음 대사로 넘어갈래요? "
+    assert await _aside_out([said, "아니면 한 번 더 해 볼까요?"]) == [said, "아니면 한 번 더 해 볼까요?"]
+
+
+@pytest.mark.parametrize("said", ["「만지시면 안 돼요」라는 뜻이에요. ", "「직원의 지시를 따르세요」라는 뜻이에요. ",
+                                  "「안내 자료」라는 뜻이에요. ", "「같이 갈래요?」라는 뜻이에요. "])
+async def test_aside_keeps_meanings_with_words_like_the_prompts(said):
+    # final branch review: 「지시」 and 「자료」 as bare words dropped answers to what a line means
+    assert await _aside_out([said, "다시 해 볼까요?"]) == [said, "다시 해 볼까요?"]
+
+
+async def test_aside_cuts_after_a_closing_bracket():
+    # PR #62 review: a sentence ending in 「.」」 was not cut there, so the sentence after a dropped one went with it
+    out = await _aside_out(["「짚을 것」이 없다는 뜻이에요.」 ", "다시 해 볼까요?"])
+    assert out == ["다시 해 볼까요?"]
+
+
+async def test_aside_with_every_sentence_dropped_yields_nothing():
+    # nothing left: `Engine._aside` says the fixed phrase, as for an empty answer
+    assert await _aside_out(["짚을 곳이 없어요."]) == []
+
+
+async def test_aside_keeps_a_sentence_about_an_earlier_point():
+    # 「짚은」 answers a question about the try before (todo 40 1); only 「짚을」 is the prompt's word
+    assert await _aside_out(["아까 짚은 곳은 late예요. ", "한 번 더 해 볼까요?"]) == [
+        "아까 짚은 곳은 late예요. ", "한 번 더 해 볼까요?"]
+
+
+async def test_aside_cut_drops_a_leaking_piece():
+    import httpx2
+
+    from fakes import FRAME
+    from je_server.models import Frame
+
+    cut = httpx2.ReadError("cut", request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
+    got = []
+    with pytest.raises(ClaudeUnavailable):
+        async for d in Claude(FakeAnthropic([["괜찮아요. ", "짚을 것이", cut]])).aside(Frame(**FRAME), [], "a", "b",
+                                                                                     None, [], []):
+            got.append(d)
+    assert got == ["괜찮아요. "]

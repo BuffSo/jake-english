@@ -17,7 +17,7 @@ from . import audio
 from .asr import WhisperError
 from .claude import ClaudeUnavailable, pick_ending
 from . import topics
-from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
+from .compare import FOLLOW_MIN, find_issues, issue_ko, korean_said, praise_candidates, similarity, words
 from .fixes import line_before
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
 from .sentences import NewSentence, SentenceBuffer
@@ -32,7 +32,8 @@ log = logging.getLogger("je_server")
 LINE_WAIT = 120
 MAX_SECONDS = 60
 NEAR_MIN = 0.3  # below FOLLOW_MIN but at least this close to the line: a try at it, not something else
-# the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer
+# the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer; that
+# try goes too, for a question about what it pointed out (todo 40 1)
 ASIDES_KEPT = 3
 HANGUL = re.compile(r"[가-힣]")
 ENDS = (".", "?", "!")  # the marks SentenceBuffer cuts a sentence at
@@ -515,8 +516,9 @@ class Engine:
             heard = await self.whisper.transcribe(wav, "en")
             close = similarity(line.text, heard) if words(heard) else 0.0
             # Hangul in the English transcript is Korean that was said: the match counts English words only, so the
-            # line begun and then Korean would pass as followed (Jake-voice check, 2026-11-08)
-            followed = close >= FOLLOW_MIN and not HANGUL.search(heard)
+            # line begun and then Korean would pass as followed (Jake-voice check, 2026-11-08). Not a name of the
+            # line written in Hangul, though: that is a try at the line (spec teacher-answer-context 3)
+            followed = close >= FOLLOW_MIN and not korean_said(line.text, heard)
             if not followed:
                 # forced to English, whisper translates Korean or leaves it in Hangul (spec offscript-aside 2). Every
                 # recording that does not follow the line is asked again: a near one may be the line begun and then
@@ -529,7 +531,8 @@ class Engine:
                     # error carries the failure's type name only, never the transcript
                     log.info("auto transcription failed: %s", e)
                     auto, lang = "", ""
-                if lang == "korean" and HANGUL.search(auto):
+                # auto-detection hears a try with the line's name in Hangul as Korean too (todo 40 2)
+                if lang == "korean" and korean_said(line.text, auto):
                     heard_ko = auto
             # a try at the line that came out wrong: English and close to it, so it gets the Mac's points
             near = not followed and heard_ko is None and close >= NEAR_MIN
@@ -563,18 +566,19 @@ class Engine:
             # the Mac's points only for a try at the line; far from it, they would point at unrelated words
             if near:
                 issues = find_issues(line.text, heard, limit=2)
-            # 「바로 앞에」 (spec 3): only what came after the last try at the line (followed, with points, or an old
-            # record's), so an earlier practice's exchange is not sent along
+            # 「바로 앞에」 (spec 3): the last try at the line (followed, with points, or an old record's) and what came
+            # after it, so an earlier practice's exchange is not sent along. The try itself goes for a question about
+            # its points: without it Ryan said he had pointed out nothing (todo 40 1)
             tries = rp.attempts.get(idx, [])
-            since = next((i + 1 for i in range(len(tries) - 1, -1, -1) if not tries[i].aside), 0)
-            asides = tries[since:][-ASIDES_KEPT:]
+            last = next((i for i in range(len(tries) - 1, -1, -1) if not tries[i].aside), None)
+            kept = ([tries[last]] if last is not None else []) + tries[0 if last is None else last + 1:][-ASIDES_KEPT:]
             # a fix line is said in place of the turn it fixes, so the talk goes up to that turn (spec free-talk-design
             # 8 「앞 대사」); a free talk is Ryan's English replies and my English turns, as Claude was given them
             went = self.history(rp, line.fix.of if line.fix is not None else idx)
             if rp.kind == "talk":
                 went = [(who, said_as) for (who, said_as), l in zip(went, rp.lines) if l.kind in ("reply", "turn")]
             text = self._aside(self.claude.aside(rp.frame, went, line.text, heard, heard_ko, issues,
-                                                 [(a.heard, a.say_ko) for a in asides]))
+                                                 [(a.heard, a.issues, a.say_ko) for a in kept]))
             # a try at the line with points moves on like a followed one, so a line whisper keeps mishearing never
             # traps the learner (user, 2026-11-07); anything else is an aside and stays on the line
             nxt = idx + 1 if (mode == "turn" and issues) else idx
