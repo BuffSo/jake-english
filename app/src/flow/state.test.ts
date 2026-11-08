@@ -923,6 +923,13 @@ describe("resume", () => {
   };
   const resumed = () => reduce(situation, { type: "resumed", resume });
 
+  // spec record-feedback 3: a resumed conversation is a new run on this screen, so its first turn shows the hint
+  test("a resumed conversation shows 「🎤를 누르고 말하세요」 on its first turn", () => {
+    const s = reduce({ ...situation, micUsed: true }, { type: "resumed", resume });
+    expect(s.micUsed).toBe(false);
+    expect(showMicHint(reduce(s, { type: "lineLoaded", line: { ...userLine, idx: 3 } }))).toBe(true);
+  });
+
   test("resuming opens the roleplay at its line with what was said before", () => {
     const s = resumed();
     expect([s.screen, s.idx, s.phase, s.mode]).toEqual(["roleplay", 2, "loading", "turn"]);
