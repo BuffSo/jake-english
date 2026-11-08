@@ -1,7 +1,8 @@
 // What the roleplay screen sent and left running when the learner went back: an evaluation and a skip move the
-// conversation's place on the Mac, and the evaluation moves it only when it has finished, a few seconds later. The
-// situation screen asks where to resume after them, or it would offer the line just said again (spec
-// docs/superpowers/specs/2026-11-08-resume-roleplay-design.md 4, found by the builder check).
+// conversation's place on the Mac, and the evaluation records the line and moves the place only when it has finished,
+// a few seconds later. The situation screen asks where to resume after them, or it would offer the line just said
+// again (spec docs/superpowers/specs/2026-11-08-resume-roleplay-design.md 4, found by the builder check; a line counts
+// as recorded once that try is kept, spec 2026-11-08-resume-unrecorded-design.md 1).
 
 // as long as a request may run before the app gives it up (`TIMEOUT` in api/client.ts)
 export const RESUME_WAIT_MS = 30_000;

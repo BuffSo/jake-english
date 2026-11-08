@@ -1,5 +1,6 @@
 // A resumed conversation, rebuilt from the Mac's record (spec docs/superpowers/specs/2026-11-08-resume-roleplay-design.md
-// 2): the lines before the place it starts from, as the bubbles the roleplay screen would have shown. Only the
+// 2): the lines before the place it starts from, as the bubbles the roleplay screen would have shown, and the lines it
+// passes on the way to its next unrecorded line (spec 2026-11-08-resume-unrecorded-design.md 3). Only the
 // conversation: no feedback and no answers from teacher Ryan, which stay on the end screen.
 import type { HeardTry, Resume, Roleplay, ScriptLine } from "../api/types";
 import type { Bubble } from "./state";

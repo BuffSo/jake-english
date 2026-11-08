@@ -79,7 +79,8 @@ export function SituationScreen({ sounds, home, start, onCreated, onResume, onBa
   // the newest conversation to resume, asked once when the screen opens (spec resume-roleplay 4)
   const [resume, setResume] = useState<Resume | null>(null);
 
-  // after what the roleplay screen left running: an evaluation moves the place only when it has finished (`pending`).
+  // after what the roleplay screen left running: an evaluation records the line and moves the place only when it has
+  // finished (`pending`).
   // A failure leaves the screen as it was, without the row.
   useEffect(() => {
     let alive = true;

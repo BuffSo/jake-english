@@ -202,8 +202,9 @@ export function notifiesSkip(s: State): boolean {
   return !s.practice && s.line !== null;
 }
 
-// A recording whose evaluation moves the conversation's place when the Mac has finished it: the roleplay's own turn.
-// The situation screen waits for it before asking where to resume (spec resume-roleplay 4).
+// A recording whose evaluation records the line and moves the conversation's place when the Mac has finished it: the
+// roleplay's own turn. The situation screen waits for it before asking where to resume (spec resume-roleplay 4,
+// resume-unrecorded 1).
 export function movesPlace(s: State): boolean {
   return s.mode === "turn";
 }
