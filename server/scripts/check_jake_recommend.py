@@ -6,8 +6,8 @@ own `pick_ending` and the sentence comes from the server's own `Claude.recommend
 (`JE_CLAUDE_RECOMMEND`, or `--model`). The learner's real recent situations are not used: ten made-up ones per topic
 go along (`RECENT`), as the server sends the topic's latest ten; a label echo (todo 21) and most odd sentences came
 only with them. Each sentence is printed with the ending it was given and whether the model kept it, the server
-swapped the ending there for it (`strip_endings`) or neither; the sentences are the model's own, so printing them is
-fine. Prints the tally, tokens and cost at the end.
+swapped the ending there for it (`strip_endings`) or neither, and one that opens with the speaker (`odd_start`); the
+sentences are the model's own, so printing them is fine. Prints the tally, tokens and cost at the end.
 
 A suggestion costs about $0.003 on Sonnet and $0.00015 on Haiku (21 calls, the default: about $0.065 and $0.003).
 Tell the user how many calls and the cost before running (AGENTS.md).
@@ -33,6 +33,9 @@ from je_server.topics import TOPICS  # noqa: E402
 
 # $ per million tokens in/out, for the models the recommendation can pick (claude.QUICKS)
 PRICE = {"claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}
+# How a suggestion opens when it starts with the speaker instead of the situation (todo 27): in Jake's voice it
+# sounds like Jake is the one doing it
+ODD_START = ("제가", "저는", "제이크", "잭", "Jake")
 
 # Made up (REVIEW.md), in the shapes the server keeps: an accepted suggestion keeps Jake's ending, a typed one not
 RECENT: dict[str, list[str]] = {
@@ -90,6 +93,11 @@ class Counting:
         return resp
 
 
+def odd_start(text: str) -> bool:
+    """`text` opens with the speaker; the learner inside the situation (「카페에서 제가 시킨 …」) does not count."""
+    return text.lstrip().startswith(ODD_START)
+
+
 def label(raw: str, said: str, ending: str) -> str:
     """How the suggestion came out: the model kept the ending, the server swapped one in, or neither. An ending the
     server does not know is said as the model wrote it, so `raw == said` alone is not a kept ending."""
@@ -109,7 +117,7 @@ async def main() -> None:
     print(f"model {claude.recommender['model']}")
     given: Counter[str] = Counter()
     how: Counter[str] = Counter()
-    repeats = 0
+    repeats = odd = 0
     for topic in TOPICS:
         turned_down: list[str] = []
         for _ in range(args.presses):
@@ -120,12 +128,13 @@ async def main() -> None:
             how[kept] += 1
             heard_before = heard_ending(turned_down[-1]) if turned_down else None
             repeats += heard_before is not None and heard_ending(text) == heard_before
-            print(f"{topic.id:8} {ending:16} {kept:10}  {text}")
+            odd += odd_start(text)
+            print(f"{topic.id:8} {ending:16} {kept:10}  {text}" + ("  !! odd start" if odd_start(text) else ""))
             turned_down.append(text)
     total = sum(given.values())
     cost = sum(i * PRICE[m][0] / 1e6 + o * PRICE[m][1] / 1e6 for m, i, o in counting.usage)
     print(f"\nsuggestions {total}: " + ", ".join(f"{k} {how[k]}" for k in ("model kept", "swapped", "MISSED")))
-    print(f"same ending heard twice in a row {repeats}")
+    print(f"same ending heard twice in a row {repeats}, opening with the speaker {odd}")
     for ending, _ in JAKE_ENDINGS:
         print(f"  {ending}: {given[ending]}")
     tokens_in = sum(i for _, i, _ in counting.usage)

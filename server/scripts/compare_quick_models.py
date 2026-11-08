@@ -131,7 +131,6 @@ INTERPRET = [
 
 # words that mean the model said what it was given rather than suggested: the message's labels and lists
 LEAKS = ("끝말", "학습자", "learner", "주제:", "예:", "목록", "최근", "다른 상황", "거절")
-ODD_START = ("제가", "저는", "제이크", "잭", "Jake")
 
 
 def _situation(text: str) -> str:
@@ -151,7 +150,7 @@ def rec_flags(raw: str, said: str, ending: str, seen: list[str]) -> list[str]:
     elif raw != said:
         out.append("swapped")
     out += [f"says {w!r}" for w in LEAKS if w in raw]
-    if raw.startswith(ODD_START):
+    if cjr.odd_start(raw):
         out.append("odd start")
     if strip_endings(raw) is not None and strip_endings(raw[: raw.rfind("상황")]) is not None:
         out.append("doubled ending")
