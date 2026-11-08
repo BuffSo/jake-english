@@ -826,6 +826,16 @@ describe("skip and cancel (spec record-cancel-skip)", () => {
     expect(reduce(s1, skip).screen).toBe("saved");
   });
 
+  test("skip in shadow practice is taken on Ryan's line and goes where 다음 goes", () => {
+    // todo 26 2: canSkip is true on Ryan's line when the mode is shadow
+    let s = reduce(reduce(end(), { type: "startPractice", kind: "shadow", order: [0, 2] }), { type: "lineLoaded", line: ryanLine });
+    expect(canSkip(s)).toBe(true);
+    s = reduce(s, skip);
+    expect([s.practice?.at, s.idx, s.phase, s.history]).toEqual([1, 2, "loading", []]);
+    s = reduce(reduce(s, { type: "lineLoaded", line: { ...ryanLine, idx: 2 } }), skip);
+    expect([s.screen, s.practice, s.mode]).toEqual(["end", null, "turn"]);
+  });
+
   test("a skipped line keeps its practice button", () => {
     const s = reduce(reduce(at("ready"), skip), { type: "lineLoaded", line: ryanLine });
     const bubble = s.history.at(-1)!;
