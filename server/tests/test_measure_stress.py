@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
 import json
 import sys
 from pathlib import Path
@@ -161,3 +162,65 @@ def test_main_prints_counts_only(monkeypatch, capsys, data, tmp_path):
     assert mod.main(["--now"]) == 0
     out = capsys.readouterr().out
     assert "measured 1" in out and "coffee" not in out and str(data) not in out
+
+
+def test_a_wav_the_wave_module_rejects_is_counted_failed(data, monkeypatch):
+    """ffmpeg can exit 0 and still leave a WAV that `wave` rejects; that recording fails, the run goes on (PR #61
+    review, as engine.py's comment on reading the WAV says)."""
+    import wave
+
+    real = mod.audio.to_wav16k
+
+    async def picky(src, dst):
+        if src.name == "3-1.m4a":
+            dst.write_bytes(b"RIFF")
+            raise wave.Error("file does not start with RIFF id")
+        return await real(src, dst)
+
+    monkeypatch.setattr(mod.audio, "to_wav16k", picky)
+    fake = Fake()
+    counts = run(data, fake)
+    assert (counts["measured"], counts["failed"]) == (1, 1) and fake.wavs == [f"{RP}_1_1"]
+    assert not tmp_left(data)
+
+
+def dead_pid() -> int:
+    import subprocess
+
+    p = subprocess.Popen(["true"])
+    p.wait()
+    return p.pid
+
+
+def test_copies_left_by_a_killed_run_are_removed_next_time(data):
+    """A run killed with SIGKILL or a power cut never reaches its finally (PR #61 review): the next run removes the
+    folders of runs that are no longer alive, even when it then stops because the app is in use."""
+    left = data / "tmp" / f"stress-{dead_pid()}-0" / "corpus" / "learner"
+    left.mkdir(parents=True)
+    (left / "x.wav").write_bytes(b"voice")
+    assert run(data, now=False)["busy"] is True
+    assert not left.parent.parent.exists()
+
+
+def test_the_folder_of_a_run_still_going_is_left_alone(data):
+    alive = data / "tmp" / f"stress-{os.getppid()}-0"
+    alive.mkdir(parents=True)
+    run(data)
+    assert alive.exists()
+
+
+def test_hangup_and_term_unwind_so_the_copies_are_deleted():
+    """Closing the terminal (SIGHUP) or `kill` (SIGTERM) raise SystemExit, so each chunk's finally deletes its work."""
+    import signal
+    import time
+
+    old = {s: signal.getsignal(s) for s in (signal.SIGHUP, signal.SIGTERM)}
+    try:
+        mod.exit_on_signals()
+        for s in old:
+            with pytest.raises(SystemExit):
+                os.kill(os.getpid(), s)
+                time.sleep(1)
+    finally:
+        for s, handler in old.items():
+            signal.signal(s, handler)

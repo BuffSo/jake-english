@@ -8,7 +8,8 @@ from the repository's .env, server/.env and the environment, like the server. It
 last 10 minutes unless --now is given.
 
 Records and recordings are only read. Values go to {data}/stress/{id}/{idx}-{n}.json. WAV copies and MFA's work go to
-{data}/tmp/stress-*/ and are deleted when done, also on failure. MFA and the feature script run at background priority
+{data}/tmp/stress-<pid>-<n>/ and are deleted when done, also on failure, Ctrl-C, SIGHUP and SIGTERM; folders left by a
+run that was killed outright (SIGKILL, power cut) are deleted by the next run. MFA and the feature script run at background priority
 (taskpolicy -b) with one job. Only counts and seconds are printed, never words or paths.
 """
 from __future__ import annotations
@@ -17,10 +18,13 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
+import wave
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -71,8 +75,10 @@ def _chunk(data_dir: Path, jobs: list[stress.Job], mfa_env: Path, work: Path, al
         wav = corpus / f"{job.key}.wav"
         try:
             asyncio.run(audio.to_wav16k(job.rec, wav))
-        except (audio.AudioError, OSError, EOFError):
-            wav.unlink(missing_ok=True)  # a half-made WAV would go to MFA without its words
+        except (audio.AudioError, OSError, EOFError, wave.Error, ValueError):
+            # ffmpeg can exit 0 and leave a WAV `wave` rejects (engine.py's note on reading the WAV): that recording
+            # fails, the rest go on. A half-made WAV would go to MFA without its words.
+            wav.unlink(missing_ok=True)
             counts["failed"] += 1
             continue
         (corpus / f"{job.key}.lab").write_text(" ".join(job.words), encoding="utf-8")
@@ -93,11 +99,45 @@ def _chunk(data_dir: Path, jobs: list[stress.Job], mfa_env: Path, work: Path, al
         counts["measured" if aligned is not None else "unaligned"] += 1
 
 
+WORK = re.compile(r"^stress-(\d+)-\d+$")
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def remove_dead_work(data_dir: Path) -> None:
+    """Deletes the work folders (recording copies, heard words, MFA's work) of runs that are no longer alive: a run
+    killed with SIGKILL or a power cut never reaches its finally (PR #61 review). A running one is left alone."""
+    tmp = data_dir / "tmp"
+    for d in tmp.glob("stress-*") if tmp.is_dir() else []:
+        m = WORK.match(d.name)
+        if m and d.is_dir() and not _alive(int(m[1])):
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def exit_on_signals() -> None:
+    """Closing the terminal (SIGHUP) or `kill` (SIGTERM) end the script through SystemExit, so the chunk's finally
+    still deletes its work folder."""
+    def leave(signum, frame):
+        raise SystemExit(128 + signum)
+
+    for s in (signal.SIGHUP, signal.SIGTERM):
+        signal.signal(s, leave)
+
+
 def run(data_dir: Path, mfa_env: Path, now: bool = False, chunk: int = CHUNK, align: Callable | None = None,
         features: Callable | None = None, version: Callable | None = None) -> dict:
     """Measures the pending tries in chunks and returns the counts. A chunk that fails writes no values, so its
     recordings are tried again next time. MFA, the feature script and the version check can be replaced (tests)."""
     align, features, version = align or mfa_align, features or praat_features, version or mfa_version
+    remove_dead_work(data_dir)
     counts = {"measured": 0, "unaligned": 0, "korean_or_empty": 0, "failed": 0, "busy": False}
     if not now and stress.in_use(data_dir, time.time()):
         counts["busy"] = True
@@ -142,5 +182,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    exit_on_signals()
     os.nice(10)  # the WAV conversions too; MFA and Praat also run at background priority
     sys.exit(main())
