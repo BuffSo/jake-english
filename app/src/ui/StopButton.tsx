@@ -33,7 +33,7 @@ export function StopButton({ live, onLevel, onPress }: Props) {
     if (!live) return;
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(blink, { toValue: 0.25, duration: BLINK_MS, useNativeDriver: true }),
+        Animated.timing(blink, { toValue: 0.3, duration: BLINK_MS, useNativeDriver: true }),
         Animated.timing(blink, { toValue: 1, duration: BLINK_MS, useNativeDriver: true }),
       ]),
     );
@@ -56,7 +56,12 @@ export function StopButton({ live, onLevel, onPress }: Props) {
       ]}
     >
       <View style={styles.words}>
-        {live && <Animated.View style={[styles.dot, { opacity: blink }]} />}
+        {/* the red fades to pale pink on a white disc, not to the blue under it, which read as gray-purple on the phone */}
+        {live && (
+          <View style={styles.dot}>
+            <Animated.View style={[styles.dotFill, { opacity: blink }]} />
+          </View>
+        )}
         <Text style={[styles.label, { color: look.text }]}>말하기 끝</Text>
       </View>
       {/* the line's place is kept while the mic is not on yet, so the button does not change height */}
@@ -96,7 +101,8 @@ const styles = StyleSheet.create({
   },
   words: { flexDirection: "row", alignItems: "center", gap: 8 },
   label: { fontSize: 18, fontWeight: "600" },
-  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.recDot, borderWidth: 2, borderColor: colors.onColor },
+  dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.onColor, alignItems: "center", justifyContent: "center" },
+  dotFill: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.recDot },
   track: { width: "55%", height: LINE, marginTop: LINE_GAP, alignItems: "center" },
   line: { height: LINE, borderRadius: LINE / 2, backgroundColor: colors.voiceLine },
   soon: { textAlign: "center", color: colors.sub, fontSize: 15, marginBottom: 2 },
