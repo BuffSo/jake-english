@@ -33,5 +33,16 @@ def test_aside_flags_the_sorting_and_a_missing_retry():
     assert {"names '짚을'", "names '상관없는'", "does not ask to try again"} <= set(cw.flags(case, bad, aside=True))
     # the prompt before this fix, live: the sort's own words, which the check first missed
     assert "names '혼잣말'" in cw.flags(case, "대사와 상관없는 혼잣말로 들렸어요. 한 번 더 해 볼까요?", aside=True)
-    good = "그렇군요, 그런 게 있으면 편하겠어요. 지금은 대사를 말해야 다음으로 넘어가요. 다시 해 볼까요?"
+    good = "그렇군요, 그런 게 있으면 편하겠어요. 다시 해 볼까요?"
+    assert cw.flags(case, good, aside=True) == []
+    # spec record-cancel-skip 6: a line can be skipped now, so the old example's 「대사를 말해야 넘어가요」 is wrong
+    old = "그렇군요, 그런 게 있으면 편하겠어요. 지금은 대사를 말해야 다음으로 넘어가요. 다시 해 볼까요?"
+    assert cw.flags(case, old, aside=True) == ["says '말해야'"]
+
+
+def test_aside_flags_a_skip_wish_without_the_skip_button():
+    # spec record-cancel-skip 6: wanting to move past the line gets 「건너뛰기」 named
+    case = next(c for c in cw.ASIDE if c.name == "off skip wish")
+    assert cw.flags(case, "괜찮아요. 다시 해 볼까요?", aside=True) == ["does not say '건너뛰기'"]
+    good = "「건너뛰기」를 누르면 녹음하지 않고 다음으로 넘어가요. 아니면 한 번 더 해 볼까요?"
     assert cw.flags(case, good, aside=True) == []

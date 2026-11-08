@@ -628,12 +628,13 @@ class Engine:
         group = group_of(rp)
         all_rps = self.store.all() if rps is None else rps
         runs = [r for r in all_rps if group_of(r) == group]  # for 「처음 녹음」 (spec review-practice 4)
-        lines, issues_left = [], False
+        lines, issues_left, said = [], False, False
         for l in rp.lines:
             # asides stay off the end screen and out of its closing words (spec offscript-aside 6)
             tries = ([a for a in rp.attempts.get(l.idx, []) if a.mode in ("turn", "retry") and not a.aside]
                      if l.speaker == "user" else [])
             issues_left = issues_left or bool(tries and tries[-1].issues)
+            said = said or bool(tries)
             lines.append({"line": l.model_dump(mode="json"), "tries": [
                 {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
                  "issues": [{"target": i.target, "heard": i.heard, "say_ko": issue_ko(i, l.text, a.heard)}
@@ -643,7 +644,9 @@ class Engine:
                  # a pronunciation point is already in issues, so it is not repeated (PR #15 review)
                  "point_ko": a.say_ko if a.mode == "turn" and not a.followed and not a.issues else ""}
                 for a in tries], "first": first_try(runs, rp, l.idx)})
-        return {"say": self.said("closing_retry" if issues_left else "closing_clean").model_dump(), "lines": lines}
+        # no line said (skipped without a recording, spec record-cancel-skip 3): no praise for what was not heard
+        closing = "closing_retry" if issues_left else "closing_clean" if said else "closing_plain"
+        return {"say": self.said(closing).model_dump(), "lines": lines}
 
     # --- 다시 연습 (spec review-practice, ADR-0011): read from the records, no Claude call -----------------------
 
