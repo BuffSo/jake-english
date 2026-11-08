@@ -230,6 +230,10 @@ class FakeVoice:
         self.fail_text: str | None = None
         # the worker's reference fingerprints by its voice name and language (`tts.Voice.refs`); none by default
         self.refs: dict[str, dict[str, str]] = {}
+        self.demoted: list[str] = []  # keys passed to `demote` (`tts.Voice.demote`)
+
+    def demote(self, keys):
+        self.demoted.extend(keys)
 
     async def start(self):
         self.audio_dir.mkdir(parents=True, exist_ok=True)
