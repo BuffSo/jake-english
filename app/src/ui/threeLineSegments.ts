@@ -1,8 +1,9 @@
-// Turns a three-line note into styled pieces: strong (bold dark orange), small gray (weak), plain.
+// Turns a three-line note into styled pieces: strong (bold dark orange), small gray (weak), plain, and in the reading
+// line the Korean sounds (`sound`, the pronunciation line's color, spec three-line-listen 1).
 // Rules: docs/guide/PRONUNCIATION_한글발음_세줄표시_20261105.md
 import type { Syllable, ThreeLine } from "../api/types";
 
-export type Style = "strong" | "weak" | "plain";
+export type Style = "strong" | "weak" | "plain" | "sound";
 export type Seg = { text: string; style: Style };
 
 const styleOf = (m: Syllable["m"]): Style => (m === "s" ? "strong" : m === "w" ? "weak" : "plain");
@@ -38,7 +39,12 @@ export function koreanSegments(t: ThreeLine): Seg[][] {
   return groups;
 }
 
+// The server marks the Korean sounds of the reading line with [[...]]; they show in 「」.
 export function readingSegments(reading: string): Seg[] {
-  const text = reading.replace(/\[\[(.*?)\]\]/g, "「$1」").trim();
-  return text ? [{ text, style: "plain" }] : [];
+  // split() with a capture group puts the marked parts at the odd places
+  return reading
+    .trim()
+    .split(/\[\[(.*?)\]\]/)
+    .map((text, i): Seg => (i % 2 ? { text: `「${text}」`, style: "sound" } : { text, style: "plain" }))
+    .filter((s) => s.text !== "");
 }
