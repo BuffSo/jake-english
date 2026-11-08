@@ -92,8 +92,8 @@ test("a long gap between readings counts at most 250 ms of loud", () => {
   expect(watch.feed(5100, LOUD)).toBe("speech"); // 450
 });
 
-test("the rule in use: 5 s and 8 s (user), -45 dBFS and 0.3 s (measured on the phone), 10 dB over the room", () => {
-  expect(SPEECH_RULE).toEqual({ level: -45, loudMs: 300, waitMs: 5000, skipMs: 300, endMs: 8000, overRoomDb: 10 });
+test("the rule in use: 5 s and 8 s (user), -45 dBFS and 0.3 s, 14 dB over the room (measured on the phone)", () => {
+  expect(SPEECH_RULE).toEqual({ level: -45, loudMs: 300, waitMs: 5000, skipMs: 300, endMs: 8000, overRoomDb: 14 });
 });
 
 // A noisy room (todo 20261108_34 6): a sound over the level all the time kept the pause from ever ending, and a test
@@ -121,6 +121,14 @@ test("in a noisy room, short pauses between words do not end it", () => {
   const said = run(15500, (ms) => (talk(ms) ? -15 : roomAt(CHATTER, ms)));
   expect([...said.entries()].filter(([ms]) => ms < 15500).map(([, h]) => h)).not.toContain("ended");
   expect(said.get(15500)).toBe("ended"); // 8 s after 7500
+});
+
+// Measured on the phone (2026-11-08): the first readings as the mic comes on are 10~20 dB under the room (a fan at
+// -40 read -50, then -45, then -40). The floor must not take them, or it sinks and the fan breaks every pause.
+test("readings as the mic comes on, under the room, do not sink the floor", () => {
+  const said = run(14000, (ms) => (ms === 400 ? -50 : ms === 500 ? -45 : ms >= 1000 && ms <= 3000 ? -15 : roomAt(FAN, ms)), SPEECH_RULE);
+  expect(said.get(10900)).toBe("speech");
+  expect(said.get(11000)).toBe("ended"); // 8 s after the last speech at 3000
 });
 
 test("a sound never standing over the room's floor does not end it: it goes on, as it did before", () => {

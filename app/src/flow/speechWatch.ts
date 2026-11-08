@@ -21,10 +21,12 @@ export type SpeechRule = {
 // common.
 // In a noisy room the level alone never let the pause end: a fan or chatter read over -45 all the time, and a test
 // recording went on to 55 s (todo 20261108_34 6). So the pause goes by speech that also stands `overRoomDb` over the
-// room's floor (the main session's pick, the user's 「ㅇㅋ」, 2026-11-08). 10 dB came from made-up fan, chatter and
-// nearby talk mixed with the learner's voice on the Mac, 756 cases: a normal voice ended 6~8 s after its last word in
-// every fan and chatter, none was cut while it was said, and none was thrown away.
-export const SPEECH_RULE: SpeechRule = { level: -45, loudMs: 300, waitMs: 5000, skipMs: 300, endMs: 8000, overRoomDb: 10 };
+// room's floor (the main session's pick, the user's 「ㅇㅋ」, 2026-11-08; the dB to be set on the phone). Measured on the
+// phone with made-up fan and chatter 12 dB under the learner's voice from the Mac speaker: the fan read -43~-38 and the
+// chatter -51~-35 once the voice stopped, and the voice up to -18. At 10 dB the chatter still broke the pause; at 14 dB
+// both ended 7~8 s after the last word. On the Mac, 756 made-up cases at 14 dB: none was cut while it was said, none
+// ended within a second of its last word, and none was thrown away.
+export const SPEECH_RULE: SpeechRule = { level: -45, loudMs: 300, waitMs: 5000, skipMs: 300, endMs: 8000, overRoomDb: 14 };
 
 export type Heard = "listening" | "speech" | "silent" | "ended";
 
@@ -36,7 +38,10 @@ const MOST_STEP_MS = 250; // a reading after a long gap (the app was busy) stand
 // only goes down: in a quiet room the floor so found stays under the level from then on. An odd low reading in the
 // first second sinks it for good; the bar is then the level alone, as before.
 const FLOOR_SHARE = 0.05;
-const FLOOR_SETTLES = 10; // counted readings (1 s) after which the floor only goes down
+const FLOOR_SETTLES = 10; // readings in the floor (1 s) after which it only goes down
+// readings this soon after the mic came on stay out of the floor: on the phone the first ones read 10~20 dB under the
+// room as the mic comes on (a fan at -40 read -50, -45, then -40), and a floor that only goes down would keep them
+const FLOOR_FROM_MS = 700;
 
 type Reading = { atMs: number; db: number; step: number };
 
@@ -47,14 +52,14 @@ export function createSpeechWatch(rule: SpeechRule = SPEECH_RULE) {
   let heard = false;
   const counted: Reading[] = [];
   const low: number[] = []; // the counted levels, quietest first
-  let floor = 0; // the room's floor, set with the first counted reading
+  let floor = -Infinity; // the room's floor, set with the first reading in it; until then the bar is the level
 
   // Speech for the pause stands over the level and over the room's floor. All the readings are judged again by the
   // floor known now: speaking from the first reading, the floor is not known yet. Without such speech adding up to
   // `loudMs` the pause never ends: in a room as loud as the voice it goes on to the button or 55 s, as before. A soft
-  // voice only a little over chatter can still be taken for room: 11 of the 756 made-up cases ended within a second
-  // of the last word, and a longer line would have been cut. In a quiet room the floor is far under the level, and
-  // this is the level alone.
+  // voice only a little over chatter can still be taken for room and cut while it is said: at 10 dB 10 of the 756
+  // made-up cases ended within a second of the last word, none at 14 dB. In a quiet room the floor is far under the
+  // level, and this is the level alone.
   function paused(atMs: number): boolean {
     const bar = Math.max(rule.level, floor + rule.overRoomDb);
     let speech = 0;
@@ -77,9 +82,11 @@ export function createSpeechWatch(rule: SpeechRule = SPEECH_RULE) {
         if (db >= rule.level) loud += step;
         if (loud >= rule.loudMs) heard = true;
         counted.push({ atMs, db, step });
-        low.splice(placeOf(low, db), 0, db);
-        const now = low[Math.floor((low.length - 1) * FLOOR_SHARE)];
-        if (low.length <= FLOOR_SETTLES || now < floor) floor = now;
+        if (atMs >= FLOOR_FROM_MS) {
+          low.splice(placeOf(low, db), 0, db);
+          const now = low[Math.floor((low.length - 1) * FLOOR_SHARE)];
+          if (low.length <= FLOOR_SETTLES || now < floor) floor = now;
+        }
       }
       if (heard) return paused(atMs) ? "ended" : "speech";
       // without any level the watch cannot tell: losing what was said is worse than a quiet recording sent. The
