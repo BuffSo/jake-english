@@ -7,7 +7,8 @@
 // a closing bracket (Ryan's 「coffee를」, 「「coffee」를」), so those are joined too (2026-11-08, todo 12-2, 3). Korean
 // separates words with spaces, so a word with Hangul in it breaks only at a space.
 const WJ = "\u2060";
-const HANGUL = /[가-힣]/;
+// syllables and the letters written on their own (「ㅋㅋ」, 「ㅠㅠ」), todo review-screens minors follow-up 2
+const HANGUL = /[가-힣ㄱ-ㅎㅏ-ㅣ]/;
 // a letter and the next one, neither a space nor a joiner already there (so a second pass adds nothing)
 const PAIR = /([^\s\u2060])(?=([^\s\u2060]))/g;
 

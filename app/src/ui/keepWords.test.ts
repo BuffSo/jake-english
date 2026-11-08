@@ -23,6 +23,13 @@ test("a Korean word stays whole with the digits, letters and signs on it", () =>
   expect(keepWords("반가워요.")).toBe(`반${WJ}가${WJ}워${WJ}요${WJ}.`);
 });
 
+test("Hangul jamo stay with each other and with the word they follow", () => {
+  // 「ㅋㅋ」, 「ㅠㅠ」 are letters on their own, not syllables (todo review-screens minors follow-up 2)
+  expect(keepWords("ㅋㅋ")).toBe(`ㅋ${WJ}ㅋ`);
+  expect(keepWords("좋아요ㅠㅠ 다시")).toBe(`좋${WJ}아${WJ}요${WJ}ㅠ${WJ}ㅠ 다${WJ}시`);
+  expect(keepWords("okㅎㅎ")).toBe(`ok${WJ}ㅎ${WJ}ㅎ`);
+});
+
 test("keepWords twice is keepWords once", () => {
   const once = keepWords("11월 7일에 모음 · coffee를");
   expect(keepWords(once)).toBe(once);
