@@ -784,13 +784,14 @@ describe("skip and cancel (spec record-cancel-skip)", () => {
 
   test("skip in the roleplay leaves my line as its script and moves on", () => {
     const s = reduce(at("ready"), skip);
-    expect(s.history.at(-1)).toEqual({ kind: "user", text: "", script: userLine.text, idx: 1 });
+    // todo 26 3: a skipped bubble says so, rather than by an empty text
+    expect(s.history.at(-1)).toEqual({ kind: "user", text: "", script: userLine.text, idx: 1, skipped: true });
     expect([s.idx, s.phase, s.line, s.mode, s.heard]).toEqual([2, "loading", null, "turn", null]);
   });
 
   test("skip after teacher Ryan's answer leaves nothing of the answer", () => {
     const s = reduce(aside(), skip);
-    expect(s.history).toEqual([{ kind: "user", text: "", script: userLine.text, idx: 1 }]);
+    expect(s.history).toEqual([{ kind: "user", text: "", script: userLine.text, idx: 1, skipped: true }]);
     expect([s.idx, s.feedback, s.aside]).toEqual([2, "", false]);
   });
 
@@ -802,6 +803,7 @@ describe("skip and cancel (spec record-cancel-skip)", () => {
     const mine = s.history.filter((b) => b.kind === "user" && b.idx === 1);
     expect(mine).toHaveLength(1);
     expect(mine[0].text).toBe("It's right over there.");
+    expect(mine[0].skipped).toBeUndefined(); // a line said is not marked skipped
     expect(s.idx).toBe(2);
   });
 

@@ -494,7 +494,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             {star?.saved && !opened && <StarMark />}
           </Text>
           {/* a line skipped without a recording has its script only (spec record-cancel-skip 3) */}
-          {b.text !== "" && (
+          {!b.skipped && (
             <View style={styles.heardRow}>
               <Text style={[styles.heardLine, styles.shrink]}>{keepWords(`들린 말: ${b.text}`)}</Text>
               {opened && b.rec && (
