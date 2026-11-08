@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { api } from "../api";
 import type { Home, Said } from "../api/types";
 import type { SoundQueue } from "../audio/player";
-import { homeLines } from "../flow/homeLines";
+import { homeLines, homeSounds } from "../flow/homeLines";
 import { Button } from "../ui/Button";
 import { ChoiceCard } from "../ui/ChoiceCard";
 import { keepWords } from "../ui/keepWords";
@@ -42,14 +42,14 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
     try {
       const h = await api.getHome();
       setHome(h);
-      say(homeLines(h, false));
+      say(homeSounds(h, false));
     } catch (e) {
       setError(messageOf(e));
     }
   }, [say, setHome]);
 
   useEffect(() => {
-    if (opened) say(homeLines(opened, true));
+    if (opened) say(homeSounds(opened, true));
     else load();
   }, [opened, say, load]);
 

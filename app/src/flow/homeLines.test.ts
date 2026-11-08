@@ -1,5 +1,5 @@
 import type { Home } from "../api/types";
-import { homeLines } from "./homeLines";
+import { homeLines, homeSounds } from "./homeLines";
 
 const said = (text: string) => ({ text, audio: text.padEnd(64, "0") });
 const lines: Home["lines"] = {
@@ -27,16 +27,22 @@ test("an older server without the ask-again line still skips the greeting", () =
   expect(homeLines({ lines: old }, true).map((l) => l.text)).toEqual(["ask_mode"]);
 });
 
-// spec ryan-shadowing-tip 2: the day's first start only, between the greeting and the question
+// spec ryan-shadowing-tip 2, 3: the day's first start only, heard after the question and never shown. As text it pushed
+// the 「복습하기」 card off the bottom of the phone (2026-11-08 user)
 
-test("on the day's first start Ryan greets, says the shadowing tip, then asks", () => {
-  expect(homeLines({ lines, tip: said("tip") }, false).map((l) => l.text)).toEqual(["greeting", "tip", "ask_mode"]);
+test("on the day's first start Ryan greets, asks, then says the shadowing tip", () => {
+  expect(homeSounds({ lines, tip: said("tip") }, false).map((l) => l.text)).toEqual(["greeting", "ask_mode", "tip"]);
+});
+
+test("the tip is heard but not shown", () => {
+  const home = { lines, tip: said("tip") };
+  expect(homeLines(home, false).map((l) => l.text)).toEqual(["greeting", "ask_mode"]);
 });
 
 test("coming back he does not say the tip again", () => {
-  expect(homeLines({ lines, tip: said("tip") }, true).map((l) => l.text)).toEqual(["ask_again"]);
+  expect(homeSounds({ lines, tip: said("tip") }, true).map((l) => l.text)).toEqual(["ask_again"]);
 });
 
 test("an older server without a tip greets and asks as before", () => {
-  expect(homeLines({ lines }, false).map((l) => l.text)).toEqual(["greeting", "ask_mode"]);
+  expect(homeSounds({ lines }, false).map((l) => l.text)).toEqual(["greeting", "ask_mode"]);
 });
