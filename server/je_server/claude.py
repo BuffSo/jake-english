@@ -53,6 +53,19 @@ QUOTES = "\"'“”‘’「」『』"
 # Ryan's live answers never show double quotes (phone test 2026-11-08: Haiku quoted the transcript in them). 「」 stay:
 # teacher Ryan puts meanings in them. Single quotes stay too: they are apostrophes in English words (I'll).
 DOUBLE_QUOTES = str.maketrans("", "", "\"“”")
+# Words of teacher Ryan's prompt that are never for the learner: the names of what he is given and how the prompt sorts
+# or holds back. A sentence with one is dropped before the learner sees or hears it (todo 40 2: on a try with no points
+# he named 「짚을 것」 and said what he would not say and how he sorts). 「짚은」 stays: 「아까 짚은 곳은 …」 answers a question
+# about the try before (todo 40 1). 「갈래」, 「지시」 and 「자료」 only in the prompt's own phrases: 「넘어갈래요」,
+# 「만지시면」, 「직원의 지시를」 and 「안내 자료」 are ordinary words a meaning may need (PR #62 reviews). The prompt calls the learner 「학습자」 and sorts what was said into 혼잣말 and 상관없는 말; live, he once
+# began 「학습자가 한국어로 혼잣말을 한 경우.」 and often 「대사와는 상관없는 말로 들렸어요」 (PR #42 fixed the prompt
+# for it). scripts/check_ryan_wording.py counts these in the model's own answer.
+ASIDE_LEAKS = ("짚을", "대사 낱말", "들린 낱말", "영어 받아쓰기", "한국어 받아쓰기", "앞 시도", "선생님에게 한 말",
+               "받은 자료", "자료 이름", "자료의 이름", "자료가 없", "이 지시", "지시문", "지시에 따라", "갈래 이름",
+               "갈래로", "갈래를", "갈래가", "갈라 말", "말하지 않을게", "말하지 않겠", "학습자", "상관없는 말", "혼잣말")
+# where sentences.SentenceBuffer cuts for the voice, and also after a closing bracket or quote right after the mark
+# (「…뜻이에요.」 다시 …), so a dropped sentence does not take the next one with it (PR #62 review)
+SENTENCE_END = re.compile(r"(?<=[.?!])[」』)\]\"'”’]*\s+")
 
 
 # Calls made while the learner waits in a turn (feedback, teacher Ryan's answer). The app gives up after 30s without a
@@ -347,22 +360,36 @@ class Claude:
     # --- teacher Ryan, when the line was not followed -------------------------------------------
 
     async def aside(self, frame: Frame, history: Draft, line: str, heard: str, heard_ko: str | None,
-                    issues: list[Issue], earlier: list[tuple[str, str]]) -> AsyncIterator[str]:
+                    issues: list[Issue], earlier: list[tuple[str, list[Issue], str]]) -> AsyncIterator[str]:
         """Streams teacher Ryan's Korean answer to a recording that did not follow the line (spec offscript-aside
         3), on the writer model. `heard` is the English transcript, `heard_ko` the Korean one when auto-detection
-        heard Korean, `issues` what the Mac found against the line, `earlier` the asides before on this line as
-        (heard, Ryan's answer). Only text goes out (ADR-0004)."""
+        heard Korean, `issues` what the Mac found against the line, `earlier` the line's tries before as (heard,
+        points, Ryan's answer): its last try at the line and the asides after it (todo 40 1). Only text goes out
+        (ADR-0004)."""
         body = {
             **self._talk(frame, history),
             "대사": line,
             "들린 말(영어 받아쓰기)": heard,
             "들린 말(한국어 받아쓰기)": heard_ko or "",
             "짚을 것": _points(issues),
-            "앞서 선생님에게 한 말": [{"들린 말": h, "라이언의 답": a} for h, a in earlier],
+            "이 대사의 앞 시도": [{"들린 말": h, "짚은 것": [{"대사 낱말": i.target, "들린 낱말": i.heard} for i in p],
+                               "라이언의 답": a} for h, p, a in earlier],
         }
-        async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600,
-                                       whole=True):
-            yield text
+        # whole sentences only, each checked for the prompt's words; the voice waits for a sentence end anyway
+        rest = ""
+        try:
+            async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600,
+                                           whole=True):
+                done, rest = _sentences(rest + text)
+                for sentence in done:
+                    if _kept(sentence):
+                        yield sentence
+        except ClaudeUnavailable:
+            if rest and _kept(rest):  # the cut piece, which `Engine._aside` ends before its fixed phrase
+                yield rest
+            raise
+        if rest and _kept(rest):
+            yield rest
 
     async def _stream(self, kw: dict[str, Any], system: str, body: dict, max_tokens: int,
                       whole: bool = False) -> AsyncIterator[str]:
@@ -390,6 +417,23 @@ class Claude:
         except anthropic.APIStatusError as e:
             log.info("claude api status %d", e.status_code)
             raise ClaudeUnavailable(f"status {e.status_code}") from e
+
+
+def _sentences(text: str) -> tuple[list[str], str]:
+    """The whole sentences in `text`, each with the space after it, and the rest that is still coming."""
+    out, start = [], 0
+    for m in SENTENCE_END.finditer(text):
+        out.append(text[start:m.end()])
+        start = m.end()
+    return out, text[start:]
+
+
+def _kept(sentence: str) -> bool:
+    """False for a sentence of teacher Ryan's that says his prompt's words; the log keeps only that one was dropped."""
+    if any(w in sentence for w in ASIDE_LEAKS):
+        log.info("aside sentence dropped")
+        return False
+    return True
 
 
 def _points(issues: list[Issue]) -> list[dict[str, str]]:

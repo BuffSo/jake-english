@@ -116,8 +116,37 @@ async def test_earlier_asides_on_the_line_go_to_claude(engine_with_rp, speech_by
     for _ in range(4):
         await run(engine, rp_id, user_idx, speech_bytes)
     earlier = fake_claude.aside_calls[-1]["earlier"]
-    assert len(earlier) == 3 and earlier[-1] == ("Wait, let me try that again.",
+    assert len(earlier) == 3 and earlier[-1] == ("Wait, let me try that again.", [],
                                                   "괜찮아요, 말이 꼬일 수 있어요. 다시 해 볼까요?")
+
+
+async def test_the_last_try_goes_with_the_asides(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    # todo 40 1: asked about a point right after the try that made it, teacher Ryan had nothing of that try and said
+    # he had pointed out nothing
+    engine, rp_id, user_idx = engine_with_rp
+    for heard in ["It's light over hair.", "What does this mean?"]:
+        fake_whisper.text = heard
+        await run(engine, rp_id, user_idx, speech_bytes, "practice")
+    tried = engine.store.load(rp_id).attempts[user_idx][0]
+    assert tried.issues and not tried.aside
+    assert fake_claude.aside_calls[-1]["earlier"] == [("It's light over hair.", tried.issues, tried.say_ko)]
+
+
+async def test_a_kept_try_stays_past_three_asides(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    for heard in ["It's right over there.", *["What does this mean?"] * 5]:
+        fake_whisper.text = heard
+        await run(engine, rp_id, user_idx, speech_bytes, "practice")
+    earlier = fake_claude.aside_calls[-1]["earlier"]
+    assert len(earlier) == 4 and earlier[0][0] == "It's right over there."
+    assert [e[0] for e in earlier[1:]] == ["What does this mean?"] * 3
+
+
+async def test_no_try_before_sends_no_earlier(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "What does this mean?"
+    await run(engine, rp_id, user_idx, speech_bytes)
+    assert fake_claude.aside_calls[-1]["earlier"] == []
 
 
 async def test_aside_claude_down_says_the_fixed_phrase(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
@@ -314,5 +343,47 @@ async def test_earlier_asides_stop_at_the_last_try_at_the_line(engine_with_rp, s
     for heard in ["Wait, let me try that again.", boundary, "What does this mean?", "What does this mean?"]:
         fake_whisper.text = heard
         await run(engine, rp_id, user_idx, speech_bytes, "practice")
-    assert fake_claude.aside_calls[-1]["earlier"] == [("What does this mean?",
-                                                       "괜찮아요, 말이 꼬일 수 있어요. 다시 해 볼까요?")]
+    # the try at the line itself goes first (todo 40 1): the learner may ask about what it pointed out
+    tried = engine.store.load(rp_id).attempts[user_idx][1]
+    assert fake_claude.aside_calls[-1]["earlier"] == [
+        (boundary, tried.issues, tried.say_ko),
+        ("What does this mean?", [], "괜찮아요, 말이 꼬일 수 있어요. 다시 해 볼까요?")]
+
+
+def _name_line(engine, rp_id, idx, text="Get off at Hongdae, please."):
+    """The learner's line made one with a name the dictionary does not have (spec teacher-answer-context 3)."""
+    rp = engine.store.load(rp_id)
+    rp.lines[idx].text = text
+    engine.store.save(rp)
+
+
+async def test_a_name_in_hangul_still_follows_the_line(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    # the transcriber wrote the line's name in Hangul: a try at the line, not Korean said (spec 3)
+    engine, rp_id, user_idx = engine_with_rp
+    _name_line(engine, rp_id, user_idx)
+    fake_whisper.text = "Get off at 홍대, peace."
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[0]["followed"] is True and fake_whisper.langs == ["en"]
+    assert [(i["target"], i["heard"]) for i in fake_claude.feedback_calls[-1]["issues"]] == [("please", "peace")]
+
+
+async def test_a_name_in_hangul_in_the_auto_transcript_is_a_try(engine_with_rp, speech_bytes, fake_whisper,
+                                                                fake_claude):
+    # todo 40 2: auto-detection heard the try as Korean because of the name in Hangul, so the Mac's points never went
+    engine, rp_id, user_idx = engine_with_rp
+    _name_line(engine, rp_id, user_idx)
+    fake_whisper.text = "Get of a Hongdae peace."
+    fake_whisper.auto_text, fake_whisper.auto_lang = "get of a 홍대 peace", "korean"
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    call = fake_claude.aside_calls[-1]
+    assert ev[0]["text"] == "Get of a Hongdae peace." and call["heard_ko"] is None
+    assert [i["target"] for i in call["issues"]] == ["off", "at"]
+
+
+async def test_korean_beside_a_name_is_still_korean(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    _name_line(engine, rp_id, user_idx)
+    fake_whisper.text = "Get off at 홍대 아 뭐였지"
+    fake_whisper.auto_text, fake_whisper.auto_lang = "겟 오프 앳 홍대 아 뭐였지", "korean"
+    ev = await run(engine, rp_id, user_idx, speech_bytes)
+    assert ev[0]["followed"] is False and fake_claude.aside_calls[-1]["heard_ko"] == "겟 오프 앳 홍대 아 뭐였지"

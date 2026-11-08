@@ -276,3 +276,100 @@ def test_a_price_read_without_dollars_is_notation():
     assert compare("That's $2.05.", "That's two oh five.").diffs == []
     assert compare("It's five ninety-nine.", "It's $5.99.").diffs == []
     assert compare("It's $5.99.", "It's five forty-nine.").diffs != []  # another price is still a point
+
+
+# Names the dictionary does not have, compared by syllable (spec teacher-answer-context 3). The examples are made up or
+# from the list scripts; none is how a name was written in the Mac's records (REVIEW.md).
+import pytest  # noqa: E402
+
+from je_server.compare import is_name, korean_said, romanize, same_name, syllables  # noqa: E402
+
+
+def test_name_syllables():
+    assert syllables("chungmuro") == [("ch", "u", "ng"), ("m", "u", ""), ("r", "o", "")]
+    assert syllables("gyeongbokgung") == [("g", "yeo", "ng"), ("b", "o", "k"), ("g", "u", "ng")]
+    assert [len(syllables(w)) for w in ("itaewon", "haeundae", "hangang", "yeouido")] == [3, 3, 2, 3]
+    assert romanize("홍대") == "hongdae" and syllables(romanize("경복궁")) == syllables("gyeongbokgung")
+
+
+def test_only_words_missing_from_the_dictionary_are_names():
+    assert is_name("hongdae") and is_name("chungmuro")
+    assert not is_name("palace") and not is_name("seoul") and not is_name("i'm") and not is_name("4")
+
+
+@pytest.mark.parametrize("line,heard", [
+    ("Get off at Sinchon.", "Get off at Sichon."),  # a final consonant left out
+    ("Get off at Jamsil.", "Get off at Chamsil."),
+    ("Get off at Hongdae.", "Get off at Hongde."),
+    ("Get off at Hongdae.", "Get off at Hong Day."),
+    ("Get off at Gyeongbokgung.", "Get off at Kyongbokkung."),
+    ("Get off at Chungmuro.", "Get off at Choongmuro."),
+    ("Let's go to Sinchon.", "Let's go to Shinchon."),
+    ("Get off at Hapjeong.", "Get off at Habjung."),
+    ("Let's meet at Jamsil.", "Let's meet at Jangsil."),  # one nasal final heard as another
+    ("Meet me at Insadong.", "Meet me at Insa Dong."),
+    ("Get off at Hongdae.", "Get off at 홍대."),
+    ("Get off at Jongno.", "Get off at 종로."),  # written in Hangul as spelled, said with the sound change
+])
+def test_names_heard_alike_pass(line, heard):
+    assert compare(line, heard).diffs == [] and similarity(line, heard) == 1.0
+    assert not korean_said(line, heard)
+
+
+@pytest.mark.parametrize("line,heard,said", [
+    ("Get off at Chungmuro.", "Get off at Chungmugong.", "chungmugong"),  # a syllable more (the user's example)
+    ("Meet me at Insadong.", "Meet me at Insa.", "insa"),  # a syllable less
+    ("Get off at Jamsil.", "Get off at Jamsilsaenae.", "jamsilsaenae"),
+    ("Get off at Hongdae.", "Get off at Hongik.", "hongik"),  # a syllable changed
+    ("Meet me in Itaewon.", "Meet me in Itaewan.", "itaewan"),
+    ("Get off at Chungmuro.", "Get off at 충무공.", "충무공"),
+])
+def test_names_heard_differently_are_pointed(line, heard, said):
+    diffs = compare(line, heard).diffs
+    assert len(diffs) == 1 and diffs[0].heard == said and diffs[0].explain == "" and diffs[0].sound is None
+    assert not korean_said(line, heard)
+
+
+def test_a_name_not_heard_is_pointed():
+    assert [(d.target, d.heard) for d in compare("Get off at Hongdae.", "Get off at.").diffs] == [("hongdae", "")]
+
+
+def test_hangul_at_the_name_is_not_korean():
+    assert not korean_said("Get off at Hongdae.", "Get off at Hongdae.")
+    assert not korean_said("Get off at Hongdae.", "Get off at 홍대.")
+    assert korean_said("Get off at Hongdae.", "Get off at Hongdae 아 뭐였지")
+    assert korean_said("Get off at Hongdae.", "아 몰라")
+    assert korean_said("Get off here.", "Get off 여기")  # no name in the line
+    # next to other words heard wrong, word for word
+    assert not korean_said("Get off at Hongdae, please.", "Get of a 홍대 peace")
+    assert korean_said("Get off at Hongdae, please.", "Get 아 a 홍대 peace")
+
+
+@pytest.mark.parametrize("line,heard", [
+    ("Get off at Hongdae.", "Get off at 홍대 맞나요?"),  # the name, then a question (PR #62 review)
+    ("Take Line 2 and get off at Hongdae.", "Take line 2 and get off at 홍대 근데 이거 맞아요?"),
+    ("Get off at Hongdae.", "Get off at 네"),  # Korean where the name goes
+    ("Get off at Chungmuro.", "Get off at 어디였지"),
+    ("Change to Line 3 there, and get off at Gyeongbokgung.", "Change to line 3 there and get off at 어 뭐였더라"),
+    ("Get off at Hongdae.", "Get off at 거기"),  # the name forgotten (final branch review)
+])
+def test_korean_at_the_name_is_still_korean(line, heard):
+    # the engine then treats the try as not followed, however close the English words are
+    assert korean_said(line, heard)
+
+
+@pytest.mark.parametrize("line,heard", [
+    ("Get off at Chungmuro.", "Get off at 충무공."),  # a syllable changed: still a try at the name
+    ("Get off at Chungmuro.", "Get off at 충무."),  # a syllable dropped
+])
+def test_hangul_like_the_name_is_a_try_at_it(line, heard):
+    assert not korean_said(line, heard) and len(compare(line, heard).diffs) == 1
+    # Korean outside the name: compared as before, without the Hangul
+    assert compare("Get off at Hongdae.", "Get off at Hongdae 아 뭐였지").diffs == []
+
+
+def test_a_name_in_hangul_beside_a_dropped_word_is_a_try():
+    # final branch review: with 「at」 dropped the span is [at, hongdae] against [홍대]; the Hangul looks like the name,
+    # so it is a try at the line, and the span is pointed out as before
+    assert not korean_said("Get off at Hongdae.", "Get off 홍대")
+    assert [(d.target, d.heard) for d in compare("Get off at Hongdae.", "Get off 홍대").diffs] == [("at hongdae", "홍대")]

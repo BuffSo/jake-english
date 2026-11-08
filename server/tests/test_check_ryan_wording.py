@@ -140,3 +140,24 @@ def test_teacher_ryan_has_a_shared_tip_case():
     assert cw.flags(case, once, aside=True) == []
     framed = "fried가 flied처럼, rice가 lice처럼 들렸어요. 두 낱말 모두 R이 L로 들렸어요. " + cw.RL + " 한 번 더 해 볼까요?"
     assert cw.flags(case, framed, aside=True) == ["sound named (fried)"]
+
+
+def test_names_cover_the_servers_leak_words():
+    # the server drops sentences with these (todo 40 2); the live check must still count the model saying them
+    from je_server.claude import ASIDE_LEAKS
+
+    assert set(ASIDE_LEAKS) <= set(cw.NAMES)
+
+
+def test_names_the_server_dropped_are_still_flagged():
+    case = next(c for c in cw.ASIDE if c.name == "try heard as korean")
+    shown = "한 번 더 해 볼까요?"
+    raw = "짚을 곳이 없어요. " + shown
+    assert cw.flags(case, shown, aside=True, raw=raw) == ["names '짚을' (server dropped)"]
+
+
+def test_a_capitalized_name_counts_as_pointed():
+    # the Mac sends names in lowercase; Haiku wrote 「Chungmuro가 Chungmugong처럼」 and the check called it missing
+    case = next(c for c in cw.FEEDBACK if c.name == "name")
+    said = "나머지 낱말은 다 알아들었어요. 그런데 Chungmuro가 Chungmugong처럼 들렸어요. 한 번 더 해 볼까요?"
+    assert cw.flags(case, said, aside=False) == []
