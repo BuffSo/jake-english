@@ -77,21 +77,35 @@ export function SituationScreen({ sounds, home, start, onCreated, onResume, onBa
   const [jakeFailed, setJakeFailed] = useState(false); // Jake's picture did not load: Ryan's face instead
   const shown = useRef<Face>("listening"); // the circle's face before a wait, kept until the thinking face comes
   const topic: Topic | null = topics.find((t) => t.id === topicId) ?? null;
-  // the newest conversation to resume, asked once when the screen opens (spec resume-roleplay 4)
+  // the newest conversation to resume, asked when the screen opens (spec resume-roleplay 4) and again on coming back
+  // to the topics from a script left being made
   const [resume, setResume] = useState<Resume | null>(null);
+  const alive = useRef(true); // the screen is still there
+  const asked = useRef(0); // counts the asks: an older answer is not drawn over a newer one
+  const making = useRef(0); // scripts being made (`create`); one left behind may still run when the next starts
+  const madeLeft = useRef(false); // the learner went back while it was: the Mac makes it the newest conversation
 
-  // after what the roleplay screen left running: an evaluation records the line and moves the place only when it has
-  // finished (`pending`).
-  // A failure leaves the screen as it was, without the row.
-  useEffect(() => {
-    let alive = true;
-    askAfter(pending, () => api.resume())
-      .then((r) => alive && setResume(r))
+  // after what the roleplay screen left running and a script left being made: an evaluation records the line and
+  // moves the place only when it has finished, and the script becomes the newest conversation when it is made
+  // (`pending`). Not asked once the screen is gone (todo 20261108_32 3). A failure leaves the screen as it was,
+  // without the row.
+  function askResume() {
+    const my = ++asked.current;
+    const wanted = () => alive.current && my === asked.current;
+    askAfter(pending, () => api.resume(), wanted)
+      .then((r) => {
+        if (wanted()) setResume(r);
+      })
       .catch(() => {});
+  }
+
+  useEffect(() => {
+    alive.current = true;
+    askResume();
     return () => {
-      alive = false;
+      alive.current = false;
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(
     () => () => {
@@ -137,6 +151,14 @@ export function SituationScreen({ sounds, home, start, onCreated, onResume, onBa
     if (step === "describe") rec.discard();
     if (clearsTurnedDown(prev)) turnedDown.current = [];
     setJake(null);
+    if (making.current > 0) madeLeft.current = true;
+    // the row asked when the screen opened is no longer the newest conversation once the script left behind is made:
+    // hidden, and asked again after it (todo 20261108_32 1)
+    if (prev === "topic" && madeLeft.current) {
+      madeLeft.current = false;
+      setResume(null);
+      askResume();
+    }
     toStep(prev);
   }
   useBackKey(back);
@@ -169,14 +191,18 @@ export function SituationScreen({ sounds, home, start, onCreated, onResume, onBa
     toStep("working");
     setStatus("라이언이 대본을 만들고 있어요");
     setError(null);
+    making.current += 1;
     try {
-      // the script is made while Jake (or Ryan) is still talking; the roleplay screen opens after they finish
-      const rp = await whenSilent(sounds, api.createRoleplay(c, topic.id));
+      // the script is made while Jake (or Ryan) is still talking; the roleplay screen opens after they finish. Tracked
+      // in `pending`: going back while it is made, the topics ask where to resume after it (todo 20261108_32 1)
+      const rp = await whenSilent(sounds, pending.track(api.createRoleplay(c, topic.id)));
       if (my === gen.current) onCreated(rp, jakeSaid, from);
     } catch (e) {
       if (my !== gen.current) return;
       setError(messageOf(e));
       toStep(from.step);
+    } finally {
+      making.current -= 1;
     }
   }
 

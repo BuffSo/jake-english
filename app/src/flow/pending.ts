@@ -31,9 +31,15 @@ export function createPending() {
 }
 
 // `ask` once what was running has settled, or `maxMs` went by: where to resume is asked after the evaluation the
-// learner left, so the line just said is not offered again
-export function askAfter<T>(p: Pick<Pending, "settled">, ask: () => Promise<T>, maxMs = RESUME_WAIT_MS): Promise<T> {
-  return p.settled(maxMs).then(ask);
+// learner left, so the line just said is not offered again. Not asked (null) when `wanted` says the answer is no
+// longer wanted by then: the screen that waited is gone (todo 20261108_32 3).
+export function askAfter<T>(
+  p: Pick<Pending, "settled">,
+  ask: () => Promise<T>,
+  wanted: () => boolean = () => true,
+  maxMs = RESUME_WAIT_MS,
+): Promise<T | null> {
+  return p.settled(maxMs).then(() => (wanted() ? ask() : null));
 }
 
 type Pending = ReturnType<typeof createPending>;

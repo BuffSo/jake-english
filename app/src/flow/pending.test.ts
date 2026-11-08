@@ -62,3 +62,17 @@ test("askAfter asks only once what was tracked has settled", async () => {
   expect(await answer).toBe("asked");
   expect(ask).toHaveBeenCalledTimes(1);
 });
+
+// todo 20261108_32 3: the situation screen left while it waited asked the Mac anyway and dropped the answer
+test("askAfter does not ask once it is no longer wanted", async () => {
+  const pending = createPending();
+  let finish!: () => void;
+  pending.track(new Promise<void>((r) => (finish = r)));
+  let wanted = true;
+  const ask = jest.fn(async () => "asked");
+  const answer = askAfter(pending, ask, () => wanted);
+  wanted = false; // the screen went away while it waited
+  finish();
+  expect(await answer).toBeNull();
+  expect(ask).not.toHaveBeenCalled();
+});
