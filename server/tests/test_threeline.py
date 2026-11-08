@@ -73,6 +73,25 @@ def test_reading_ref_with_non_hangul_is_a_problem():
     assert kinds(check("I like coffee.", line(I, LIKE, coffee(), reading="[[ka-피]]"))) == ["ref"]
 
 
+def test_ref_may_span_words_with_a_space():
+    # the Korean line here is 「아이 라익 카피」
+    assert check("I like coffee.", line(I, LIKE, coffee(), reading="[[라익 카-피]]")) == []
+
+
+def test_ref_hyphens_need_not_follow_syllables():
+    # the hyphens are not shown in the Korean line, so only its letters must agree
+    assert check("I like coffee.", line(I, LIKE, coffee(), reading="[[카피]], [[아-이]]")) == []
+
+
+def test_ref_may_point_at_one_letter_inside_a_syllable():
+    assert check("I like coffee.", line(I, LIKE, coffee(), reading="[[이]]를 길게")) == []
+
+
+def test_ref_letters_must_still_match():
+    for bad in ("[[카 페]]", "[[아이카]]", "[[피카]]", "[[카--피]]", "[[카-피 ]]", "[[ 카피]]"):
+        assert kinds(check("I like coffee.", line(I, LIKE, coffee(), reading=bad))) == ["ref"], bad
+
+
 def test_refs_lists_bracket_contents():
     assert refs("앞을 세게, [[카-피]]. 뒤 [[피]]는 「약하게」") == ["카-피", "피"]
 

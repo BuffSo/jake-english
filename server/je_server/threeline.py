@@ -4,6 +4,11 @@ Rules come from docs/guide/PRONUNCIATION_한글발음_세줄표시_20261105.md �
 rule 2 (one highlighted Hangul letter), rule 7 (highlight on the dictionary stress), rule 5 (the same
 Korean in the Korean line and the reading line). When a line still fails after retries, `degrade`
 removes the failing marks: no mark is better than a wrong one (PRD 「실패로 볼 것」 1).
+
+Rule 5 compares Hangul letters only. A sound in the reading may run over words with a space, put its hyphens
+anywhere, or name one letter inside a syllable (스테이's 「테」): the Korean line shows no hyphens, so the learner sees
+the same letters either way. Checking the hyphens against the syllables threw away 37 of 47 readings that failed in a
+2026-11-08 first-try diagnosis (todo three_line_notes_degrade_rate).
 """
 from __future__ import annotations
 
@@ -16,7 +21,7 @@ from .models import Syllable, ThreeLine, Word
 
 REF = re.compile(r"\[\[(.*?)\]\]")
 HANGUL = re.compile(r"^[가-힣]$")
-REF_OK = re.compile(r"^[가-힣]+(-[가-힣]+)*$")
+REF_OK = re.compile(r"^[가-힣]+([- ][가-힣]+)*$")  # Hangul runs joined by one hyphen or space
 
 
 @dataclass(frozen=True)
@@ -48,11 +53,6 @@ def korean_line(three: ThreeLine) -> str:
     return out.strip()
 
 
-def _is_run(pieces: list[str], kos: list[str]) -> bool:
-    n = len(pieces)
-    return any(kos[i:i + n] == pieces for i in range(len(kos) - n + 1))
-
-
 def check(text: str, three: ThreeLine) -> list[Problem]:
     problems: list[Problem] = []
     if _norm_words(text) != _norm_words(" ".join(word_text(w) for w in three.words)):
@@ -71,10 +71,10 @@ def check(text: str, three: ThreeLine) -> list[Problem]:
         fits = [p for p in cmu.prons(word_text(w)) if cmu.vowel_count(p) == len(w.syl)]
         if fits and not any(strong == [cmu.primary_index(p)] for p in fits):
             problems.append(Problem("stress", i, f"'{word_text(w)}': the strong syllable is not the dictionary stress"))
-    kos = [s.ko for w in three.words for s in w.syl if s.ko]
+    letters = "".join(s.ko for w in three.words for s in w.syl)
     for r in refs(three.reading):
-        if not REF_OK.match(r) or not _is_run(r.split("-"), kos):
-            problems.append(Problem("ref", None, f"[[{r}]] does not match the Korean line's syllables"))
+        if not REF_OK.match(r) or re.sub(r"[- ]", "", r) not in letters:
+            problems.append(Problem("ref", None, f"[[{r}]] is not written with the Korean line's letters"))
     return problems
 
 
