@@ -58,6 +58,7 @@
   - 줄마다의 소희 한국어(2026-11-08 더함). 대사와 같은 사실만 말하고, 앞뒤 줄을 이어 읽어 새 뜻이 생기지 않게 쓴다.
 - 대본은 Claude가 쓴 대본과 같은 검사를 거친다(`Claude.script_problems`). 대사가 번갈아 나오고, 목록 줄의 사람이 먼저 말하고, 내 대사는 정확히 3번이고, 내 대사는 12낱말 이하다. 시험으로 묶어 둔다(AI 판단).
 - 대본은 대본 규칙(`prompts.SCRIPT_SYSTEM`)도 따른다. 내 대사는 그 자리에서 실제로 하는 짧은 말이고, 라이언 대사는 한두 문장으로 상황을 이끈다. 라이언의 마지막 말이 내 인사를 되받기만 하면 빼고 내 말로 끝낸다.
+- 한 덩어리 말(갈아타는 길처럼 여러 단계인 것)을 내 대사 여럿으로 나눌 때는 첫 토막에 뒤에 더 있다는 표시(「First,」, 한국어 「먼저」)를 둔다. 첫 토막이 그것으로 끝나 보이면, 상대가 다음 토막을 기다렸다는 듯이 묻는 것처럼 들린다(2026-11-08 사용자, 아래 경복궁 대본).
 - 사실은 그 목록 줄의 자세한 설명에 든 것만 쓴다. 그 설명은 이미 저장소에 있고, 지금까지 대본을 쓸 때마다 「꼭 지킬 사실」로 Claude에게 넘긴 것이다. 그 가운데 경복궁역 5번 출구, 현금만 받는 충전기와 편의점 충전, 새우 트럭 메뉴와 밥 두 스쿱은 2026-11-07 웹에서 확인했다(상황 주제 스펙 3). 명동역에서 충무로역까지 한 정거장, 3호선 갈아타기, 2인분부터 주문, 270은 미국 남자 9는 설명에만 있고 따로 확인한 기록은 없다(아래 「한계」).
 - 설명에 없는 사실(3호선으로 몇 정거장인지, 가게 값, 결제 방법, 영업시간)은 쓰지 않는다. 이름 없는 호텔의 체크아웃 시간처럼 대화에 필요한 작은 값은 지어내도 된다(대본 규칙과 같다, AI 판단).
 - 대본에 든 사실이 지워지지 않게 시험으로 묶는다(지금 `test_list_facts_checked_on_the_web`과 같다). 사실을 고칠 때는 다시 확인하고 설명, 대본, 시험을 함께 고친다.
@@ -115,12 +116,14 @@ AI 초안이다. 사실은 상황 주제 스펙 3에서 확인한 것만 썼다.
 | | 대사 |
 |---|---|
 | R | Excuse me, do you speak English? I'm trying to get to Gyeongbokgung Palace. |
-| 나 | Sure. Take Line 4 from here, just one stop to Chungmuro. |
+| 나 | Sure. First, take Line 4 one stop to Chungmuro. |
 | R | Chungmuro, got it. And then what? |
 | 나 | Change to Line 3 there, and get off at Gyeongbokgung. |
 | R | Great. Which exit should I use? |
 | 나 | Take Exit 5. It goes straight into the palace. |
 | R | Perfect. Thank you so much! |
+
+- 처음 대사 「Sure. Take Line 4 from here, just one stop to Chungmuro.」는 길이 거기서 끝나는 것처럼 들렸다. 사용자가 폰에서 해 보고 「내 차례 첫마디가 4호선 한 정거장만 타고 가면 된다는 줄 알았어」라고 해서 「First,」를 넣었다(2026-11-08). 라이언의 「And then what?」은 충무로까지만 들은 관광객의 말이라 그대로 둔다. 나머지 다섯 대본도 이어 읽어 보았는데, 라이언의 질문이 모두 새 질문이라 고치지 않았다.
 
 **지하철역에서 교통카드 충전** (`t-tmoney`, 라이언 먼저)
 
