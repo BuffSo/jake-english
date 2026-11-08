@@ -278,13 +278,27 @@ def find_issues(target: str, heard: str, limit: int) -> list[Issue]:
     return out
 
 
-def issue_ko(i: Issue) -> str:
-    """The end screen's line for a point, worded like Ryan's: what was heard, never what was said."""
+def _as_written(found: str, text: str) -> str:
+    """The words of a point as `text` writes them, each one that `text` writes in one way only: the Mac compares in
+    lowercase, and the end screen showed 「i」 for 「I」 (todo follow-feedback leftovers 3). A word written both ways,
+    or not written at all (a number read out), stays as compared."""
+    forms: dict[str, set[str]] = {}
+    for w in re.findall(r"[A-Za-z0-9'’]+", text):
+        w = w.replace("’", "'").strip("'")
+        forms.setdefault(w.lower(), set()).add(w)
+    return " ".join(next(iter(f)) if len(f := forms.get(w, set())) == 1 else w for w in found.split())
+
+
+def issue_ko(i: Issue, line: str = "", heard: str = "") -> str:
+    """The end screen's line for a point, worded like Ryan's: what was heard, never what was said. `line` and
+    `heard` give the words as written. An added word takes 「도」, which fits after any word, where 이 or 가 would
+    depend on how it ends in Korean (the user's choice, 2026-11-08)."""
+    target, said = _as_written(i.target, line), _as_written(i.heard, heard)
     if not i.target:
-        return f"대사에 없는 「{i.heard}」 들렸어요"
+        return f"대사에 없는 「{said}」도 들렸어요"
     if not i.heard:
-        return f"「{i.target}」 → 들리지 않았어요"
-    return f"「{i.target}」 → 「{i.heard}」처럼 들렸어요"
+        return f"「{target}」 → 들리지 않았어요"
+    return f"「{target}」 → 「{said}」처럼 들렸어요"
 
 
 def praise_candidates(target: str, heard: str, before: list[Issue], limit: int = 2) -> list[str]:

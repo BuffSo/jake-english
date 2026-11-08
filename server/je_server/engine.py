@@ -621,7 +621,8 @@ class Engine:
             issues_left = issues_left or bool(tries and tries[-1].issues)
             lines.append({"line": l.model_dump(mode="json"), "tries": [
                 {"n": a.n, "mode": a.mode, "heard": a.heard, "followed": a.followed,
-                 "issues": [{"target": i.target, "heard": i.heard, "say_ko": issue_ko(i)} for i in a.issues],
+                 "issues": [{"target": i.target, "heard": i.heard, "say_ko": issue_ko(i, l.text, a.heard)}
+                            for i in a.issues],
                  # Ryan's one point for a roleplay turn said differently, in records from before 2026-11-07 (asides
                  # are left out above); a retry said differently only asked to follow the line, not a point
                  # a pronunciation point is already in issues, so it is not repeated (PR #15 review)

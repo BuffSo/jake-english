@@ -82,7 +82,8 @@ def test_comparison_counts_matched_words():
 def test_issue_ko_says_what_was_heard():
     assert issue_ko(Issue(target="right", heard="light")) == "「right」 → 「light」처럼 들렸어요"
     assert issue_ko(Issue(target="on", heard="")) == "「on」 → 들리지 않았어요"
-    assert issue_ko(Issue(target="", heard="and")) == "대사에 없는 「and」 들렸어요"
+    # 「도」 fits every word: 이 or 가 would depend on how the word ends in Korean (the user's choice, 2026-11-08)
+    assert issue_ko(Issue(target="", heard="and")) == "대사에 없는 「and」도 들렸어요"
 
 
 def test_limit_caps_issues_and_one_per_sound():
@@ -245,3 +246,18 @@ def test_a_word_added_inside_the_line_is_still_a_point():
     # not a try at the words after it: another first word
     assert find_issues("Could I see the menu?", "Please, could I see the menu?", limit=2) == [
         Issue(target="", heard="please")]
+
+
+# --- the end screen's words, and notation (todo follow-feedback leftovers 3, 5) --------------------------------
+
+def test_issue_ko_shows_the_words_as_written():
+    # the Mac compares in lowercase; the end screen shows a word the way the line or the transcript writes it
+    assert issue_ko(Issue(target="i", heard="eye"), "Can I see the menu?", "Can eye see the menu?") == (
+        "「I」 → 「eye」처럼 들렸어요")
+    assert issue_ko(Issue(target="", heard="boston"), "We need two tickets.", "We need two Boston tickets.") == (
+        "대사에 없는 「Boston」도 들렸어요")
+    # written both ways in the line, or not written at all (a number read out): left as compared
+    assert issue_ko(Issue(target="please", heard=""), "Please, please wait.", "Please wait.") == (
+        "「please」 → 들리지 않았어요")
+    assert issue_ko(Issue(target="ten", heard="tin"), "Wait 10 minutes.", "Wait tin minutes.") == (
+        "「ten」 → 「tin」처럼 들렸어요")
