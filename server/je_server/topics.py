@@ -6,14 +6,19 @@ a line here; the app shows whatever /home lists.
 
 The facts in the lists were checked on the web on 2026-11-07 (Gyeongbokgung station exit 5 goes straight into the
 palace, closed on some evenings; the station top-up machines take cash only and convenience stores top up too;
-Giovanni's Shrimp Truck serves shrimp scampi, hot & spicy and lemon butter, each plate with two scoops of rice).
-Do not change a fact without checking it again: a wrong route or menu is learned as if it were true.
+Giovanni's Shrimp Truck serves shrimp scampi, hot & spicy and lemon butter, each plate with two scoops of rice), and
+on 2026-11-08 (many foreign tourists visit Namdaemun Market, people queue long at its hotteok stalls, and its known
+vegetable hotteok has vegetables and glass noodles). Do not change a fact without checking it again: a wrong route
+or menu is learned as if it were true.
 
 Each list line also has its script and frame, written here and reviewed in the PR: a pick starts from it without
 asking Claude (spec fixed-list-scripts, ADR-0013). A script keeps only the facts of its description. When a fact
 changes, change the description, the script and `tests/test_topics.py` together. When one answer is split over the
 learner's turns (a route with a change), its first piece says more is coming ("First, ..."): ending there, it sounds
 like the whole answer, and the other person's next question sounds like waiting for the next piece (2026-11-08 user).
+Scripts use easy everyday words, at the learner's level: no hard proper names or special terms, or say them in plain
+words ("the two statues"). The user found a museum draft's "Pensive Bodhisattvas" and "national treasures" too hard
+and asked for every new script to be written this way (2026-11-08, spec korea-english-topic 4).
 
 Each script line carries Sohee's Korean for it, made once with the quick model and read over by hand (todo 13): a
 pick's 「통역」 does not ask Claude. It says what the English says and no more; read it with the lines around it, as
@@ -85,6 +90,66 @@ TOPICS: tuple[Topic, ...] = (
         placeholder_ko="예: 공원에서 외국인에게 먼저 인사하는 상황",
         first=None,
         picks=(
+            # 2026-11-08 small talk goes first, so the list does not read as helping tourists only (the user; spec
+            # korea-english-topic 4). The learner greets first here. A month in Seoul and two years of running are
+            # small made-up values, in the description too; the script says nothing about the park itself
+            _pick("t-hangang-run", "한강에서 달리다 먼저 인사하기",
+                  "아침에 한강공원에서 달리다가 처음 보는 외국인에게 내가 먼저 인사한다. 외국인은 지난달 서울로 이사 와서 "
+                  "한국에 산다. 나는 이 길을 2년째 거의 매일 아침 달린다. 내일 또 보자고 인사한다.", "user",
+                  ("아침마다 한강공원에서 달리는 서울 사람", "지난달 서울로 이사 온 외국인", "아침의 한강공원",
+                   "처음 보는 외국인에게 먼저 인사하고 가볍게 이야기하기"),
+                  (("user", "Morning! Great day for a run, isn't it?",
+                    "좋은 아침이에요! 달리기 딱 좋은 날이네요, 그렇죠?"),
+                   ("ryan", "It really is. I just moved to Seoul last month, and I love this path.",
+                    "정말 그래요. 지난달에 서울로 이사 왔는데, 이 길이 정말 좋아요."),
+                   ("user", "Welcome to Seoul! I've been running here for two years.",
+                    "서울에 오신 걸 환영해요! 저는 여기서 2년째 달리고 있어요."),
+                   ("ryan", "Wow, every morning? Maybe I'll see you around, then.",
+                    "와, 매일 아침이요? 그럼 또 마주치겠네요."),
+                   ("user", "Most mornings, yeah. See you tomorrow!",
+                    "거의 매일 아침이요. 내일 봬요!"))),
+            # the user asked for a place foreigners really go these days (2026-11-08). Checked on the web that day:
+            # many foreign tourists visit the market, people queue long at its hotteok stalls, and its known
+            # vegetable hotteok has vegetables and glass noodles. No stall name and no price: prices differ by source
+            # and have gone up. Nothing on taste beyond that. "glass noodles", not "noodles": plain noodles read as
+            # noodle soup (the user, 2026-11-08)
+            _pick("t-market-hotteok", "남대문시장 호떡 줄에서 이야기하기",
+                  "서울 남대문시장의 야채호떡 노점 앞 줄에서, 처음 보는 외국인 관광객이 호떡 줄이 맞는지 묻는다. "
+                  "남대문시장은 외국인 관광객이 많이 찾고, 호떡 노점 앞에는 사람들이 오래 줄을 선다. 야채호떡에는 "
+                  "채소와 당면이 들어 있다. 호떡 맛있게 먹으라고 인사한다.", "ryan",
+                  ("남대문시장에서 호떡 줄을 선 서울 사람", "남대문시장에 구경 온 외국인 관광객", "남대문시장의 호떡 노점 앞 줄",
+                   "호떡 줄을 묻는 관광객에게 답하고 가볍게 이야기하기"),
+                  (("ryan", "Excuse me, is this the line for hotteok?",
+                    "실례합니다, 여기가 호떡 줄인가요?"),
+                   ("user", "Yes, it is. People wait a long time for it.",
+                    "네, 맞아요. 사람들이 이거 먹으려고 오래 기다려요."),
+                   ("ryan", "Wow, it must be good. What's inside?",
+                    "와, 맛있나 보네요. 안에 뭐가 들었어요?"),
+                   ("user", "Vegetables and glass noodles. You'll love it!",
+                    "채소랑 당면이요. 분명 좋아하실 거예요."),
+                   ("ryan", "I can't wait. This market is so much fun!",
+                    "빨리 먹어 보고 싶네요. 이 시장 정말 재밌어요!"),
+                   ("user", "Glad you like it. Enjoy your hotteok!",
+                    "좋아하시니 다행이에요. 호떡 맛있게 드세요!"))),
+            # a week's stay is a small made-up value, in the description too; the cafe has no name
+            _pick("t-cafe-seat", "카페 옆자리 관광객과 이야기하기",
+                  "서울의 카페에서 처음 보는 외국인 관광객이 옆자리에 앉아도 되는지 묻는다. 앉으라고 하고 서울을 여행 "
+                  "중인지 묻는다. 관광객은 한국에 처음 왔고 일주일 머문다. 한국 음식이 맛있고 사람들이 친절하다고 한다. "
+                  "즐거운 여행 하라고 인사한다.", "ryan",
+                  ("카페에 앉아 있는 서울 사람", "서울에 여행 온 외국인 관광객", "서울의 카페",
+                   "옆자리에 앉는 관광객과 인사하고 가볍게 이야기하기"),
+                  (("ryan", "Excuse me, is anyone sitting here?",
+                    "실례합니다, 여기 자리 있나요?"),
+                   ("user", "No, go ahead. Are you traveling in Seoul?",
+                    "아니요, 앉으세요. 서울 여행 중이세요?"),
+                   ("ryan", "Yes, it's my first time in Korea. I'm staying for a week.",
+                    "네, 한국은 처음이에요. 일주일 머물러요."),
+                   ("user", "Nice! How do you like it so far?",
+                    "좋네요! 지금까지 어떠세요?"),
+                   ("ryan", "I love it. The food is great, and people are so nice.",
+                    "정말 좋아요. 음식도 맛있고, 사람들도 정말 친절해요."),
+                   ("user", "Glad to hear that. Have a great trip!",
+                    "그렇다니 다행이에요. 즐거운 여행 되세요!"))),
             _pick("t-gyeongbokgung", "명동역에서 경복궁 가는 길",
                   "명동역 근처에서 외국인 관광객이 경복궁 가는 법을 묻는다. 4호선을 타고 한 정거장 가서 충무로역에서 "
                   "3호선으로 갈아타고, 경복궁역 5번 출구로 나가면 궁으로 바로 이어진다.", "ryan",

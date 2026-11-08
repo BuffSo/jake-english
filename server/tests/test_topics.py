@@ -35,11 +35,14 @@ def test_other_leaves_out_the_korea_topic():
 def test_starting_lists():
     # three per topic to try it first (user), none yet for 「그 밖의 상황」; 2026-11-08 the user added two reservation
     # scenes to 「미국 여행」, at the end so the first three keep their places (todo 38)
-    assert [len(get(t).picks) for t in ("tourist", "usa", "other")] == [3, 5, 0]
+    assert [len(get(t).picks) for t in ("tourist", "usa", "other")] == [6, 5, 0]
     assert [p.id for p in get("usa").picks] == ["u-shrimp-truck", "u-hotel-checkin", "u-sneaker-size",
                                                 "u-hotel-online", "u-seafood-walkin"]
     assert [p.first for p in get("usa").picks] == ["ryan", "user", "user", "ryan", "ryan"]
-    assert all(p.first == "ryan" for p in get("tourist").picks)
+    # 2026-11-08 small talk first, so the list does not read as helping tourists only (spec korea-english-topic 4)
+    assert [p.id for p in get("tourist").picks] == ["t-hangang-run", "t-market-hotteok", "t-cafe-seat",
+                                                    "t-gyeongbokgung", "t-tmoney", "t-samgyeopsal"]
+    assert [p.first for p in get("tourist").picks] == ["user", "ryan", "ryan", "ryan", "ryan", "ryan"]
     ids = [p.id for t in TOPICS for p in t.picks]
     assert len(ids) == len(set(ids))
 
@@ -119,6 +122,8 @@ def test_script_keeps_the_facts_of_its_description():
                                                      "king room", "high floor"))
     assert all(w in said["u-seafood-walkin"] for w in ("reservation", "table for two", "30-minute wait", "bar",
                                                        "put my name down"))
+    assert all(w in said["t-market-hotteok"] for w in ("line for hotteok", "wait a long time",
+                                                       "Vegetables and glass noodles"))
 
 
 def test_ryans_list_lines_are_one_or_two_sentences():
@@ -181,6 +186,7 @@ def test_korean_keeps_the_facts():
     assert all(w in said["u-sneaker-size"] for w in ("270", "9 사이즈"))
     assert all(w in said["u-hotel-online"] for w in ("온라인", "확인 번호", "2박", "킹 침대", "높은 층"))
     assert all(w in said["u-seafood-walkin"] for w in ("예약", "두 명", "30분", "바에", "이름"))
+    assert all(w in said["t-market-hotteok"] for w in ("호떡 줄", "오래 기다려요", "채소", "당면"))
 
 
 def test_tmoney_korean_says_cash_only_of_the_machine():
@@ -215,3 +221,35 @@ def test_reservation_values_are_in_the_description():
 def test_walk_in_korean_says_no_more_than_the_english():
     # the bar is only another place to sit: 「바로」(right away) is not in the English
     assert not any("바로" in k for k in pick("usa", "u-seafood-walkin").ko)
+
+
+# --- small talk in Korea (spec korea-english-topic 4, 2026-11-08) -------------------------------------------------
+
+SMALL_TALK = ("t-hangang-run", "t-market-hotteok", "t-cafe-seat")
+
+
+def test_small_talk_values_are_in_the_description():
+    # the made-up values and the market facts the scripts say are facts of their descriptions too (REVIEW.md
+    # 「목록 대본의 사실」); the market facts were checked on the web on 2026-11-08
+    run, market, cafe = (pick("tourist", i).situation for i in SMALL_TALK)
+    assert all(w in run for w in ("한강공원", "지난달", "2년째", "먼저 인사"))
+    assert all(w in market for w in ("남대문시장", "야채호떡", "오래 줄", "채소와 당면"))
+    assert all(w in cafe for w in ("처음", "일주일", "옆자리"))
+
+
+def test_a_small_talk_pick_starts_with_the_learner():
+    # the user: in Korea the learner may greet a foreigner first (spec korea-english-topic 3)
+    p = pick("tourist", "t-hangang-run")
+    assert p.first == "user" and p.script[0][0] == "user"
+
+
+def test_small_talk_picks_end_on_the_learner():
+    # spec fixed-list-scripts 1: Ryan's last line would only echo the goodbye, so the learner closes
+    assert all(pick("tourist", i).script[-1][0] == "user" for i in SMALL_TALK)
+
+
+def test_market_script_says_nothing_of_taste_or_price():
+    # the description has what is inside the vegetable hotteok, not how it tastes or what it costs; the stall has
+    # no name (spec korea-english-topic 4)
+    said = " ".join(t for _, t in pick("tourist", "t-market-hotteok").script).lower()
+    assert not any(w in said for w in ("sweet", " won", "$", "spicy", "price"))
