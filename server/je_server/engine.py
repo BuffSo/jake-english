@@ -16,7 +16,7 @@ from . import audio
 from .asr import WhisperError
 from .claude import ClaudeUnavailable, pick_ending
 from . import topics
-from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
+from .compare import FOLLOW_MIN, find_issues, issue_ko, korean_said, praise_candidates, similarity, words
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
 from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
@@ -492,8 +492,9 @@ class Engine:
             heard = await self.whisper.transcribe(wav, "en")
             close = similarity(line.text, heard) if words(heard) else 0.0
             # Hangul in the English transcript is Korean that was said: the match counts English words only, so the
-            # line begun and then Korean would pass as followed (Jake-voice check, 2026-11-08)
-            followed = close >= FOLLOW_MIN and not HANGUL.search(heard)
+            # line begun and then Korean would pass as followed (Jake-voice check, 2026-11-08). Not a name of the
+            # line written in Hangul, though: that is a try at the line (spec teacher-answer-context 3)
+            followed = close >= FOLLOW_MIN and not korean_said(line.text, heard)
             if not followed:
                 # forced to English, whisper translates Korean or leaves it in Hangul (spec offscript-aside 2). Every
                 # recording that does not follow the line is asked again: a near one may be the line begun and then
@@ -506,7 +507,8 @@ class Engine:
                     # error carries the failure's type name only, never the transcript
                     log.info("auto transcription failed: %s", e)
                     auto, lang = "", ""
-                if lang == "korean" and HANGUL.search(auto):
+                # auto-detection hears a try with the line's name in Hangul as Korean too (todo 40 2)
+                if lang == "korean" and korean_said(line.text, auto):
                     heard_ko = auto
             # a try at the line that came out wrong: English and close to it, so it gets the Mac's points
             near = not followed and heard_ko is None and close >= NEAR_MIN

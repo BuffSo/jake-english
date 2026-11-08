@@ -13,6 +13,7 @@ from itertools import product
 
 from . import cmu, sounds
 from .models import Issue
+from .names import HANGUL_WORD, is_name, romanize, same_name, syllables  # noqa: F401 (romanize, syllables: tests)
 
 FOLLOW_MIN = 0.6  # word-level similarity at or above this counts as following the line
 SOUND_LETTERS = {"R": "R", "L": "L", "F": "F", "P": "P", "V": "V", "B": "B", "TH": "TH", "DH": "TH", "S": "S",
@@ -92,7 +93,9 @@ def _price(dollars: int, cents: int) -> list[Token]:
     return [(f"{d} {unit} {c}", f"{d} {c}", f"{d} {unit} and {_number(cents)} {cent}")]
 
 
-def _tokens(text: str) -> list[Token]:
+def _tokens(text: str, hangul: bool = False) -> list[Token]:
+    """`hangul`: Hangul words stay as words, for a name the transcriber wrote in Hangul (spec teacher-answer-context
+    3); otherwise only Latin letters and digits count."""
     t = text.lower().replace("’", "'")
     t = re.sub(r"(?<=\d),(?=\d{3})", "", t)  # 1,000 is one number
     t = re.sub(r"\b([ap])\.?m\b\.?", r"\1m", t)
@@ -101,7 +104,7 @@ def _tokens(text: str) -> list[Token]:
     t = re.sub(r"(\d+)%", r"\1 percent", t)
     t = re.sub(r"\b(\d{1,2}):00\b", r"\1", t)  # 9:00 is nine (o'clock is dropped below)
     out: list[Token] = []
-    for w in re.findall(r"[a-z0-9']+", t):
+    for w in re.findall(r"[a-z0-9']+|[가-힣]+" if hangul else r"[a-z0-9']+", t):
         w = w.strip("'")
         if not w:
             continue
@@ -141,10 +144,10 @@ def words(text: str) -> list[str]:
     return _read(_tokens(text))
 
 
-def _paired(target: str, heard: str) -> tuple[list[str], list[str]]:
+def _paired(target: str, heard: str, hangul: bool = False) -> tuple[list[str], list[str]]:
     """The line's and the transcript's words, with each number on either side read the way that matches the other
     side best: 270 in the line and "two seventy" heard are the same words, and so are the other way round."""
-    a, b = _tokens(target), _tokens(heard)
+    a, b = _tokens(target), _tokens(heard, hangul)
     ways = [len(t) for t in a + b if not isinstance(t, str)]
     if not ways:
         return _read(a), _read(b)
@@ -207,6 +210,7 @@ class Comparison:
     matched_words: set[str] = field(default_factory=set)
     heard_matched: int = 0  # transcript words that matched the line (a word written in two counts both)
     heard_total: int = 0  # transcript words, fillers and restarts aside
+    korean: bool = False  # Hangul words other than a name of the line written in Hangul
 
 
 def _same_sound(target_word: str, heard_word: str) -> bool:
@@ -249,15 +253,37 @@ def _restart(line: list[str], at: int, added: list[str]) -> bool:
 
 
 def compare(target: str, heard: str) -> Comparison:
+    """The transcript against the line. Hangul in it counts only where it stands for a name of the line; anywhere
+    else it is Korean that was said, left out as before (spec teacher-answer-context 3)."""
+    c = _compare(target, heard, hangul=bool(HANGUL_WORD.search(heard)))
+    return _compare(target, heard) if c.korean else c
+
+
+def korean_said(line: str, text: str) -> bool:
+    """Hangul in the transcript other than a name of the line written in Hangul (spec teacher-answer-context 3): the
+    transcriber wrote 「Get off at 홍대」 for a try at the line, which is no Korean said."""
+    return bool(HANGUL_WORD.search(text)) and _compare(line, text, hangul=True).korean
+
+
+def _compare(target: str, heard: str, hangul: bool = False) -> Comparison:
     # fillers are never points, on either side: the transcriber usually leaves them out (spec 「평가」 2)
-    wa, wb = _paired(target, heard)
+    wa, wb = _paired(target, heard, hangul)
     a = [w for w in wa if w not in FILLERS]
     b = [w for w in wb if w not in FILLERS]
     diffs: list[Issue] = []
     matched: set[str] = set()
     count = heard_count = restarted = 0
+    korean = False
     for tag, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
         ta, hb = a[i1:i2], b[j1:j2]
+        # a name the dictionary does not have, heard as one or more words (spec teacher-answer-context 3). Hangul
+        # anywhere else is Korean said; word for word when the counts match, so a name in Hangul next to another
+        # word heard wrong still stands for the name
+        names = bool(ta) and all(map(is_name, ta))
+        if tag == "replace" and len(ta) == len(hb):
+            korean |= any(HANGUL_WORD.match(h) and not is_name(t) for t, h in zip(ta, hb))
+        else:
+            korean |= not names and any(HANGUL_WORD.match(h) for h in hb)
         if tag == "equal" or "".join(ta) == "".join(hb):  # checkout and check out
             count += len(ta)
             heard_count += len(hb)
@@ -266,17 +292,22 @@ def compare(target: str, heard: str) -> Comparison:
             restarted += len(hb)
         elif tag == "replace" and len(ta) == len(hb):
             for t, h in zip(ta, hb):
-                if _same_sound(t, h):  # to for two, four for for: how the transcriber wrote it
+                # to for two, four for for, a name spelled the transcriber's way: how it was written
+                if _same_sound(t, h) or (is_name(t) and same_name(t, h)):
                     count += 1
                     heard_count += 1
                     matched.add(t)
                 else:
                     diffs.append(_issue([t], [h], _listed(t, h)))
+        elif tag == "replace" and names and same_name("".join(ta), "".join(hb)):  # Insadong heard as Insa Dong
+            count += len(ta)
+            heard_count += len(hb)
+            matched.update(ta)
         else:
             found = next((f for t in ta for h in hb if (f := _listed(t, h))), None)
             diffs.append(_issue(ta, hb, found))
     return Comparison(diffs=diffs, matched=count, total=len(a), matched_words=matched, heard_matched=heard_count,
-                      heard_total=len(b) - restarted)
+                      heard_total=len(b) - restarted, korean=korean)
 
 
 def find_issues(target: str, heard: str, limit: int) -> list[Issue]:
