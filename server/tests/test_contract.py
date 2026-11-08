@@ -89,6 +89,11 @@ def test_talk_events_example_has_the_engine_types():
         if e["type"] in keys:
             assert set(e) == keys[e["type"]]
     assert next(e for e in events if e["type"] == "heard")["korean"] is False
+    # inside a free talk Ryan speaks English only: its errors say a fixed English line (spec free-talk-design 3)
+    from je_server.phrases import TALK_PHRASES
+
+    error = next(e for e in events if e["type"] == "error")
+    assert error["say"]["text"] == TALK_PHRASES[error["code"]]
 
 
 def test_talk_end_example_has_the_engine_shape():
