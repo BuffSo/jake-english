@@ -1,6 +1,7 @@
 import type { AttemptEvent, ScriptLine, TalkEnd } from "../api/types";
 import endJson from "../../../contract/talk-end.json";
-import { fixCount, fixInitial, fixReduce, isLastFix, nextLabel, type FixAction, type FixState } from "./talkFix";
+import { MIC_FAILED } from "./state";
+import { canTry, fixCount, fixInitial, fixMessageIsError, fixReduce, isLastFix, nextLabel, type FixAction, type FixState } from "./talkFix";
 
 const end = endJson as unknown as TalkEnd;
 const item = end.items[0];
@@ -109,4 +110,33 @@ test("retry after an error with the line loaded makes the fix ready again", () =
   expect(r).toMatchObject({ phase: "ready", message: null, heard: null, feedback: "", tries: 1 });
   expect(fixReduce(r, { type: "recordStart" }).tries).toBe(2);
   expect(fixReduce(r, { type: "retry" })).toBe(r);
+});
+
+test("a mic that did not start goes back to ready saying why, in red", () => {
+  const rec = run(loaded(), { type: "recordStart" });
+  const f = fixReduce(rec, { type: "micFailed" });
+  expect(f).toMatchObject({ phase: "ready", message: MIC_FAILED, tries: 1 });
+  expect(fixMessageIsError(f)).toBe(true);
+  const ready = loaded();
+  expect(fixReduce(ready, { type: "micFailed" })).toBe(ready);
+});
+
+test("only a failure or a mic that cannot be used is drawn as an error", () => {
+  const ns = run(loaded(), { type: "recordStart" }, { type: "noSpeech" });
+  expect(ns.message).toBeTruthy();
+  expect(fixMessageIsError(ns)).toBe(false);
+  expect(fixMessageIsError(run(fixInitial("rp1", end), { type: "lineFailed", message: "안 됐어요" }))).toBe(true);
+  expect(fixMessageIsError(loaded())).toBe(false);
+});
+
+test("canTry: the mic starts only on a loaded fix that is ready or evaluated", () => {
+  expect(canTry(fixInitial("rp1", end))).toBe(false);
+  expect(canTry(loaded())).toBe(true);
+  expect(canTry(run(loaded(), { type: "recordStart" }))).toBe(false);
+  expect(canTry(evaluating())).toBe(false);
+  const done = run(evaluating(), { type: "event", tries: 1, e: { type: "done", next: 0, issues: 0 } });
+  expect(done.phase).toBe("evaluated");
+  expect(canTry(done)).toBe(true);
+  // an error before the line loaded has no line to try
+  expect(canTry(run(fixInitial("rp1", end), { type: "lineFailed", message: "x" }))).toBe(false);
 });

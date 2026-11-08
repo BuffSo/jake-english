@@ -4,7 +4,7 @@
 // earlier try is dropped.
 import type { AttemptEvent, ScriptLine, TalkEnd, TalkItem, TryRef } from "../api/types";
 import type { ErrorCode } from "../api/client";
-import { NO_SPEECH, messageFor } from "./state";
+import { MIC_FAILED, NO_SPEECH, messageFor } from "./state";
 
 export type FixPhase = "loading" | "ready" | "recording" | "evaluating" | "evaluated" | "error";
 
@@ -28,6 +28,7 @@ export type FixAction =
   | { type: "retry" }
   | { type: "recordStart" }
   | { type: "recordCancel" }
+  | { type: "micFailed" }
   | { type: "noSpeech" }
   | { type: "recordStop" }
   | { type: "event"; tries: number; e: AttemptEvent }
@@ -46,6 +47,10 @@ export function fixInitial(rpId: string, end: TalkEnd): FixState {
 export const isLastFix = (s: FixState) => s.at >= s.items.length - 1;
 export const nextLabel = (s: FixState): "다음 ›" | "끝" => (isLastFix(s) ? "끝" : "다음 ›");
 export const fixCount = (s: FixState): string | null => (s.items.length >= 2 ? `${s.at + 1}/${s.items.length}` : null);
+// 「🎤 따라 말하기」 starts the mic: a loaded fix, before a try or after one
+export const canTry = (s: FixState): boolean => (s.phase === "ready" || s.phase === "evaluated") && s.line !== null;
+// the message is drawn in red after a failure and when the mic could not be used; the no-speech notice is not one
+export const fixMessageIsError = (s: FixState): boolean => s.phase === "error" || s.message === MIC_FAILED;
 
 export function fixReduce(s: FixState, a: FixAction): FixState {
   switch (a.type) {
@@ -58,10 +63,13 @@ export function fixReduce(s: FixState, a: FixAction): FixState {
       if (s.phase !== "error") return s;
       return { ...s, phase: s.line ? "ready" : "loading", ...(s.line ? noResult : {}), message: null };
     case "recordStart":
-      if ((s.phase !== "ready" && s.phase !== "evaluated") || !s.line) return s;
+      if (!canTry(s)) return s;
       return { ...s, ...noResult, phase: "recording", tries: s.tries + 1, message: null };
     case "recordCancel":
       return s.phase === "recording" ? { ...s, phase: "ready" } : s;
+    case "micFailed":
+      // no permission or the recorder failed: back to before speaking, saying why, as the roleplay does
+      return s.phase === "recording" ? { ...s, phase: "ready", message: MIC_FAILED } : s;
     case "noSpeech":
       return s.phase === "recording" ? { ...s, phase: "ready", message: NO_SPEECH } : s;
     case "recordStop":
