@@ -142,7 +142,7 @@ test("done hands back my turn when the sounds end", () => {
   expect(talkReduce(s, { type: "ryanDone" }).phase).toBe("ready");
 });
 
-test("Korean heard gets Ryan's fixed Korean nudge", () => {
+test("Korean heard gets Ryan's fixed English line asking for English", () => {
   const s0 = run(ready(), { type: "recordStart", heard: null }, { type: "recordStop" });
   const help: Said[] = [{ text: "Could you try that in English? Short is fine.", audio: key("f") }];
   const s = run(
@@ -317,7 +317,7 @@ test("the line before a saved fix is Ryan's line before the turn it fixes", () =
   expect(savedBefore(rp, rp.lines[7])?.idx).toBe(4);
 });
 
-test("the line before a saved fix skips Ryan's Korean help lines", () => {
+test("the line before a saved fix skips Ryan's help lines", () => {
   const rp = withLines([L(0, "ryan", "reply"), L(1, "user", "ask"), L(2, "ryan", "help"), L(3, "user", "turn"), L(4, "user", "fix", 3)]);
   expect(savedBefore(rp, rp.lines[4])?.idx).toBe(0);
   const none = withLines([L(0, "ryan", "help"), L(1, "user", "turn"), L(2, "user", "fix", 1)]);

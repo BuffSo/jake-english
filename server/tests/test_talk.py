@@ -170,7 +170,7 @@ async def test_hangul_in_the_english_transcript_is_heard_again_in_korean(talks, 
     assert fake_claude.talk_calls == []
 
 
-async def test_korean_transcription_failing_still_answers_in_korean(talks, engine, speech_bytes, fake_whisper):
+async def test_korean_transcription_failing_still_gets_ryans_english_line(talks, engine, speech_bytes, fake_whisper):
     fake_whisper.by_lang = {"en": "I am 피곤해 today"}
     fake_whisper.fail_lang = "ko"
     rp = await talks.create()
@@ -477,7 +477,7 @@ async def test_end_with_nothing_to_fix_says_so(talks, engine, speech_bytes, fake
 async def test_end_sends_english_turns_and_ryans_replies_only(talks, speech_bytes, fake_whisper, fake_claude):
     rp = await talks.create()
     fake_whisper.by_lang = {"en": "I am 피곤해 today", "ko": "오늘 피곤해요"}
-    await run(talks, rp.id, speech_bytes)  # my Korean turn (1) and Ryan's Korean answer (2)
+    await run(talks, rp.id, speech_bytes)  # my Korean turn (1) and Ryan's English help line (2)
     fake_whisper.by_lang = {}
     fake_whisper.text = SAID[0]
     await run(talks, rp.id, speech_bytes)  # my English turn (3) and Ryan's reply (4)

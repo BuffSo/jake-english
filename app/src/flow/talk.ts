@@ -193,8 +193,9 @@ export function talkReduce(s: TalkState, a: TalkAction): TalkState {
 }
 
 // 「모아 둔 문장」의 앞 대사 (spec free-talk-design 8). A fix line plays Ryan's line before the turn it fixes
-// (`fix.of`, like the server's `fixes.line_before`), any other line the one right before it. Ryan's Korean `help`
-// lines are not part of the English talk, so they are walked past: the fix goes back to Ryan's English line.
+// (`fix.of`, like the server's `fixes.line_before`), any other line the one right before it. Ryan's `help` lines (his
+// fixed English after a Korean turn) are not part of the talk, so they are walked past: the fix goes back to Ryan's
+// reply.
 export function savedBefore(rp: Roleplay, line: ScriptLine): ScriptLine | undefined {
   let at = (line.fix ? line.fix.of : line.idx) - 1;
   const skip = (l: ScriptLine) => (line.fix ? !(l.speaker === "ryan" && l.kind !== "help") : l.kind === "help");

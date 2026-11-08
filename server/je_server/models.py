@@ -46,8 +46,9 @@ Draft = list[tuple[Speaker, str]]
 
 # script: a roleplay's line. reply: Ryan's English line (in a free talk also the first question); in records from before
 # 2026-11-07 it is also Ryan's in-role answer to something said differently from the line. The rest are free talk only
-# (spec free-talk-design 2): turn is my English turn, ask my Korean turn, help Ryan's Korean answer to it, and fix the
-# corrected sentence (said by `user`) that the closing 「대화 돌아보기」 shows.
+# (spec free-talk-design 2): turn is my English turn, ask my Korean turn, help Ryan's fixed English line after it
+# (`TALK_ENGLISH`, asking for English), and fix the corrected sentence (said by `user`) that the closing 「대화 돌아보기」
+# shows.
 LineKind = Literal["script", "reply", "turn", "ask", "help", "fix"]
 
 

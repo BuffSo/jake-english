@@ -6,7 +6,7 @@ export type Word = { syl: Syllable[]; emph: boolean; link: boolean };
 export type ThreeLine = { words: Word[]; reading: string };
 export type Speaker = "ryan" | "user";
 // reply: Ryan's English line; turn / ask / help / fix are free talk only: my English turn, my Korean turn, Ryan's
-// Korean answer, the corrected sentence
+// fixed English line after it (asking for English), the corrected sentence
 export type LineKind = "script" | "reply" | "turn" | "ask" | "help" | "fix";
 export type Fix = { of: number; said: string; why_ko: string; why_audio: string | null };
 export type ScriptLine = {
@@ -125,7 +125,8 @@ export type AttemptEvent =
   | { type: "error"; code: string; say: Said | null }
   | { type: "done"; next: number; issues: number };
 // Free talk (spec free-talk-design 2; contract/talk-events.ndjson, talk-end.json). `heard` is my English turn heard: idx
-// is its line, n its recording, korean whether it was heard again in Korean (then Ryan's fixed nudge follows, with no Claude).
+// is its line, n its recording, korean whether it was heard again in Korean (then Ryan's fixed English `help` line
+// follows, with no Claude).
 export type TalkEvent =
   | { type: "heard"; text: string; n: number; idx: number; korean: boolean }
   | { type: "text"; delta: string }

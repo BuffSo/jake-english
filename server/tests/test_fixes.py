@@ -78,12 +78,12 @@ def test_line_before_a_fix_is_ryans_line_before_the_turn():
     assert line_before(rp, 0) is None
 
 
-def test_line_before_skips_ryans_korean_help_line():
+def test_line_before_skips_ryans_help_line():
     rp = talk_example()
     assert rp.lines[2].kind == "help"
     moved = rp.lines[3].model_copy(update={"fix": rp.lines[7].fix.model_copy(update={"of": 3})})
     rp.lines[7] = moved.model_copy(update={"idx": 7})
-    # the turn it fixes (3) comes right after Ryan's Korean help line (2): the line before is Ryan's English opener (0)
+    # the turn it fixes (3) comes right after Ryan's help line (2): the line before is Ryan's opener (0)
     assert line_before(rp, 7).idx == 0
 
 

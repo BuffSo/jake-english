@@ -60,7 +60,7 @@ type Of<K extends TalkBubble["kind"]> = Extract<TalkBubble, { kind: K }>;
 // Ryan's sounds in the talk: the keys whose sound has started are the sentences I heard (spec 2)
 const TALK = "talk:";
 const talkTag = (key: string) => TALK + key;
-// a 🔊 asked for from a bubble (spec play-button-feedback 2): Ryan's line again, his Korean nudge, my recording
+// a 🔊 asked for from a bubble (spec play-button-feedback 2): Ryan's line again, his fixed `help` line, my recording
 const bubbleTag = (idx: number) => `bubble:${idx}`;
 const recTag = (r: TryRef) => `rec:${r.rp_id}:${r.idx}:${r.n}`;
 
@@ -389,7 +389,8 @@ export function TalkScreen({ sounds, onHome }: Props) {
     );
   }
 
-  // Ryan's fixed Korean nudge after Korean said with 「🎤 말하기」 (spec 3): the yellow box, his voice again on a tap
+  // Ryan's fixed English line asking for English after Korean said with 「🎤 말하기」 (spec 3): the yellow box, his
+  // voice again on a tap
   function helpBubble(b: Of<"help">) {
     return (
       <Named key={b.idx} part="feedback">
