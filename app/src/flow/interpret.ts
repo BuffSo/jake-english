@@ -2,7 +2,7 @@
 // how it shows and when her voice may play. Her sound comes a moment after the text, so whether it may play is
 // asked again when it arrives, not when the line was opened.
 import type { ScriptLine } from "../api/types";
-import { canReplay, type Phase } from "./state";
+import { canReplay, mayListen, type Phase } from "./state";
 
 export type Ko = { text: string; audio: string | null };
 export type KoEntry = Ko | "loading" | "failed";
@@ -33,7 +33,8 @@ export function mayAutoPlay(where: Where, phase: Phase, playing: boolean): boole
   return where === "end" || (canReplay(phase) && !playing);
 }
 
-// A tap on her line: in the roleplay while my turn waits, stopping what plays, like 「다시 듣기」
-export function mayReplay(where: Where, phase: Phase): boolean {
-  return where === "end" || canReplay(phase);
+// A tap on her line: in the roleplay while my turn waits, stopping what plays, but not Ryan's answer (spec
+// three-line-listen 5); on the end screen always
+export function mayReplay(where: Where, phase: Phase, answering: boolean): boolean {
+  return where === "end" || mayListen(phase, answering);
 }

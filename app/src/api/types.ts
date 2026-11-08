@@ -97,7 +97,8 @@ export type PastRun = { roleplay: Roleplay; summary: Summary };
 // a saved sentence and the line it was saved from (spec review-practice 5, 6)
 export type SavedItem = { key: string; rp_id: string; idx: number; speaker: Speaker; text: string; title_ko: string; at: string };
 export type AttemptEvent =
-  | { type: "heard"; text: string; followed: boolean }
+  // n: the recording just saved on the Mac, to play it back (spec three-line-listen 7); absent on an older server
+  | { type: "heard"; text: string; followed: boolean; n?: number }
   | { type: "text"; delta: string }
   | { type: "audio"; key: string }
   | { type: "error"; code: string; say: Said | null }

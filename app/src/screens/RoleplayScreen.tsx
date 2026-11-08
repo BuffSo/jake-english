@@ -70,7 +70,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const copyGate = useRef(createGate()).current;
   const interp = useInterpret(rp.id, sounds, (auto) =>
     mounted.current &&
-    (auto ? mayAutoPlay("roleplay", now.current.phase, sounds.isPlaying()) : mayReplay("roleplay", now.current.phase)),
+    (auto ? mayAutoPlay("roleplay", now.current.phase, sounds.isPlaying()) : mayReplay("roleplay", now.current.phase, false)),
   );
 
   useEffect(() => {

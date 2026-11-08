@@ -1,6 +1,6 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Roleplay, ScriptLine } from "../api/types";
-import { askFirst, canReplay, initial, leavesScreen, modelKey, practiceFor, reduce, type State } from "./state";
+import { askFirst, canReplay, initial, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -682,4 +682,49 @@ test("a near miss with points moves on like a followed try", () => {
   const next = reduce(s, { type: "next" });
   expect(next.idx).toBe(2);
   expect(next.history.map((b) => b.kind)).toEqual(["user"]);
+});
+
+describe("the recording of each turn (spec three-line-listen 3, 4, 7)", () => {
+  const heard = (s: State, n: number | undefined, followed = true) =>
+    reduce(s, { type: "event", e: { type: "heard", text: "I'd like a cup of coffee", followed, ...(n ? { n } : {}) } });
+
+  test("heard with n keeps the recording of this turn", () => {
+    const s = heard(at("evaluating"), 3);
+    expect(s.heardRec).toEqual({ rp_id: rp.id, idx: userLine.idx, n: 3 });
+  });
+
+  test("heard without n leaves no recording", () => {
+    const s = heard(at("evaluating"), undefined);
+    expect(s.heardRec).toBeNull();
+    expect(s.heard).toBe("I'd like a cup of coffee");
+  });
+
+  test("each retry bubble keeps its own recording", () => {
+    let s = heard(at("evaluating"), 1);
+    s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 0 } });
+    s = reduce(s, { type: "again" });
+    expect(s.heardRec).toBeNull();
+    s = reduce(reduce(s, { type: "recordStart" }), { type: "recordStop" });
+    s = heard(s, 2);
+    s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 0 } });
+    s = reduce(s, { type: "next" });
+    const mine = s.history.filter((b) => b.kind === "user");
+    expect(mine.map((b) => b.rec?.n)).toEqual([1, 2]);
+    expect(mine[0].rec).toEqual({ rp_id: rp.id, idx: userLine.idx, n: 1 });
+  });
+
+  test("an aside keeps its recording only while on screen", () => {
+    let s = heard(at("evaluating"), 4, false);
+    s = reduce(s, { type: "event", e: { type: "done", next: 1, issues: 0 } });
+    expect(s.heardRec?.n).toBe(4);
+    s = reduce(s, { type: "again" });
+    expect(s.history.some((b) => b.kind === "user")).toBe(false);
+    expect(s.heardRec).toBeNull();
+  });
+});
+
+test("a bubble sound plays only while my turn waits and Ryan is not answering (spec three-line-listen 5)", () => {
+  const phases: State["phase"][] = ["loading", "ryan", "ready", "recording", "evaluating", "evaluated", "error"];
+  expect(phases.filter((p) => mayListen(p, false))).toEqual(["ready", "evaluated"]);
+  expect(phases.filter((p) => mayListen(p, true))).toEqual([]);
 });
