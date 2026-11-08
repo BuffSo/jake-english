@@ -27,6 +27,7 @@ import { InRowButton } from "../ui/InRowButton";
 import { keepWords } from "../ui/keepWords";
 import { Named } from "../ui/Named";
 import { lineNotes, needsNotes, notesView } from "../ui/notesView";
+import { usePicture } from "../ui/picture";
 import { StarButton } from "../ui/Star";
 import { SoonEnds, StopButton } from "../ui/StopButton";
 import { ThreeLineView } from "../ui/ThreeLine";
@@ -34,7 +35,8 @@ import { useSaved } from "../ui/useSaved";
 import { colors, top } from "../ui/theme";
 import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 
-// soheeFace: her face from /home (`images.sohee.face`); absent on an older server, then the chip's words alone
+// soheeFace: her face from /home (`images.sohee.face`); absent on an older server (or failing to load), then the chip's
+// words alone
 type Props = { rp: Roleplay; end: TalkEnd; sounds: SoundQueue; soheeFace?: string; onHome: () => void };
 
 // 「🔊 듣기」 under the corrected sentence plays its model under this tag (spec play-button-feedback 2)
@@ -209,6 +211,8 @@ export function TalkFixScreen({ rp, end, sounds, soheeFace, onHome }: Props) {
   const three = line ? lineNotes(line, threes[line.idx], !!noNotes[line.idx]) : null;
   const view = notesView(three, s.reading);
   const chance = soheeLine(end);
+  // her face, left out once it fails to load: the words alone (spec 9 「그림」)
+  const [chipFace, onChipFaceError] = usePicture(soheeFace);
 
   return (
     <View style={styles.wrap}>
@@ -220,8 +224,8 @@ export function TalkFixScreen({ rp, end, sounds, soheeFace, onHome }: Props) {
         </View>
         {/* under the title, also when there is nothing to fix; her green, as on her bubbles */}
         {chance && (
-          <View style={styles.chip}>
-            {soheeFace && <Image source={api.imageSource(soheeFace)} style={styles.chipFace} />}
+          <View style={[styles.chip, !chipFace && styles.chipNoFace]}>
+            {chipFace && <Image source={api.imageSource(chipFace)} onError={onChipFaceError} style={styles.chipFace} />}
             <Text style={styles.chipText}>{chance}</Text>
           </View>
         )}
@@ -384,6 +388,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.soheeLine,
   },
+  chipNoFace: { paddingVertical: 5, paddingLeft: 10 },
   chipFace: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.ryan },
   chipText: { fontSize: 14, fontWeight: "700", color: colors.soheeText },
   scroll: { padding: 16, paddingBottom: 32 },

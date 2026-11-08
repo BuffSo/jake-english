@@ -5,7 +5,7 @@
 // full sentence, its 🔊 and its reading notes. A tap on her Korean plays her voice again.
 //
 // Once Ryan has a newer reply, the bubble folds to 「🤫 소희 찬스」 (「· 전체 문장 봄」 after step 2) and opens on a tap.
-// Without pictures (a server from before the Sohee chance) the words alone.
+// Without pictures (a server from before the Sohee chance, or one that failed to load) the words alone.
 import { useEffect, useRef } from "react";
 import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -14,6 +14,7 @@ import type { ThreeLine } from "../api/types";
 import { HINT_FAILED, hintSoundTag, soheeFullTag, soheeTag, type Chance } from "../flow/soheeChance";
 import { InRowButton } from "./InRowButton";
 import { keepWords } from "./keepWords";
+import { usePicture } from "./picture";
 import { PlayIcon } from "./PlayIcon";
 import { colors } from "./theme";
 import { Dots, ThinkingFace } from "./ThinkingFace";
@@ -153,10 +154,17 @@ export function SoheeHint(p: Props) {
   );
 }
 
-// her face in a green ring; nothing without a picture
+// her face in a green ring; nothing without a picture, or once it failed to load (spec 9 「그림」: the words alone)
 function Face({ path, size }: { path?: string; size: number }) {
-  if (!path) return null;
-  return <Image source={api.imageSource(path)} style={[styles.face, { width: size, height: size, borderRadius: size / 2 }]} />;
+  const [shown, onError] = usePicture(path);
+  if (!shown) return null;
+  return (
+    <Image
+      source={api.imageSource(shown)}
+      onError={onError}
+      style={[styles.face, { width: size, height: size, borderRadius: size / 2 }]}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
