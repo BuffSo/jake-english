@@ -146,3 +146,16 @@ def test_server_defaults_to_the_spec_models(settings):
 
     claude = build_services(settings).engine.claude
     assert claude.writer is SONNET and claude.quick is HAIKU and claude.recommender is QUICKS["sonnet"]
+
+
+def test_talk_model_defaults_to_sonnet():
+    assert load_settings(TOKEN).claude_talk == "sonnet"
+
+
+def test_talk_model_read_from_env():
+    assert load_settings({**TOKEN, "JE_CLAUDE_TALK": "haiku"}).claude_talk == "haiku"
+
+
+def test_unknown_talk_model_stops_the_server():
+    with pytest.raises(ValueError, match="JE_CLAUDE_TALK"):
+        load_settings({**TOKEN, "JE_CLAUDE_TALK": "gpt"})

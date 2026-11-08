@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from .claude import QUICKS, WRITERS
+from .claude import QUICKS, TALKERS, WRITERS
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = SERVER_DIR.parent
@@ -21,6 +21,7 @@ MIN_TOKEN = 32
 DEFAULT_WRITER = "sonnet"
 DEFAULT_QUICK = "haiku"
 DEFAULT_RECOMMEND = "sonnet"
+DEFAULT_TALK = "sonnet"  # JE_CLAUDE_TALK: Ryan in free talk, a key of claude.TALKERS
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class Settings:
     claude_writer: str = DEFAULT_WRITER
     claude_quick: str = DEFAULT_QUICK
     claude_recommend: str = DEFAULT_RECOMMEND
+    claude_talk: str = DEFAULT_TALK
 
 
 def _model_name(env: Mapping[str, str], key: str, choices: Mapping[str, object], default: str) -> str:
@@ -84,4 +86,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         claude_writer=_model_name(env, "JE_CLAUDE_WRITER", WRITERS, DEFAULT_WRITER),
         claude_quick=_model_name(env, "JE_CLAUDE_QUICK", QUICKS, DEFAULT_QUICK),
         claude_recommend=_model_name(env, "JE_CLAUDE_RECOMMEND", QUICKS, DEFAULT_RECOMMEND),
+        claude_talk=_model_name(env, "JE_CLAUDE_TALK", TALKERS, DEFAULT_TALK),
     )

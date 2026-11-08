@@ -38,6 +38,8 @@ QUICKS: dict[str, dict[str, Any]] = {
     "haiku": HAIKU,
     "sonnet": QUICK_SONNET,
 }
+# Ryan as the free-talk partner picks from the same settings (JE_CLAUDE_TALK, default Sonnet).
+TALKERS = WRITERS
 # Jake's recommendation picks from QUICKS too (JE_CLAUDE_RECOMMEND), default Sonnet: 2026-11-08 the user chose it
 # after the three quick jobs were compared on made-up inputs. Haiku wrote odd recommendation sentences 12 times in
 # 63 (the message's 「끝말:」 copied, two endings, 「제가 …」), Sonnet twice; Sohee's interpretation and Ryan's
@@ -156,11 +158,13 @@ def _spoken(text: str) -> str:
 
 class Claude:
     def __init__(self, client: Any, writer: dict[str, Any] = SONNET, quick: dict[str, Any] = HAIKU,
-                 recommender: dict[str, Any] = QUICK_SONNET):
+                 recommender: dict[str, Any] = QUICK_SONNET,
+                 talker: dict[str, Any] = SONNET):
         self.client = client
         self.writer = writer
         self.quick = quick
         self.recommender = recommender
+        self.talker = talker
 
     def _request(self, model: dict[str, Any], output_config: dict[str, Any]) -> dict[str, Any]:
         kw = {k: v for k, v in model.items() if k != "effort"}
@@ -364,7 +368,15 @@ class Claude:
                                        whole=True):
             yield text
 
-    async def _stream(self, kw: dict[str, Any], system: str, body: dict, max_tokens: int,
+    # --- Ryan as the free-talk partner ----------------------------------------------------------
+
+    async def talk(self, messages: list[dict]) -> AsyncIterator[str]:
+        """Streams Ryan's next free-talk turn (spec free-talk 3). `messages` are the turns so far, Ryan as the
+        assistant, sent as they are. Short, so a stream that stops early still keeps what came (not `whole`)."""
+        async for text in self._stream(self._request(self.talker, {}), prompts.TALK_SYSTEM, messages, 300):
+            yield text
+
+    async def _stream(self, kw: dict[str, Any], system: str, body: dict | list[dict], max_tokens: int,
                       whole: bool = False) -> AsyncIterator[str]:
         """A live call streamed as text, without double quotes; an empty output_config is left out. `whole`: a stream
         that ends at the token limit or as a refusal, after some text and without an error, is unavailable too, so
@@ -375,7 +387,8 @@ class Claude:
         try:
             async with self._client(live=True).messages.stream(
                 **kw, max_tokens=max_tokens, system=system,
-                messages=[{"role": "user", "content": json.dumps(body, ensure_ascii=False)}],
+                messages=body if isinstance(body, list)
+                else [{"role": "user", "content": json.dumps(body, ensure_ascii=False)}],
             ) as stream:
                 async for text in stream.text_stream:
                     if text := text.translate(DOUBLE_QUOTES):

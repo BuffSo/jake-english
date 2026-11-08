@@ -55,7 +55,7 @@ def build_services(settings: Settings) -> Services:
     import anthropic
 
     from .asr import Whisper
-    from .claude import QUICKS, WRITERS, Claude
+    from .claude import QUICKS, TALKERS, WRITERS, Claude
     from .store import Store
     from .tts import Voice
 
@@ -64,9 +64,11 @@ def build_services(settings: Settings) -> Services:
     voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir, hear=whisper.hear)
     writer, quick = WRITERS[settings.claude_writer], QUICKS[settings.claude_quick]
     recommender = QUICKS[settings.claude_recommend]
-    log.info("claude models: writer %s, quick %s, recommend %s", writer["model"], quick["model"], recommender["model"])
+    talker = TALKERS[settings.claude_talk]
+    log.info("claude models: writer %s, quick %s, recommend %s, talk %s", writer["model"], quick["model"],
+             recommender["model"], talker["model"])
     claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30),
-                    writer=writer, quick=quick, recommender=recommender)
+                    writer=writer, quick=quick, recommender=recommender, talker=talker)
     return Services(engine=Engine(store, claude, voice, whisper), voice=voice, whisper=whisper)
 
 

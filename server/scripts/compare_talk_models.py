@@ -18,29 +18,9 @@ import anthropic
 
 from je_server.claude import QUICKS, WRITERS, Claude
 from je_server.config import load_settings
+from je_server.prompts import TALK_START, TALK_SYSTEM  # the prompt that ships
 from je_server.sentences import SentenceBuffer
 
-# A draft of the partner's instructions; the prompt that ships is in je_server/prompts.py once written.
-SYSTEM = """\
-You are Ryan, an English conversation partner in a speaking-practice app. The learner is a Korean adult who
-understands some English but is not confident speaking it. You chat in English about everyday life.
-
-How you reply:
-- Two or three sentences, never more, and under 35 words in all, in plain everyday English a learner can follow.
-- Begin with a short reaction of two to five words that fits what they said. It is spoken first, so keep it short.
-  Vary it: do not begin with a reaction you already used in this conversation.
-- Then, if you like, one short comment or a little about yourself, and end with one easy question, so the learner
-  has something to answer.
-- Follow what the learner wants to talk about.
-- Never correct the learner's English and never comment on mistakes: corrections come after the conversation.
-  If you understand what they mean, just answer it.
-- The learner's words come from speech recognition and may contain wrong words. Guess the meaning from the
-  conversation. If it still does not make sense, do not make up what they meant: say kindly that you did not catch
-  it and ask them to say it again.
-- If the learner asks you something, answer briefly as Ryan, then ask back.
-- Plain text only: no lists, no quotation marks, no emojis, no stage directions.
-"""
-START = "(The learner opened free talk.)"
 
 # (name, conversation so far: Ryan's opener first, then turns alternating learner / Ryan, ending with the learner)
 CASES: list[tuple[str, list[str]]] = [
@@ -51,6 +31,7 @@ CASES: list[tuple[str, list[str]]] = [
                         "I eat the lunch with my coworker at the Korean rest around near my office."]),
     ("asks back", ["What do you usually do on weekends?", "I usually cook at home.", "Nice! What do you like to cook?",
                    "Kimchi stew. What about you? Do you like cooking?"]),
+    ("how do you say", ["What did you do today?", "How do you say I'm tired in English?"]),
     ("stuck", ["Do you have any plans for the holidays?", "Um... I don't know."]),
     ("long turn", ["How is work these days?",
                    "I am thinking about changing my job because my company is too far from my house, it takes one "
@@ -73,7 +54,7 @@ MODELS = {"sonnet": WRITERS["sonnet"], "haiku": QUICKS["haiku"]}
 
 
 def messages(turns: list[str]) -> list[dict]:
-    out = [{"role": "user", "content": START}]
+    out = [{"role": "user", "content": TALK_START}]
     for i, t in enumerate(turns):
         out.append({"role": "assistant" if i % 2 == 0 else "user", "content": t})
     return out
@@ -103,7 +84,7 @@ async def ask(client, model: dict, turns: list[str]) -> dict:
     t0 = time.perf_counter()
     first_text = first_sentence = None
     buf, sentences, text = SentenceBuffer(), [], ""
-    async with client.messages.stream(**kw, max_tokens=300, system=SYSTEM, messages=messages(turns)) as stream:
+    async with client.messages.stream(**kw, max_tokens=300, system=TALK_SYSTEM, messages=messages(turns)) as stream:
         async for delta in stream.text_stream:
             first_text = first_text or time.perf_counter() - t0
             text += delta
