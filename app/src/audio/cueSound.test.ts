@@ -37,10 +37,14 @@ const rmsDb = (s: Float32Array) => 20 * Math.log10(Math.sqrt(s.reduce((sum, x) =
 // 2026-11-08). At a quarter it is -22.4, at or under all of them. Plain RMS still puts it 2 to 5 dB over the speech in
 // those lines (-19 dBFS against -21 to -24), since it counts a short tone at full weight; the RMS bound below only pins
 // today's value so a louder cue fails here.
-test("no cue is louder than a quarter of full scale, and none is silent", () => {
+// The cancel cue spreads its gain over the note and two overtones, so its peak is higher for the same loudness: by
+// `ebur128` it is 0.2 dB under the start cue (todo 20261108_43, 2026-11-08).
+const PEAK: Record<Cue, number> = { start: 0.25, end: 0.25, cancel: 0.4 };
+
+test("no cue is louder than its bound, and none is silent", () => {
   for (const cue of CUES) {
     const peak = Math.max(...Array.from(cueSamples(cue), Math.abs));
-    expect(peak).toBeLessThanOrEqual(0.25);
+    expect(peak).toBeLessThanOrEqual(PEAK[cue]);
     expect(peak).toBeGreaterThan(0.1);
   }
 });
@@ -64,4 +68,26 @@ test("start rises, end falls, cancel is low", () => {
   expect(crossings(s, 0, at(60))).toBeLessThan(crossings(s, s.length - at(60), s.length));
   expect(crossings(e, 0, at(60))).toBeGreaterThan(crossings(e, e.length - at(60), e.length));
   expect(crossings(c, at(20), at(80))).toBeLessThan(crossings(s, 0, at(60)));
+});
+
+// how strong `hz` is in the samples (one bin of a DFT), in dB
+function level(s: Float32Array, hz: number): number {
+  let re = 0;
+  let im = 0;
+  for (let i = 0; i < s.length; i++) {
+    re += s[i] * Math.cos((2 * Math.PI * hz * i) / CUE_RATE);
+    im += s[i] * Math.sin((2 * Math.PI * hz * i) / CUE_RATE);
+  }
+  return 20 * Math.log10(Math.hypot(re, im) / s.length);
+}
+
+// todo 20261108_43: the pure 392 Hz cancel came out of the phone speaker 11 dB under the start cue (-54 against -43
+// LUFS), which plays 659 and 880 Hz: a small speaker gives little below that. The user kept the low note and picked the
+// draft that adds its overtones, which the speaker does play.
+test("cancel keeps its low note and has its overtones", () => {
+  const c = cueSamples("cancel");
+  const base = level(c, 392);
+  expect(base).toBeGreaterThan(level(c, 523)); // the note is still 392 Hz
+  expect(level(c, 784)).toBeGreaterThan(base - 6);
+  expect(level(c, 1176)).toBeGreaterThan(base - 10);
 });
