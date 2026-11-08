@@ -116,7 +116,8 @@ class Voice:
 
     async def say(self, text: str, voice: Literal["ryan", "jake", "sohee"], lang: Literal["english", "korean"],
                   urgent: bool, rank: int = 0, check: bool = False) -> str:
-        """rank orders prepared jobs (the line number), so the next line's sound is not stuck behind later lines.
+        """rank orders prepared jobs (the line number), so the next line's sound is not stuck behind later lines;
+        Sohee's sounds made ahead pass a rank above every line number (`engine.SOHEE_RANK`) to come after them.
         check hears the sound back and makes it again when its last word is missing; it adds a transcription
         (about 0.4 s), so Ryan's live feedback does not use it."""
         key = audio_key(voice, lang, text)

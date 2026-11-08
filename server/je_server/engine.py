@@ -53,7 +53,8 @@ class Engine:
         self.sem = asyncio.Semaphore(3)
         # notes being made, one call per line: Ryan's when asked, the learner's in the background from the start
         self.threes: dict[tuple[str, int], asyncio.Task] = {}
-        self.kos: dict[tuple[str, int], asyncio.Task] = {}  # Sohee's Korean asked for, one call per line
+        # Sohee's Korean asked for, one call per line; a list pick's lines come with theirs from the repository
+        self.kos: dict[tuple[str, int], asyncio.Task] = {}
         self.sohees: dict[str, asyncio.Task] = {}  # Sohee's sounds made ahead, one task per run of a list pick
         self.answers_running = 0  # recordings being answered now; Sohee's sounds made ahead wait for none
         self.quiet = asyncio.Event()
@@ -299,9 +300,10 @@ class Engine:
     # --- Sohee's interpretation (spec korean-translation) ---------------------------------------
 
     async def ko(self, rp_id: str, idx: int) -> str:
-        """Sohee's Korean for a line, made when first asked and kept on the line. Asks for the same line at once
-        share one Claude call. It does not wait for `self.sem`, which three-line notes can fill at the start of a
-        roleplay (spec 5, builder check)."""
+        """Sohee's Korean for a line, made when first asked and kept on the line; a list pick's line has it from the
+        repository already, so Claude is not asked (todo 13). Asks for the same line at once share one Claude call.
+        It does not wait for `self.sem`, which three-line notes can fill at the start of a roleplay (spec 5, builder
+        check)."""
         _, line = self.get_line(rp_id, idx)
         if line.ko is not None:
             return line.ko
@@ -327,7 +329,8 @@ class Engine:
 
     async def ko_audio(self, rp_id: str, idx: int) -> str:
         """Sohee saying the line's Korean, made when first asked: urgent, since the learner waits, and heard back,
-        since a lost last sound (「~요」) changes the meaning (spec 4)."""
+        since a lost last sound (「~요」) changes the meaning (spec 4). A list pick's sounds are also made ahead
+        (`_sohee_later`); asked for while that one is queued or being made, both wait for the same sound."""
         _, line = self.get_line(rp_id, idx)
         if line.ko is None:
             raise NotFound(f"{rp_id}/{idx}/ko")
