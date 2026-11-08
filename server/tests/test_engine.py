@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from je_server.claude import ClaudeUnavailable
+from je_server.claude import JAKE_ENDINGS, ClaudeUnavailable
 from je_server.engine import NotFound
 from je_server.models import Attempt, ScriptLine
 
@@ -79,8 +79,16 @@ async def test_unknown_line_is_not_found(engine):
 
 async def test_recommend_is_jake_korean(engine, fake_voice, fake_claude):
     said = await engine.recommend()
-    assert said.text.endswith("어때요?") and (said.text, "jake", "korean", True) in fake_voice.calls
+    assert fake_claude.endings[-1] in {e for e, _ in JAKE_ENDINGS} and said.text.endswith(fake_claude.endings[-1])
+    assert (said.text, "jake", "korean", True) in fake_voice.calls
     assert said.text in fake_voice.checked  # heard back: its end was once swallowed (2026-11-05)
+
+
+async def test_recommend_does_not_repeat_the_last_turned_down_ending(engine, fake_claude):
+    # 「다른 걸로요」: the next suggestion ends another way (spec situation-topics 4)
+    for _ in range(20):
+        await engine.recommend(["카페에서 주문하는 상황을 추천해요."])
+    assert "상황을 추천해요." not in fake_claude.endings  # the weights: test_claude.py, with a seeded random
 
 
 async def test_recommend_passes_turned_down(engine, fake_claude):

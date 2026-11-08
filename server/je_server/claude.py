@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 import time
 from collections.abc import AsyncIterator, Sequence
@@ -52,6 +53,55 @@ DOUBLE_QUOTES = str.maketrans("", "", "\"“”")
 # Calls made while the learner waits in a turn (feedback, teacher Ryan's answer). The app gives up after 30s without a
 # stream event, so these must fail sooner and let Ryan say "지금은 대답할 수 없어요" (final review, 2026-11-05).
 LIVE_OPTIONS: dict[str, Any] = {"timeout": 12.0, "max_retries": 1}
+
+
+# How Jake's suggestion ends, with weights (2026-11-08 the user heard five endings in Jake's voice and chose these three
+# to mix, in place of the one 「…상황으로 연습해 보면 어때요?」). 「볼까요」 is Ryan's ending too, so it comes least
+# (AI recommendation, the user agreed). The server picks one and Claude keeps it: asked to choose among them itself,
+# a model leans on one and cannot keep the weights.
+JAKE_ENDINGS: tuple[tuple[str, int], ...] = (
+    ("상황을 골라 봤어요.", 2),
+    ("상황을 추천해요.", 2),
+    ("상황으로 연습해 볼까요?", 1),
+)
+
+
+def pick_ending(turned_down: Sequence[str], rng: random.Random | None = None) -> str:
+    """One of JAKE_ENDINGS by weight, but not the ending of the last suggestion just turned down (the app sends the
+    latest last), so 「다른 걸로요」 again and again does not hear the same ending twice in a row."""
+    last = turned_down[-1].strip() if turned_down else ""
+    left = [(e, w) for e, w in JAKE_ENDINGS if not last.endswith(e)]
+    return (rng or random).choices([e for e, _ in left], weights=[w for _, w in left])[0]
+
+
+def _ending_at_end(ending: str) -> re.Pattern[str]:
+    """The ending at the end of a sentence, with or without its spaces."""
+    return re.compile(r"\s*" + r"\s*".join(re.escape(c) for c in ending if not c.isspace()) + r"\s*$")
+
+
+# Endings a suggestion may come back with: Jake's three and the one from before them. Real Haiku (2026-11-08) wrote
+# 「추천해요」 for 「골라 봤어요」 4 times in 21, after turned-down sentences ending so, and once lost a space in one;
+# in a second run it put 「…상황을 추천해요.」 before the given ending 4 times in 21.
+KNOWN_ENDINGS = tuple(_ending_at_end(e) for e in (*(e for e, _ in JAKE_ENDINGS), "상황으로 연습해 보면 어때요?"))
+
+
+def _known_at_end(text: str) -> re.Match[str] | None:
+    for known in KNOWN_ENDINGS:
+        if m := known.search(text):
+            return m
+    return None
+
+
+def swap_ending(text: str, ending: str) -> str | None:
+    """`text` with every known ending at its end (KNOWN_ENDINGS, one or more) taken off and `ending` put on once, or
+    None when it does not end in one or nothing comes before it. The clause before 상황 fits every ending, so only
+    the ending changes."""
+    stem = text
+    while m := _known_at_end(stem):
+        stem = stem[:m.start()]
+    if stem == text or not stem.strip():
+        return None
+    return f"{stem.strip()} {ending}"
 
 
 class ClaudeUnavailable(Exception):
@@ -206,11 +256,11 @@ class Claude:
 
     # --- recommendation -----------------------------------------------------------------------
 
-    async def recommend(self, recent: list[str], turned_down: Sequence[str], topic: Topic) -> str:
-        """Jake's suggestion inside the topic, unlike its recent ones, its prepared list and those just turned down
-        (spec situation-topics 4)."""
+    async def recommend(self, recent: list[str], turned_down: Sequence[str], topic: Topic, ending: str) -> str:
+        """Jake's suggestion inside the topic, unlike its recent ones, its prepared list and those just turned down,
+        ending in `ending` (one of JAKE_ENDINGS, picked by the server; spec situation-topics 4)."""
         listed = "\n".join(f"- {r}" for r in recent) or "- 없음"
-        message = f"주제: {topic.scenes_en}\n예: {topic.example_ko}\n\n최근 상황:\n{listed}"
+        message = f"주제: {topic.scenes_en}\n예: {topic.example_ko}\n끝말: {ending}\n\n최근 상황:\n{listed}"
         if topic.picks:  # Jake fills in what the short list does not cover (user, 2026-11-07)
             message += "\n\n목록에 있는 상황:\n" + "\n".join(f"- {p.title_ko}" for p in topic.picks)
         if turned_down:  # suggested on the situation screen and turned down with 「다른 걸로요」 (2026-11-06)
@@ -219,6 +269,12 @@ class Claude:
         text = (data or {}).get("request_ko", "").strip() if isinstance(data, dict) else ""
         if not text:
             raise ClaudeUnavailable("empty recommendation")
+        # no second call: put the given ending on in place of known ones, say anything else as it came
+        if (swapped := swap_ending(text, ending)) is None:
+            log.warning("recommendation did not keep the given ending")
+        elif swapped != text:
+            log.info("recommendation ending swapped")
+            text = swapped
         return text
 
     # --- the conversation sent along ---------------------------------------------------------

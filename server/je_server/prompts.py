@@ -102,8 +102,10 @@ You suggest one situation for a Korean adult to practice speaking English: a rea
 something in English right away. The user gives the topic ("주제"): suggest a moment inside it, like the example
 ("예").
 
-Jake suggests it to the learner. Write request_ko as one polite Korean sentence (해요체) in Jake's words,
-ending with "상황으로 연습해 보면 어때요?", in the same form as the topic's example.
+Jake suggests it to the learner. Write request_ko as one polite Korean sentence (해요체) in Jake's words: the
+situation, then the ending the user gives ("끝말") word for word. The ending starts with 상황, so the situation is
+a phrase that runs up to the word before 상황 (it ends in a word such as 묻는 or 주문하는) and has no ending of its
+own. The ending comes once, at the very end. Do not copy the endings of the sentences the user lists.
 Real places and shops may be named; never real people.
 Pick something different from the recent situations listed by the user, and from the situations on the topic's
 prepared list ("목록에 있는 상황") if there is one. If the user also lists situations the learner just
