@@ -54,7 +54,9 @@ export function fixReduce(s: FixState, a: FixAction): FixState {
     case "lineFailed":
       return s.phase === "loading" ? { ...s, phase: "error", message: a.message } : s;
     case "retry":
-      return s.phase === "error" && !s.line ? { ...s, phase: "loading", message: null } : s;
+      // an error before the line loaded loads it again; after it, the fix is ready for another try
+      if (s.phase !== "error") return s;
+      return { ...s, phase: s.line ? "ready" : "loading", ...(s.line ? noResult : {}), message: null };
     case "recordStart":
       if ((s.phase !== "ready" && s.phase !== "evaluated") || !s.line) return s;
       return { ...s, ...noResult, phase: "recording", tries: s.tries + 1, message: null };

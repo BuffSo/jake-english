@@ -100,3 +100,13 @@ test("toggleReading flips the reading", () => {
   expect(s.reading).toBe(true);
   expect(fixReduce(s, { type: "toggleReading" }).reading).toBe(false);
 });
+
+test("retry after an error with the line loaded makes the fix ready again", () => {
+  const s = evaluating();
+  const e = fixReduce(s, ev(s, { type: "error", code: "claude_unavailable", say: null }));
+  expect(e.phase).toBe("error");
+  const r = fixReduce(e, { type: "retry" });
+  expect(r).toMatchObject({ phase: "ready", message: null, heard: null, feedback: "", tries: 1 });
+  expect(fixReduce(r, { type: "recordStart" }).tries).toBe(2);
+  expect(fixReduce(r, { type: "retry" })).toBe(r);
+});
