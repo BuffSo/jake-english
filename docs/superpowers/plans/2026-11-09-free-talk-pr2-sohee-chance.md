@@ -76,7 +76,7 @@ async def test_roleplay_no_speech_stays_korean(...):  # engine.error("no_speech"
 - [ ] **Step 3: 구현한다**
   - `TALK_PHRASES = {"no_speech": "Sorry, I didn't catch that. Could you say it again?", "too_long": "That was a little long. Could you say it in a shorter way?", "claude_down": "Sorry, I can't answer right now. Let's try again in a moment."}`. `warm()`은 `TALK_OPENERS`와 이 값을 라이언 영어 목소리로 미리 만든다(`check=True`).
   - `_turn`: `_Unheard` → `engine.talk_error(e.code)`. 한국어 차례는 `kind="ask"` 줄로 남기고 영어 차례와 같은 Claude 길로 간다(정해진 한 줄 없음). `engine.speak(..., down=engine.talk_error("claude_unavailable", "claude_down"))`.
-  - `messages`: `ask` 줄은 `TALK_KOREAN + text`인 user. 마지막 user 메시지가 내 영어 차례이고 그것이 내 영어 차례(`kind == "turn"`)의 짝수 번째이면 `"\n" + TALK_ECHO`를 붙인다.
+  - `messages`: `ask` 줄은 `TALK_KOREAN + text`인 user. 마지막 user 메시지가 내 영어 차례이고 그것이 내 영어 차례(`kind == "turn"`)의 짝수 번째이면 `"\n" + TALK_ECHO`를 붙인다. (구현 뒤 실제 모델로 재고 셋째 번째마다로 바꿨다, 스펙 4)
   - `TALK_SYSTEM`의 「Never correct …」 항목 뒤에 아래 두 규칙을 넣는다(2026-11-09 실제 모델로 다듬은 문구, 스펙 4).
 
 ```text
