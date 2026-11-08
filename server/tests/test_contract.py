@@ -53,3 +53,10 @@ def test_home_topics_example_has_the_engine_shape():
     assert set(raw) == {"topics"}
     for t in raw["topics"]:
         assert set(t) == set(real) and all(set(p) == set(real["picks"][0]) for p in t["picks"])
+
+
+def test_resume_example_has_the_engine_shape():
+    raw = json.loads((CONTRACT / "resume.json").read_text(encoding="utf-8"))["resume"]
+    assert set(raw) == {"roleplay", "at", "progress", "said"} and set(raw["progress"]) == {"no", "total"}
+    assert Roleplay.model_validate(raw["roleplay"]).model_dump(mode="json") == raw["roleplay"]
+    assert raw["said"] and all(set(s) == {"idx", "heard", "n"} for s in raw["said"])

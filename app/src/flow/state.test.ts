@@ -1,6 +1,7 @@
 import roleplayJson from "../../../contract/roleplay.json";
-import type { Roleplay, ScriptLine } from "../api/types";
-import { askFirst, canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, modelKey, NO_SPEECH, practiceFor, reduce, showMicHint, type State } from "./state";
+import type { Resume, Roleplay, ScriptLine } from "../api/types";
+import { resumeHistory, resumeSeen } from "./resume";
+import { canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, modelKey, movesPlace, NO_SPEECH, notifiesSkip, practiceFor, reduce, showMicHint, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -382,16 +383,6 @@ describe("one line in the middle of the roleplay (spec roleplay-practice 9)", ()
     expect(practiceFor(inside, s.history[0])).toBeNull();
   });
 
-  test("asks first only when a roleplay would be lost", () => {
-    // back is the only way out since 「처음으로」 went (2026-11-06 user): from a practice it never loses the roleplay
-    const s = midway("ready");
-    expect(askFirst(s)).toBe(true);
-    const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
-    expect(askFirst(inside)).toBe(false);
-    const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
-    expect(askFirst(fromEnd)).toBe(false);
-  });
-
   test("only back from a line practised mid-roleplay stays on the roleplay screen", () => {
     const s = midway("ready");
     const inside = reduce(s, { type: "practiseLine", kind: "mine", idx: 1 });
@@ -618,18 +609,20 @@ describe("situation topics (spec situation-topics 2, 5)", () => {
   const from = { topic: "usa", step: "list" as const };
   const started = () => reduce(situation, { type: "created", roleplay: rp, from });
 
-  test("back from a roleplay returns to the step the situation came from", () => {
-    // picking another card should not mean choosing the topic and the way again
+  test("back from a roleplay mid-way goes to the topics; from its end screen to where it was picked", () => {
+    // mid-way: the topic step shows the row to resume it (spec resume-roleplay 5, the user's choice). The end
+    // screen still goes back to the step it came from, to pick another card there.
     const s = reduce(reduce(started(), { type: "lineLoaded", line: ryanLine }), { type: "back" });
-    expect([s.screen, s.situationFrom, s.roleplay]).toEqual(["situation", from, null]);
+    expect([s.screen, s.situationFrom, s.roleplay]).toEqual(["situation", null, null]);
     const e = reduce({ ...started(), screen: "end" }, { type: "back" });
     expect([e.screen, e.situationFrom]).toEqual(["situation", from]);
   });
 
-  test("restarting keeps where back leads", () => {
+  test("restarting keeps where back leads from the end screen", () => {
     const copy = { ...rp, id: "b".repeat(12) };
     const s = reduce({ ...started(), screen: "end" }, { type: "restarted", roleplay: copy });
-    expect(reduce(s, { type: "back" }).situationFrom).toEqual(from);
+    expect(reduce({ ...s, screen: "end" }, { type: "back" }).situationFrom).toEqual(from);
+    expect(reduce(s, { type: "back" }).situationFrom).toBeNull(); // mid-way, to the topics
   });
 
   test("choosing roleplay on the home screen starts at the topics", () => {
@@ -916,5 +909,69 @@ describe("first-turn hint and the silent cancel (spec record-feedback 3, 4)", ()
   test("the notice goes at the next start", () => {
     const s = reduce(reduce(at("recording"), { type: "noSpeech" }), { type: "recordStart" });
     expect(s.message).toBeNull();
+  });
+});
+
+// --- resuming the last conversation (spec resume-roleplay 2, 4, 5) ----------------------------------------------
+
+describe("resume", () => {
+  const resume: Resume = {
+    roleplay: { ...rp, pos: 2 },
+    at: 2,
+    progress: { no: 1, total: 1 },
+    said: [{ idx: 1, heard: "I'd like a cup of coffee.", n: 1 }],
+  };
+  const resumed = () => reduce(situation, { type: "resumed", resume });
+
+  test("resuming opens the roleplay at its line with what was said before", () => {
+    const s = resumed();
+    expect([s.screen, s.idx, s.phase, s.mode]).toEqual(["roleplay", 2, "loading", "turn"]);
+    expect(s.roleplay).toBe(resume.roleplay);
+    expect(s.history).toEqual(resumeHistory(resume));
+    expect(s.seen).toEqual(resumeSeen(resume));
+    expect([s.progress, s.situationFrom, s.jake]).toEqual([resume.progress, null, null]);
+  });
+
+  test("resumed is taken only on the situation screen", () => {
+    expect(reduce(initial, { type: "resumed", resume })).toBe(initial);
+    const playing = at("ready");
+    expect(reduce(playing, { type: "resumed", resume })).toBe(playing);
+  });
+
+  test("a second resumed does nothing", () => {
+    // a double tap on the row: the second tap sees the roleplay screen
+    const s = resumed();
+    expect(reduce(s, { type: "resumed", resume })).toBe(s);
+  });
+
+  test("a past line of a resumed roleplay can be practised", () => {
+    const s = resumed();
+    expect(practiceFor(s, s.history[1])).toBe("mine");
+    expect(practiceFor(s, s.history[0])).toBe("shadow");
+  });
+
+  test("back from a resumed roleplay goes to the topics", () => {
+    const s = reduce(resumed(), { type: "back" });
+    expect([s.screen, s.situationFrom, s.roleplay]).toEqual(["situation", null, null]);
+  });
+});
+
+// --- what moves the conversation's place on the Mac (spec resume-roleplay 3, 4; final review) --------------------
+
+describe("the place on the Mac", () => {
+  test("a skip inside the conversation tells the Mac", () => {
+    expect(notifiesSkip(at("ready"))).toBe(true);
+  });
+
+  test("a skip inside a practice does not", () => {
+    // a saved sentence or a past line is another conversation's line: its place must not move
+    const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
+    const midway = reduce({ ...at("ready"), seen: { 0: ryanLine, 1: userLine } }, { type: "practiseLine", kind: "shadow", idx: 0 });
+    expect([notifiesSkip(fromEnd), notifiesSkip(midway)]).toEqual([false, false]);
+  });
+
+  test("only a turn's evaluation moves the place", () => {
+    expect(movesPlace(at("ready"))).toBe(true);
+    for (const mode of ["retry", "practice", "shadow"] as const) expect(movesPlace(at("ready", { mode }))).toBe(false);
   });
 });
