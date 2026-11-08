@@ -138,3 +138,26 @@ async def test_summary_shows_points_as_the_words_are_written(engine_with_rp):
                                                        audio=[], timings={}), pos=None)
     [t] = tries(engine.summary(rp_id), user_idx)
     assert t["issues"] == [{"target": "it's", "heard": "is", "say_ko": "「It's」 → 「Is」처럼 들렸어요"}]
+
+
+# spec record-cancel-skip 3: a roleplay where no line was said ends without praise; skips leave lines without tries
+async def test_closing_without_any_line_said_has_no_praise(engine_with_rp):
+    engine, rp_id, _ = engine_with_rp
+    assert engine.summary(rp_id)["say"] == engine.said("closing_plain").model_dump()
+
+
+async def test_closing_after_asides_only_has_no_praise(engine_with_rp):
+    from je_server.models import Attempt
+
+    engine, rp_id, user_idx = engine_with_rp
+    await engine.save_attempt(rp_id, user_idx, Attempt(n=1, mode="turn", heard="넘어가고 싶어요", followed=False,
+                                                       issues=[], say_ko="…", audio=[], timings={}, aside=True),
+                              pos=None)
+    assert engine.summary(rp_id)["say"] == engine.said("closing_plain").model_dump()
+
+
+async def test_closing_after_practice_only_has_no_praise(engine_with_rp, speech_bytes, fake_whisper):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's right over there."
+    await run(engine, rp_id, user_idx, speech_bytes, "practice")  # practice is not a try inside the roleplay
+    assert engine.summary(rp_id)["say"] == engine.said("closing_plain").model_dump()

@@ -403,6 +403,15 @@ def test_aside_prompt_hides_how_the_recording_was_sorted():
     assert "앱에 바라는 것" in p and "약속하지 않아요" in p
 
 
+def test_aside_prompt_points_to_skip():
+    # spec record-cancel-skip 6: the line can be skipped now, so Ryan says how instead of 「대사를 말해야 넘어가요」
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert "「건너뛰기」" in p
+    assert "대사를 말해야 다음으로 넘어가" not in p and "말해야 다음으로 넘어간다" not in p
+
+
 @pytest.mark.parametrize("error", ["read", "timeout"])
 async def test_stream_cut_by_the_network_is_unavailable(error):
     # final review: the SDK raises transport errors met while reading the stream as they are, so a dropped

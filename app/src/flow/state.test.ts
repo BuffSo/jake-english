@@ -1,6 +1,6 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Roleplay, ScriptLine } from "../api/types";
-import { askFirst, canReplay, initial, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
+import { askFirst, canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -754,4 +754,81 @@ test("a bubble sound plays only while my turn waits and Ryan is not answering (s
   const phases: State["phase"][] = ["loading", "ryan", "ready", "recording", "evaluating", "evaluated", "error"];
   expect(phases.filter((p) => mayListen(p, false))).toEqual(["ready", "evaluated", "error"]);
   expect(phases.filter((p) => mayListen(p, true))).toEqual([]);
+});
+
+describe("skip and cancel (spec record-cancel-skip)", () => {
+  const skip = { type: "skip" } as const;
+  const aside = (): State => {
+    let s = at("evaluating");
+    s = reduce(s, { type: "event", e: { type: "heard", text: "넘어가고 싶어요", followed: false } });
+    s = reduce(s, { type: "event", e: { type: "text", delta: "다시 해 볼까요?" } });
+    return reduce(s, { type: "event", e: { type: "done", next: 1, issues: 0 } });
+  };
+
+  test("cancel while recording goes back to ready and keeps the mode", () => {
+    const s = reduce(reduce(at("ready", { mode: "retry" }), { type: "recordStart" }), { type: "recordCancel" });
+    expect([s.phase, s.mode, s.history]).toEqual(["ready", "retry", []]);
+  });
+
+  test("skip is taken before recording and after teacher Ryan's answer only", () => {
+    expect(canSkip(at("ready"))).toBe(true);
+    expect(canSkip(aside())).toBe(true);
+    const followed = reduce(at("evaluating"), { type: "event", e: { type: "done", next: 2, issues: 0 } });
+    const ryanTurn = reduce(reduce(situation, { type: "created", roleplay: rp }), { type: "lineLoaded", line: ryanLine });
+    const no = [at("recording"), at("evaluating"), followed, at("error"), at("loading"), ryanTurn, end({ phase: "ready" })];
+    for (const s of no) {
+      expect(canSkip(s)).toBe(false);
+      expect(reduce(s, skip)).toBe(s);
+    }
+  });
+
+  test("skip in the roleplay leaves my line as its script and moves on", () => {
+    const s = reduce(at("ready"), skip);
+    expect(s.history.at(-1)).toEqual({ kind: "user", text: "", script: userLine.text, idx: 1 });
+    expect([s.idx, s.phase, s.line, s.mode, s.heard]).toEqual([2, "loading", null, "turn", null]);
+  });
+
+  test("skip after teacher Ryan's answer leaves nothing of the answer", () => {
+    const s = reduce(aside(), skip);
+    expect(s.history).toEqual([{ kind: "user", text: "", script: userLine.text, idx: 1 }]);
+    expect([s.idx, s.feedback, s.aside]).toEqual([2, "", false]);
+  });
+
+  test("skipping a line already said adds no bubble", () => {
+    let s = at("evaluating");
+    s = reduce(s, { type: "event", e: { type: "heard", text: "It's right over there.", followed: true } });
+    s = reduce(s, { type: "event", e: { type: "done", next: 2, issues: 0 } });
+    s = reduce(reduce(s, { type: "again" }), skip);
+    const mine = s.history.filter((b) => b.kind === "user" && b.idx === 1);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].text).toBe("It's right over there.");
+    expect(s.idx).toBe(2);
+  });
+
+  test("two skips from one old state move one line", () => {
+    const once = reduce(at("ready"), skip);
+    expect(reduce(once, skip)).toBe(once);
+  });
+
+  test("skip in a practice goes where 다음 goes", () => {
+    let s = reduce(end(), { type: "startPractice", kind: "mine", order: [1, 3] });
+    s = reduce(reduce(s, { type: "lineLoaded", line: userLine }), skip);
+    expect([s.practice?.at, s.idx, s.history, s.phase]).toEqual([1, 3, [], "loading"]);
+    s = reduce(reduce(s, { type: "lineLoaded", line: { ...userLine, idx: 3 } }), skip);
+    expect([s.screen, s.practice]).toEqual(["end", null]);
+
+    const before = { ...at("ready", { idx: 3, line: { ...userLine, idx: 3 } }), seen: { 1: userLine } };
+    const one = reduce(before, { type: "practiseLine", kind: "mine", idx: 1 });
+    expect(reduce(one, skip)).toEqual({ ...before, practiceNo: one.practiceNo });
+
+    const saved = reduce(reduce(initial, { type: "openReview" }), { type: "openSaved" });
+    const s1 = reduce(reduce(saved, { type: "startSaved", runs: [rp], order: [1] }), { type: "lineLoaded", line: userLine });
+    expect(reduce(s1, skip).screen).toBe("saved");
+  });
+
+  test("a skipped line keeps its practice button", () => {
+    const s = reduce(reduce(at("ready"), skip), { type: "lineLoaded", line: ryanLine });
+    const bubble = s.history.at(-1)!;
+    expect(practiceFor(s, bubble)).toBe("mine");
+  });
 });

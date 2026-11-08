@@ -2,9 +2,10 @@ import { Pressable, StyleSheet, Text } from "react-native";
 
 import { colors } from "./theme";
 
-type Props = { label: string; onPress: () => void; disabled?: boolean; kind?: "primary" | "plain"; small?: boolean };
+// grow: fills what is left of its row, next to a button as wide as its words (spec record-cancel-skip 4)
+type Props = { label: string; onPress: () => void; disabled?: boolean; kind?: "primary" | "plain"; small?: boolean; grow?: boolean };
 
-export function Button({ label, onPress, disabled, kind = "primary", small }: Props) {
+export function Button({ label, onPress, disabled, kind = "primary", small, grow }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -14,6 +15,7 @@ export function Button({ label, onPress, disabled, kind = "primary", small }: Pr
         styles.base,
         kind === "primary" ? styles.primary : styles.plain,
         small && styles.small,
+        grow && styles.grow,
         (disabled || pressed) && styles.dim,
       ]}
     >
@@ -28,6 +30,7 @@ const styles = StyleSheet.create({
   plain: { backgroundColor: colors.ryan },
   small: { paddingVertical: 8, paddingHorizontal: 12 },
   dim: { opacity: 0.5 },
+  grow: { flexGrow: 1, flexBasis: 0 },
   label: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
   plainLabel: { color: colors.text },
   smallLabel: { fontSize: 15 },
