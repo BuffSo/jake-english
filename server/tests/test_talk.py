@@ -440,8 +440,8 @@ async def talked(talks, fake_whisper, speech_bytes, said=SAID[:2]) -> str:
     return rp.id
 
 
-def no_fixes(engine) -> dict:
-    return {"items": [], "say": engine.said("talk_no_fixes").model_dump()}
+def no_fixes(engine, sohee: int = 0) -> dict:
+    return {"items": [], "say": engine.said("talk_no_fixes").model_dump(), "sohee": sohee}
 
 
 async def test_end_appends_the_checked_fixes_as_my_lines(talks, engine, speech_bytes, fake_whisper, fake_claude):
@@ -774,3 +774,28 @@ async def test_sohees_phrases_are_made_ahead(engine, fake_voice):
     await engine.warm()
     phrase = SOHEE_PHRASES["hint_full"]
     assert (phrase, "sohee", "korean", False) in fake_voice.calls and phrase in fake_voice.checked
+
+
+@pytest.mark.parametrize("steps, count", [
+    ({}, 0),
+    ({2: False}, 1),  # the hint only
+    ({2: True}, 2),  # the hint and the full sentence
+    ({0: True, 2: False}, 3),  # two of Ryan's lines, summed
+])
+async def test_end_counts_sohee_chances(talks, engine, speech_bytes, fake_whisper, steps, count):
+    rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])  # Ryan at 0 and 2, my turn at 1
+    for idx, full in steps.items():
+        await talks.hint(rp_id, idx)
+        if full:
+            await talks.show_full(rp_id, idx)
+    assert await talks.end(rp_id) == no_fixes(engine, count)  # nothing to fix: the count is still there
+
+
+async def test_end_with_fixes_counts_sohee_chances_too(talks, speech_bytes, fake_whisper, fake_claude):
+    rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])
+    await talks.hint(rp_id, 2)
+    await talks.show_full(rp_id, 2)
+    fake_claude.fix_items = [fix_item(0, 1)]
+    body = await talks.end(rp_id)
+    assert body["items"] and body["sohee"] == 2
+    assert (await talks.end(rp_id))["sohee"] == 2  # asked again, from the record

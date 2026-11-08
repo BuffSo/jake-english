@@ -93,7 +93,8 @@ def test_talk_events_example_has_the_engine_types():
 
 def test_talk_end_example_has_the_engine_shape():
     raw = json.loads((CONTRACT / "talk-end.json").read_text(encoding="utf-8"))
-    assert set(raw) == {"items", "say"} and raw["say"] is None and raw["items"]
+    assert set(raw) == {"items", "say", "sohee"} and raw["say"] is None and raw["items"]
+    assert isinstance(raw["sohee"], int) and raw["sohee"] >= 0  # Sohee chances used (spec free-talk-design 9)
     for item in raw["items"]:
         assert set(item) == {"line", "rec"}
         assert ScriptLine.model_validate(item["line"]).model_dump(mode="json") == item["line"]

@@ -232,15 +232,18 @@ class Talks:
 
     def _end_body(self, rp: Roleplay, lines: list[ScriptLine]) -> dict:
         """The answer to `end`: each fix line with the recording of my last try at the turn it fixes (for 「🔊 내 녹음
-        들어 보기」), or no lines and Ryan's 「고칠 곳을 찾지 못했어요」 (spec 7)."""
+        들어 보기」), or no lines and Ryan's 「고칠 곳을 찾지 못했어요」 (spec 7). `sohee`: how many Sohee chances I used,
+        the hint and the full sentence each counted once on each of Ryan's replies (spec 9 「대화 끝」)."""
+        sohee = sum(1 + line.hint.full_shown for line in rp.lines
+                    if line.speaker == "ryan" and line.kind == "reply" and line.hint is not None)
         if not lines:
-            return {"items": [], "say": self.engine.said("talk_no_fixes").model_dump()}
+            return {"items": [], "say": self.engine.said("talk_no_fixes").model_dump(), "sohee": sohee}
         items = []
         for line in lines:
             tries = [a for a in rp.attempts.get(line.fix.of, []) if a.mode == "turn"]
             rec = {"rp_id": rp.id, "idx": line.fix.of, "n": tries[-1].n} if tries else None
             items.append({"line": line.model_dump(mode="json"), "rec": rec})
-        return {"items": items, "say": None}
+        return {"items": items, "say": None, "sohee": sohee}
 
     async def turn(self, rp_id: str, body: bytes, heard: int | None) -> AsyncIterator[dict]:
         """One turn of mine and Ryan's line after it. `heard`: how many sentences of Ryan's last reply I heard before I

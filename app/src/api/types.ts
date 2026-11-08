@@ -139,7 +139,9 @@ export type TalkEvent =
   | { type: "done"; idx: number };
 // one fix of the talk's end: the corrected line and the recording of the turn it fixes (null when there is none)
 export type TalkItem = { line: ScriptLine; rec: TryRef | null };
-export type TalkEnd = { items: TalkItem[]; say: Said | null };
+// sohee: Sohee chances used in the talk, the hint and the full sentence each once (spec free-talk-design 9); absent
+// from an older server
+export type TalkEnd = { items: TalkItem[]; say: Said | null; sohee?: number };
 
 // Key lists checked against contract/ by the tests; the type checks below keep them in step with the types.
 export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin", "topic", "pick", "kind"] as const;
@@ -148,7 +150,7 @@ export const FIX_KEYS = ["of", "said", "why_ko", "why_audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "error", "done"] as const;
 export const TALK_EVENT_TYPES = ["heard", "text", "reply", "audio", "error", "done"] as const;
-export const TALK_END_KEYS = ["items", "say"] as const;
+export const TALK_END_KEYS = ["items", "say", "sohee"] as const;
 export const TALK_ITEM_KEYS = ["line", "rec"] as const;
 export const SUMMARY_KEYS = ["say", "lines"] as const;
 export const TRY_KEYS = ["n", "mode", "heard", "followed", "issues", "point_ko"] as const;

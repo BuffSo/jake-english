@@ -623,3 +623,11 @@ def test_hint_routes_need_token(settings, engine, fake_voice, fake_whisper):
     assert c.post(base).status_code == 401 and c.post(f"{base}/full").status_code == 401
     for path in (f"{base}/audio", f"{base}/sounds/0", f"{base}/three"):
         assert c.get(path).status_code == 401
+
+
+def test_end_route_counts_sohee_chances(client, fake_claude, speech_bytes):
+    base = hint_base(client, speech_bytes)
+    client.post(base)
+    client.post(f"{base}/full")
+    j = client.post(f"/talks/{base.split('/')[2]}/end").json()
+    assert j["sohee"] == 2 and j["items"] == []
