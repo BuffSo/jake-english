@@ -1,5 +1,5 @@
 import type { Resume, Roleplay, ScriptLine } from "../api/types";
-import { resumeHistory, resumeLabel, resumeSeen } from "./resume";
+import { passRecorded, resumeHistory, resumeLabel, resumeSeen } from "./resume";
 
 // a made-up conversation: Ryan, me, Ryan, me, Ryan
 const RP = "aaaaaaaaaaaa";
@@ -68,4 +68,33 @@ test("the label of a conversation gone to the end: how many lines of mine are un
   const said = [{ idx: 3, heard: "Sure, here you go.", n: 1 }];
   expect(resumeLabel(resume(0, said, true))).toBe("호텔 체크인하기 · 녹음 안 한 줄 1개");
   expect(resumeLabel(resume(0, [], true))).toBe("호텔 체크인하기 · 녹음 안 한 줄 2개");
+});
+
+// --- passing recorded lines in a resumed conversation (spec resume-unrecorded 3) ---------------------------------
+
+test("passing nothing when the next line of mine is unrecorded", () => {
+  const rec = { 1: { idx: 1, heard: "Yes, I booked a room.", n: 1 } };
+  const p = passRecorded(roleplay, rec, 2); // R2 leads to U3, which is unrecorded
+  expect(p.idx).toBe(2);
+  expect(p.passed).toEqual([]);
+  expect(p.seen).toEqual({});
+});
+
+test("after the last unrecorded line, the ending or the end screen", () => {
+  const rec = { 3: { idx: 3, heard: "Sure, here you go.", n: 2 } };
+  const p = passRecorded(roleplay, rec, 2); // U1 done: U3 is recorded, so on to R4, the ending
+  expect(p.idx).toBe(4);
+  expect(p.passed.map((b) => b.idx)).toEqual([2, 3]);
+  expect(p.passed[1]).toEqual({ kind: "user", text: "Sure, here you go.", script: lines[3].text, idx: 3, rec: { rp_id: RP, idx: 3, n: 2 } });
+  expect(Object.keys(p.seen).map(Number)).toEqual([2, 3]);
+  const mineLast = { ...roleplay, lines: lines.slice(0, 4) }; // I end the conversation
+  expect(passRecorded(mineLast, {}, 4).idx).toBe(4); // = line count: lineMissing, the end screen
+});
+
+test("passing to the Ryan line before the next unrecorded one", () => {
+  // R0 U1 R2 U3 R4 U5 R6: U1 just done, U3 recorded, U5 unrecorded
+  const seven = [...lines, { ...lines[3], idx: 5, text: "Thanks a lot." }, { ...lines[4], idx: 6, text: "Bye." }];
+  const p = passRecorded({ ...roleplay, lines: seven }, { 3: { idx: 3, heard: "Sure.", n: 1 } }, 2);
+  expect(p.idx).toBe(4);
+  expect(p.passed.map((b) => b.idx)).toEqual([2, 3]);
 });
