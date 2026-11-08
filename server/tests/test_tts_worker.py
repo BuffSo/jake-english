@@ -26,3 +26,58 @@ def test_only_korean_is_split_into_sentences():
     assert tts_worker.split_parts(chunks) == [
         ("Sure. What size would you like?", "english"), ("Ask Mr. Smith at 3 p.m. today.", "english"),
         ("좋아요.", "korean"), ("다음으로 가요.", "korean")]
+
+
+# --- the reference recordings' fingerprints (todo voice-reference-in-sound-key) ---------------------------------
+
+def fake_module(ref_dir):
+    """Stands in for the voice setup: the parts `ref_prints` reads (its `ref_name` falls back to the Korean one)."""
+    import types
+
+    voices = {"ryan": {"ref": {"korean": "ryan_ko", "english": "ryan_en"}},
+              "jake": {"ref": {"korean": "jake_ko", "english": "jake_en"}},
+              "sohee_clone": {"ref": {"korean": "sohee_ko"}},
+              "builtin": {"speaker": "x"}}
+    for conf in voices.values():
+        for name in conf.get("ref", {}).values():
+            (ref_dir / f"{name}.wav").write_bytes(f"sound of {name}".encode())
+            (ref_dir / f"{name}.txt").write_text(f"words of {name}", encoding="utf-8")
+    return types.SimpleNamespace(REF_DIR=str(ref_dir), voice_conf=lambda n: voices.get(n, voices["builtin"]),
+                                 ref_name=lambda conf, lang: conf["ref"].get(lang) or conf["ref"]["korean"])
+
+
+def test_ref_prints_are_the_same_for_the_same_recordings(tmp_path):
+    srv = fake_module(tmp_path)
+    prints = tts_worker.ref_prints(srv)
+    assert set(prints) == {"ryan", "jake", "sohee_clone"}
+    assert all(len(p) == 16 for v in prints.values() for p in v.values())
+    assert tts_worker.ref_prints(srv) == prints  # a restart with the same recordings keeps every sound
+
+
+def test_a_new_korean_recording_changes_only_korean_sounds(tmp_path):
+    srv = fake_module(tmp_path)
+    before = tts_worker.ref_prints(srv)
+    (tmp_path / "ryan_ko.wav").write_bytes(b"a new recording")
+    after = tts_worker.ref_prints(srv)
+    # English sounds use the English recording only; Korean ones may read English words with it, so they carry both
+    assert after["ryan"]["english"] == before["ryan"]["english"]
+    assert after["ryan"]["korean"] != before["ryan"]["korean"]
+    assert after["jake"] == before["jake"] and after["sohee_clone"] == before["sohee_clone"]
+
+
+def test_a_new_english_recording_or_its_words_change_both(tmp_path):
+    srv = fake_module(tmp_path)
+    before = tts_worker.ref_prints(srv)
+    (tmp_path / "jake_en.txt").write_text("other words", encoding="utf-8")
+    after = tts_worker.ref_prints(srv)
+    assert after["jake"]["english"] != before["jake"]["english"]
+    assert after["jake"]["korean"] != before["jake"]["korean"]
+
+
+def test_a_missing_recording_does_not_stop_the_worker(tmp_path):
+    # the worker must still say it is ready: a voice without its recording fails on its own sounds only
+    srv = fake_module(tmp_path)
+    before = tts_worker.ref_prints(srv)
+    (tmp_path / "sohee_ko.wav").unlink()
+    after = tts_worker.ref_prints(srv)
+    assert after["sohee_clone"]["korean"] != before["sohee_clone"]["korean"] and after["ryan"] == before["ryan"]

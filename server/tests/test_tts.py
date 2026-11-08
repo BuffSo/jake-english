@@ -226,3 +226,29 @@ async def test_sohee_is_the_cloned_voice(voice, tmp_path):
     key = await voice.say("커피 한 잔 주세요.", "sohee", "korean", urgent=True)
     rates = (tmp_path / ".tmp" / "rates.txt").read_text(encoding="utf-8").splitlines()
     assert rates == ["sohee_clone korean 1.0"] and key == audio_key("sohee", "korean", "커피 한 잔 주세요.")
+
+
+# --- the reference recordings in the key (todo voice-reference-in-sound-key) ------------------------------------
+
+async def test_the_workers_reference_prints_are_in_the_key(tmp_path):
+    # a new reference recording, picked up when the worker starts, makes new sounds instead of serving the old voice
+    import json
+
+    refs = {"ryan": {"english": "aaaa", "korean": "bbbb"}, "sohee_clone": {"korean": "cccc"}}
+    v = Voice(sys.executable, "refs:" + json.dumps(refs), tmp_path, worker=FAKE_WORKER)
+    await v.start()
+    try:
+        key = await v.say("Hello.", "ryan", "english", urgent=True)
+        ko = await v.say("커피 주세요.", "sohee", "korean", urgent=True)
+    finally:
+        await v.stop()
+    assert key == v.key("ryan", "english", "Hello.") == audio_key("ryan", "english", "Hello.", "aaaa")
+    assert key != audio_key("ryan", "english", "Hello.")
+    assert ko == audio_key("sohee", "korean", "커피 주세요.", "cccc")  # under the worker's name for her
+    assert v.key("jake", "korean", "좋아요.") == audio_key("jake", "korean", "좋아요.")  # no print: as before
+
+
+async def test_without_prints_the_keys_stay_as_they_were(voice):
+    # an older worker, or none yet: every sound made so far keeps its key
+    assert voice.key("ryan", "english", "Hello.") == audio_key("ryan", "english", "Hello.")
+    assert audio_key("ryan", "english", "Hello.", "") == audio_key("ryan", "english", "Hello.")

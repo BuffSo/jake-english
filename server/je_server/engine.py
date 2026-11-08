@@ -22,7 +22,6 @@ from .tts import VoiceError
 from .phrases import PHRASES
 from .review import first_try, group_of, latest_run, past_items, sentence_key
 from .store import Store
-from .tts import audio_key
 
 log = logging.getLogger("je_server")
 LINE_WAIT = 120
@@ -65,7 +64,7 @@ class Engine:
 
     def said(self, name: str) -> Said:
         text = PHRASES[name]
-        return Said(text=text, audio=audio_key("ryan", "korean", text))
+        return Said(text=text, audio=self.voice.key("ryan", "korean", text))
 
     async def warm(self) -> None:
         for text in PHRASES.values():  # made once and played many times, so heard back (check)
@@ -143,7 +142,7 @@ class Engine:
         make; her sound comes with it when the Mac has made it before (todo 13). Without it, the line as it is."""
         if not ko:
             return line
-        key = audio_key("sohee", "korean", ko)
+        key = self.voice.key("sohee", "korean", ko)
         return line.model_copy(update={"ko": ko, "ko_audio": key if self.voice.path(key).is_file() else None})
 
     async def _sohee_later(self, rp_id: str) -> None:
@@ -158,7 +157,7 @@ class Engine:
             _, line = self.get_line(rp_id, idx)
             if not line.ko:
                 continue
-            made = audio_key("sohee", "korean", line.ko)
+            made = self.voice.key("sohee", "korean", line.ko)
             if self.voice.path(made).is_file():  # a tap, or another run of the pick, made it meanwhile
                 if line.ko_audio != made:
                     await self.update_line(rp_id, idx, line.text, ko_audio=made)
@@ -173,22 +172,34 @@ class Engine:
                 continue
             await self.update_line(rp_id, idx, line.text, ko_audio=key)
 
-    @staticmethod
-    def _prepared(runs: list[Roleplay], line: ScriptLine) -> ScriptLine:
+    def _prepared(self, runs: list[Roleplay], line: ScriptLine) -> ScriptLine:
         """The line with what earlier runs (oldest first) made for the same line: same place, speaker and words.
         Each part comes from the newest run that has it; a note with no Korean is made again, Sohee's sound comes
-        with her Korean (spec 2)."""
+        with her Korean (spec 2), and a sound made for an older key is made again (`_current_sounds`)."""
         same = [l for r in reversed(runs) for l in r.lines[line.idx:line.idx + 1]
                 if (l.speaker, l.text) == (line.speaker, line.text)]
         three = next((l.three for l in same if l.three is not None and not blank(l.three)), None)
         audio = next((l.audio for l in same if l.audio is not None), None)
         ko = next((l for l in same if l.ko is not None), None)
-        return line.model_copy(update={"three": three, "audio": audio, "ko": ko and ko.ko,
-                                       "ko_audio": ko and ko.ko_audio})
+        return self._current_sounds(line.model_copy(update={"three": three, "audio": audio, "ko": ko and ko.ko,
+                                                            "ko_audio": ko and ko.ko_audio}))
+
+    def _current_sounds(self, line: ScriptLine) -> ScriptLine:
+        """The line without the sounds an earlier run made for another key than today's: another reference
+        recording, rate or way of making (todo voice-reference-in-sound-key, fixed-list-scripts minors 4). A new run
+        makes them again; the earlier run's own record keeps what was heard then."""
+        drop = {}
+        if line.audio is not None and line.audio != self.voice.key("ryan", "english", line.text):
+            drop["audio"] = None
+        if line.ko_audio is not None and (line.ko is None
+                                          or line.ko_audio != self.voice.key("sohee", "korean", line.ko)):
+            drop["ko_audio"] = None
+        return line.model_copy(update=drop) if drop else line
 
     async def copy(self, rp_id: str) -> Roleplay:
         """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
-        sounds are reused, so it starts at once; the old record and its tries stay as they are. A list pick plays its
+        sounds are reused, so it starts at once, except sounds made for an older key (`_current_sounds`); the old
+        record and its tries stay as they are. A list pick plays its
         script as it is now in the repository; one taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
         if old.pick is not None and old.topic is not None:
@@ -200,7 +211,8 @@ class Engine:
                 # outside the try: a KeyError from inside is a bug, not a pick taken off the list (todo 08 1)
                 return await self.create_pick(old.topic, old.pick)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
-                      situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
+                      situation=old.situation, frame=old.frame,
+                      lines=[self._current_sounds(l.model_copy(deep=True)) for l in old.lines],
                       origin=old.origin or old.id,  # a copy of a copy still points at the first (ADR-0011)
                       topic=old.topic, pick=old.pick)
         self.store.save(rp)

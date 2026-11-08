@@ -6,12 +6,13 @@ It loads that module the way the existing render script does and repeats its ste
 voice-likeness check with retries, optional pitch matching, even pauses, then WAV -> AAC (afconvert).
 Unlike the render script it makes one sentence at a time and cuts Korean pauses inside a sentence short.
 Protocol, one JSON object per line:
-    -> {"ready": true}
+    -> {"ready": true, "refs": {"ryan": {"english": "<16 hex>", "korean": "<16 hex>"}, ...}}
     <- {"id": 1, "text": "...", "voice": "ryan" | "jake" | "sohee_clone", "lang": "english" | "korean", "rate": 1.3,
         "out": "/abs/x.m4a"}
     -> {"id": 1, "ok": true, "seconds": 1.8}  or  {"id": 1, "ok": false, "error": "TypeName"}
 Library output goes to stderr so stdout carries only the protocol. Texts are not logged.
 """
+import hashlib
 import importlib.util
 import json
 import os
@@ -27,6 +28,41 @@ import wave
 # are the voice's gap (0.6 s), since each sentence is made on its own.
 KOREAN_PAUSE_CAP = 0.15
 MODULE_PAUSE_CAP = 0.75
+
+
+# The voices the server asks for (`tts.WORKER_VOICE` names them for the worker), and the languages it makes.
+REF_VOICES = ("ryan", "jake", "sohee_clone")
+LANGS = ("english", "korean")
+
+
+def ref_prints(srv) -> dict[str, dict[str, str]]:
+    """Each voice's reference recordings as a fingerprint by language, sent with {"ready": true} so the server puts
+    it in the sound key: after a new recording and a restart, sounds are made again (todo
+    voice-reference-in-sound-key). An English sound uses the voice's English recording only; a Korean one may read
+    English words with that one too, so it carries all of the voice's recordings. A voice of the module's built-in
+    speakers has none and gets "". A missing file still gives a fingerprint, so the worker starts and only that
+    voice's sounds fail."""
+    out: dict[str, dict[str, str]] = {}
+    for voice in REF_VOICES:
+        conf = srv.voice_conf(voice)
+        refs = conf.get("ref") or {}
+        uses = {"english": {srv.ref_name(conf, "english")} if refs else set(), "korean": set(refs.values())}
+        out[voice] = {lang: _digest(srv.REF_DIR, uses[lang]) if uses[lang] else "" for lang in LANGS}
+    return out
+
+
+def _digest(ref_dir: str, names: set[str]) -> str:
+    h = hashlib.sha256()
+    for name in sorted(names):
+        for ext in (".wav", ".txt"):
+            h.update(f"{name}{ext}\0".encode())
+            try:
+                with open(os.path.join(ref_dir, name + ext), "rb") as f:
+                    for chunk in iter(lambda: f.read(1 << 20), b""):
+                        h.update(chunk)
+            except OSError:
+                h.update(b"\0missing")
+    return h.hexdigest()[:16]
 
 
 def sentences(part: str) -> list[str]:
@@ -111,7 +147,7 @@ def main() -> None:
         render("Hello.", "ryan", "english", warm)
     finally:
         os.remove(warm)
-    proto.write(json.dumps({"ready": True}) + "\n")
+    proto.write(json.dumps({"ready": True, "refs": ref_prints(srv)}) + "\n")
 
     for line in sys.stdin:
         req = json.loads(line)

@@ -358,3 +358,54 @@ async def test_copy_of_a_list_run_lets_an_error_inside_create_pick_show(engine, 
     with pytest.raises(KeyError, match="inside create_pick"):
         await engine.copy(rp.id)
     assert len(engine.store.all()) == before
+
+
+
+# --- sounds made for an older key (todo voice-reference-in-sound-key, fixed-list-scripts minors 4) ---------------
+
+NEW_REFS = {"ryan": {"english": "new-ryan-en", "korean": "new-ryan-ko"}, "sohee_clone": {"korean": "new-sohee"}}
+
+
+async def test_a_list_run_does_not_take_sounds_made_with_an_old_reference(engine, fake_voice):
+    first = await engine.create_pick(*SNEAKER)
+    await ready(engine, first)
+    await engine._sohee_later(first.id)
+    fake_voice.refs = NEW_REFS  # the reference recordings changed and the server started again
+    second = await engine.create_pick(*SNEAKER)
+    assert all(l.audio is None for l in second.lines)  # made again, not the old voice
+    assert all(l.ko_audio is None for l in second.lines)
+    assert all(l.three is not None for l in second.lines if l.speaker == "user")  # notes still come along
+    await ready(engine, second)
+    assert [l.audio for l in engine.store.load(second.id).lines] == [
+        fake_voice.key("ryan", "english", l.text) for l in second.lines]
+
+
+async def test_a_list_run_still_takes_sounds_of_the_same_reference(engine, fake_voice):
+    fake_voice.refs = NEW_REFS
+    first = await engine.create_pick(*SNEAKER)
+    await ready(engine, first)
+    second = await engine.create_pick(*SNEAKER)
+    assert [l.audio for l in second.lines] == [l.audio for l in engine.store.load(first.id).lines]
+    assert all(l.audio for l in second.lines)
+
+
+async def test_play_again_does_not_take_sounds_made_with_an_old_reference(engine, fake_voice):
+    rp = await engine.create("길 묻기")
+    for l in rp.lines:
+        await engine.line(rp.id, l.idx)
+    await engine.ko(rp.id, 0)
+    await engine.ko_audio(rp.id, 0)
+    fake_voice.refs = NEW_REFS
+    again = await engine.copy(rp.id)
+    assert all(l.audio is None for l in again.lines) and again.lines[0].ko_audio is None
+    assert again.lines[0].ko == engine.store.load(rp.id).lines[0].ko  # the words stay; only sounds are made again
+    old = engine.store.load(rp.id)
+    assert all(l.audio for l in old.lines)  # the record played then keeps what was heard
+
+
+async def test_fixed_phrases_follow_the_reference(engine, fake_voice):
+    from je_server.phrases import PHRASES
+
+    fake_voice.refs = NEW_REFS
+    assert engine.said("greeting").audio == fake_voice.key("ryan", "korean", PHRASES["greeting"])
+    assert engine.said("greeting").audio != audio_key("ryan", "korean", PHRASES["greeting"])
