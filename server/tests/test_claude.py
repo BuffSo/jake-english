@@ -568,6 +568,32 @@ async def test_recommend_keeps_a_long_tail_after_situation(caplog):
     assert "did not keep" in caplog.text
 
 
+@pytest.mark.parametrize("answer, ending, said", [
+    # todo 21: a real recommendation (Haiku, 2026-11-08) echoed the message's 「끝말:」 line after the sentence;
+    # the comparison the same day saw it again (made-up lines here)
+    ("카페에서 주문하는 상황을 추천해요. 끝말: 상황을 추천해요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+    ("카페에서 주문하는 상황을 골라 봤어요. 끝말: 상황을 골라 봤어요.", "상황을 추천해요.", "카페에서 주문하는 상황을 추천해요."),
+    # a label in front: only the label goes
+    ("끝말: 공항에서 짐을 찾는 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
+    ("예: 공항에서 짐을 찾는 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
+    ("주제 : 공항에서 짐을 찾는 상황을 추천해요.", "상황을 추천해요.", "공항에서 짐을 찾는 상황을 추천해요."),
+])
+async def test_recommend_drops_message_labels(caplog, answer, ending, said):
+    fake = FakeAnthropic([json.dumps({"request_ko": answer})])
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        text = await Claude(fake).recommend([], [], OTHER, ending)
+    assert text == said and len(fake.requests) == 1
+    assert "label" in caplog.text and "상황" not in caplog.text
+
+
+@pytest.mark.parametrize("answer", ["호텔 예약을 바꾸는 상황을 추천해요.", "공연장에서 주제곡을 묻는 상황을 추천해요."])
+async def test_recommend_keeps_words_that_only_look_like_labels(caplog, answer):
+    fake = FakeAnthropic([json.dumps({"request_ko": answer})])
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        assert await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.") == answer
+    assert "label" not in caplog.text
+
+
 def test_recommend_system_shows_no_ending_of_its_own():
     # second real run: the system's example 「…묻는 상황을 추천해요.」 was followed by the given ending (doubled)
     from je_server import prompts
