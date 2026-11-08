@@ -5,7 +5,7 @@ along the same routes. Ryan opens with the next of `TALK_OPENERS` in turn. The r
 given only the text (`messages`), and never my Korean turns or Ryan's Korean answers.
 
 A turn (`Talks.turn`) is my line with its try and recording, then Ryan's line: his English reply streamed sentence by
-sentence (spec 4), or the fixed Korean `talk_english` when I spoke Korean (spec 3). The learner may cut Ryan's sounds
+sentence (spec 4), or the fixed English `TALK_ENGLISH` when I spoke Korean (spec 3). The learner may cut Ryan's sounds
 off and speak again once his line is saved (spec 2).
 
 Ending a talk (`Talks.end`, spec 6, 7) asks Claude for the fixes, keeps those `fixes.check` lets through as my `fix`
@@ -272,8 +272,8 @@ class Talks:
             ryan = idx + 1
             failed = False
             if korean:
-                # Korean said with 「말하기」 gets the fixed 「영어로 말해 볼까요?」, and Claude never sees it (spec 3)
-                help_ = engine.said("talk_english")
+                # Korean said with 「말하기」 gets the fixed English line (`TALK_ENGLISH`), and Claude never sees it (spec 3)
+                help_ = engine.talk_english()
                 yield {"type": "text", "delta": help_.text}
                 await self._add(rp_id, ScriptLine(idx=ryan, speaker="ryan", text=help_.text, kind="help",
                                                   audio=help_.audio, parts=[help_]))

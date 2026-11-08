@@ -23,7 +23,7 @@ from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLi
 from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
 from .tts import VoiceError
-from .phrases import PHRASES, TALK_OPENERS, TIPS
+from .phrases import PHRASES, TALK_ENGLISH, TALK_OPENERS, TIPS
 from .review import (first_try, group_of, kept_tries, latest_run, past_items, resume_start, said_on, sentence_key,
                      to_resume)
 from .store import Store
@@ -76,6 +76,10 @@ class Engine:
     def said(self, name: str) -> Said:
         return self._ryan_said(PHRASES[name])
 
+    def talk_english(self) -> Said:
+        """The fixed line for Korean said in a free talk: English, in Ryan's English voice (2026-11-08 user)."""
+        return Said(text=TALK_ENGLISH, audio=self.voice.key("ryan", "english", TALK_ENGLISH))
+
     def _ryan_said(self, text: str) -> Said:
         return Said(text=text, audio=self.voice.key("ryan", "korean", text))
 
@@ -100,7 +104,7 @@ class Engine:
         # made once and played many times, so heard back (check); the tips too, said once a day
         for text in [*PHRASES.values(), *TIPS]:
             await self.voice.say(text, "ryan", "korean", urgent=False, check=True)
-        for text in TALK_OPENERS:  # Ryan's first questions of a free talk, in English
+        for text in (*TALK_OPENERS, TALK_ENGLISH):  # Ryan's first questions of a free talk and the line for Korean
             await self.voice.say(text, "ryan", "english", urgent=False, check=True)
 
     # --- helpers ------------------------------------------------------------------------------

@@ -9,7 +9,7 @@ from fakes import talk_example
 from je_server.claude import ClaudeUnavailable
 from je_server.engine import NotFound
 from je_server.models import Said
-from je_server.phrases import PHRASES, TALK_OPENERS
+from je_server.phrases import PHRASES, TALK_ENGLISH, TALK_OPENERS
 from je_server.prompts import TALK_CUT, TALK_CUT_SILENT, TALK_START
 from je_server.talk import TALK_FRAME, TalkBusy, TalkEnded, Talks, messages
 
@@ -48,7 +48,8 @@ async def test_openers_and_talk_phrases_are_made_ahead(engine, fake_voice):
     assert set(TALK_OPENERS) <= set(fake_voice.checked)
     for text in TALK_OPENERS:
         assert (text, "ryan", "english", False) in fake_voice.calls
-    assert (PHRASES["talk_english"], "ryan", "korean", False) in fake_voice.calls
+    assert (TALK_ENGLISH, "ryan", "english", False) in fake_voice.calls
+    assert (TALK_ENGLISH, "ryan", "korean", False) not in fake_voice.calls
 
 
 def test_messages_put_ryan_as_assistant_after_the_start():
@@ -157,14 +158,14 @@ async def test_hangul_in_the_english_transcript_is_heard_again_in_korean(talks, 
     assert fake_whisper.langs == ["en", "ko"]
     assert ev[0] == {"type": "heard", "text": "오늘 피곤해요", "n": 1, "idx": 1, "korean": True}
     assert [e["type"] for e in ev] == ["heard", "text", "reply", "audio", "done"]
-    help_ = engine.said("talk_english")
-    assert ev[1] == {"type": "text", "delta": PHRASES["talk_english"]}
+    help_ = engine.talk_english()
+    assert ev[1] == {"type": "text", "delta": TALK_ENGLISH}
     assert ev[2] == {"type": "reply", "idx": 2, "kind": "help", "parts": [help_.model_dump()]}
     assert ev[3] == {"type": "audio", "key": help_.audio} and ev[4] == {"type": "done", "idx": 2}
     saved = engine.load(rp.id)
     assert (saved.lines[1].kind, saved.lines[1].text) == ("ask", "오늘 피곤해요")
     ryan = saved.lines[2]
-    assert (ryan.speaker, ryan.kind, ryan.text) == ("ryan", "help", PHRASES["talk_english"])
+    assert (ryan.speaker, ryan.kind, ryan.text) == ("ryan", "help", TALK_ENGLISH)
     assert ryan.audio == help_.audio and ryan.parts == [help_]
     assert fake_claude.talk_calls == []
 

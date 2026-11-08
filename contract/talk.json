@@ -48,7 +48,7 @@
   {
    "idx": 2,
    "speaker": "ryan",
-   "text": "영어로 말해 볼까요? 짧게 말해도 괜찮아요.",
+   "text": "Could you try that in English? Short is fine.",
    "kind": "help",
    "three": null,
    "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
@@ -56,7 +56,7 @@
    "ko_audio": null,
    "parts": [
     {
-     "text": "영어로 말해 볼까요? 짧게 말해도 괜찮아요.",
+     "text": "Could you try that in English? Short is fine.",
      "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
     }
    ],

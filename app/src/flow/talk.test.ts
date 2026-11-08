@@ -144,7 +144,7 @@ test("done hands back my turn when the sounds end", () => {
 
 test("Korean heard gets Ryan's fixed Korean nudge", () => {
   const s0 = run(ready(), { type: "recordStart", heard: null }, { type: "recordStop" });
-  const help: Said[] = [{ text: "영어로 말해 볼까요? 짧게 말해도 괜찮아요.", audio: key("f") }];
+  const help: Said[] = [{ text: "Could you try that in English? Short is fine.", audio: key("f") }];
   const s = run(
     s0,
     ev(s0, { ...heardE, text: "주말에 한 일", korean: true }),

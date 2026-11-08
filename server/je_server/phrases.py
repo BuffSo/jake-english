@@ -21,10 +21,13 @@ PHRASES: dict[str, str] = {
     "retry_offscript": "이번에는 대사를 그대로 따라 말해 볼까요?",
     "claude_down": "지금은 제가 대답할 수 없어요. 맥의 인터넷 연결을 확인해 주세요.",
     "too_long": "녹음이 너무 길어요. 한 문장씩 짧게 말해 볼까요?",
-    # free talk (spec free-talk-design 2, 3): said when the 「말하기」 was in Korean, and when the talk had nothing to fix
-    "talk_english": "영어로 말해 볼까요? 짧게 말해도 괜찮아요.",
+    # free talk (spec free-talk-design 2): said when the talk had nothing to fix
     "talk_no_fixes": "이번 대화에서는 고칠 곳을 찾지 못했어요. 수고했어요.",
 }
+
+# Said when the 「말하기」 of a free talk came out in Korean (spec free-talk-design 3). English, in Ryan's English voice:
+# inside a free talk Ryan speaks only English (2026-11-08 user). Easy words; not in PHRASES, which are Korean.
+TALK_ENGLISH = "Could you try that in English? Short is fine."
 
 # Ryan's first question in a free talk (spec free-talk-design 2): a light everyday question, no Korean introduction,
 # taken in turn, not at random. The turn of the next one is kept in the Mac's records folder (`Store.load_talk`), so a
