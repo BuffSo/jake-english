@@ -43,7 +43,8 @@ import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 type Props = {
   sounds: SoundQueue;
   home: Home;
-  // where back from the roleplay comes to: the topic and the step its situation was picked from (null: the topics)
+  // where back from the roleplay's end screen comes to: the topic and the step its situation was picked from (null: the
+  // topics, also after leaving a roleplay mid-way)
   start: SituationStart | null;
   onCreated: (rp: Roleplay, jake: Said | null, from: SituationStart) => void;
   // the row on the topic step: resume the newest conversation (spec resume-roleplay 4)

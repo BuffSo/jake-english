@@ -6,7 +6,7 @@ import type { Home, Topic } from "../api/types";
 // askRecommend: 「제이크에게 상황을 하나 추천받아 볼까요?」, asked only when the learner said 「모르겠어」 while describing.
 export type SituationStep = "topic" | "how" | "list" | "describe" | "askRecommend" | "working" | "confirm";
 // the step the situation was picked from: where back from a wait or Jake's suggestion goes, and where back from
-// the roleplay comes to (spec 2, 6)
+// the roleplay's end screen comes to (spec 2, 6; mid-way back goes to the topics, spec resume-roleplay 5)
 export type Origin = "how" | "list" | "describe";
 export type SituationStart = { topic: string; step: Origin };
 export type HowChoice = "list" | "jake" | "describe";
@@ -54,9 +54,9 @@ export function backFrom(step: SituationStep, origin: Origin): SituationStep | n
   }
 }
 
-// Where the screen opens when the learner comes back from a roleplay: the step its situation was picked from, in the
-// same topic (spec situation-topics 2, 6). A topic the server no longer has starts at the topics, and a list that
-// has since emptied opens how to pick instead of a list without cards (todo 05).
+// Where the screen opens when the learner comes back from a roleplay's end screen: the step its situation was picked
+// from, in the same topic (spec situation-topics 2, 6). A topic the server no longer has starts at the topics, and a
+// list that has since emptied opens how to pick instead of a list without cards (todo 05).
 export function resumeFrom(start: SituationStart | null, topics: Topic[]): SituationStart | null {
   const topic = start ? topics.find((t) => t.id === start.topic) : undefined;
   if (!start || !topic) return null;

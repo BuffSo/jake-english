@@ -74,8 +74,9 @@ export type State = {
   // where a roleplay started from 「다시 연습」 goes back to, and its end screen too (spec review-practice 9)
   returnTo: State | null;
   beforeOpen: boolean; // the line before, in saved-sentence practice: hidden until asked (spec review-practice 7)
-  // the topic and step the roleplay's situation was picked from: back from the roleplay or its end screen opens the
-  // situation screen there (spec situation-topics 2); null starts it at the topics
+  // the topic and step the roleplay's situation was picked from: back from its end screen opens the situation screen
+  // there (spec situation-topics 2); null starts it at the topics. Back from the roleplay mid-way always starts at
+  // the topics, whose last row resumes it (spec resume-roleplay 5)
   situationFrom: SituationStart | null;
 };
 
