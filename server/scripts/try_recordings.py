@@ -1,7 +1,8 @@
 """Send recordings to the Mac server the way the app does, without the phone (guide DEVENV_폰없이_녹음_시험하기).
 
 The roleplay is copied first (「이 상황 다시 하기」, POST /roleplays/{id}/copy, no Claude call), and each recording is
-sent to the copy as a try at one line (POST /roleplays/{copy}/lines/{idx}/attempts). For each it prints what was
+sent to the copy as a try at one line (POST /roleplays/{copy}/lines/{idx}/attempts). The line is checked and printed
+from the copy: a list pick's copy plays the list's current script, which may differ from the run copied. For each it prints what was
 heard, whether it followed the line, Ryan's answer, the done event and the times the server saved. At the end the copy's
 folder is deleted with its recordings, so the learner's records get no test tries; `--keep` leaves it and prints its id.
 
@@ -28,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from je_server import topics  # noqa: E402
 from je_server.config import load_settings  # noqa: E402
 from je_server.models import Roleplay  # noqa: E402
 from je_server.store import ID  # noqa: E402
@@ -138,9 +140,15 @@ def show(t: Try, out: Callable[[str], object]) -> None:
 
 def run(http, data_dir: Path, rp_id: str, idx: int, files: list[Path], mode: str, keep: bool = False,
         out: Callable[[str], object] = print) -> list[Try]:
-    line = _check_line(http.json("GET", f"/roleplays/{rp_id}"), idx, mode)
-    out(f"line {idx}: {line['text']}")
+    """The line is checked and printed from the copy, where the recordings go: a list pick's copy plays the script as
+    it is now in the repository, which may differ from the run copied (todo 25)."""
     copy = http.json("POST", f"/roleplays/{rp_id}/copy")
+    try:
+        line = _check_line(copy, idx, mode)
+    except Stop:
+        remove_copy(data_dir, copy["id"], rp_id)  # nothing was sent to it: gone even with --keep
+        raise
+    out(f"line {idx}: {line['text']}")
     tries: list[Try] = []
     try:
         for path in files:
@@ -154,8 +162,21 @@ def run(http, data_dir: Path, rp_id: str, idx: int, files: list[Path], mode: str
     return tries
 
 
+def copy_lines(rp: Roleplay) -> tuple[list[tuple[int, str, str]], bool]:
+    """The lines a copy of `rp` gets, as (idx, speaker, text), and whether they are the list's current script: a list
+    pick still on its list plays the repository's script, anything else its own lines (`Engine.copy`)."""
+    if rp.pick is not None and rp.topic is not None:
+        try:
+            script = topics.pick(rp.topic, rp.pick).script
+        except KeyError:
+            pass  # taken off the list: copied from the record
+        else:
+            return [(i, speaker, text) for i, (speaker, text) in enumerate(script)], True
+    return [(l.idx, l.speaker, l.text) for l in rp.lines], False
+
+
 def list_roleplays(data_dir: Path, n: int = 10) -> None:
-    """The newest roleplays with their line numbers, to pick one to try. Copies are marked."""
+    """The newest roleplays with the line numbers a copy of each gets, to pick one to try. Copies are marked."""
     found = []
     for f in (data_dir / "roleplays").glob("*/roleplay.json"):
         try:
@@ -163,9 +184,11 @@ def list_roleplays(data_dir: Path, n: int = 10) -> None:
         except ValueError:
             continue
     for rp in sorted(found, key=lambda r: r.created, reverse=True)[:n]:
-        print(f"{rp.id}  {rp.created}  {rp.frame.title_ko}" + ("  (copy)" if rp.origin else ""))
-        for l in rp.lines:
-            print(f"    {l.idx} {'ryan' if l.speaker == 'ryan' else 'me  '}  {l.text}")
+        lines, current = copy_lines(rp)
+        print(f"{rp.id}  {rp.created}  {rp.frame.title_ko}" + ("  (copy)" if rp.origin else "")
+              + ("  (list: current script)" if current else ""))
+        for i, speaker, text in lines:
+            print(f"    {i} {'ryan' if speaker == 'ryan' else 'me  '}  {text}")
 
 
 def main() -> int:
