@@ -205,9 +205,8 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.post("/roleplays")
     async def create(body: NewRoleplay) -> dict:
         try:
-            if body.pick is not None:
-                p = topics.pick(body.topic, body.pick)
-                rp = await engine().create(p.situation, body.topic, p.first)
+            if body.pick is not None:  # its script is in the repository: no Claude (spec fixed-list-scripts)
+                rp = await engine().create_pick(body.topic, body.pick)
             else:
                 rp = await engine().create(body.situation.strip(), body.topic)
             return rp.model_dump(mode="json")

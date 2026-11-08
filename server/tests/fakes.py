@@ -8,8 +8,13 @@ import anthropic
 import httpx2
 
 from je_server.claude import ClaudeUnavailable
-from je_server.models import Frame, ThreeLine
-from je_server.threeline import plain
+from je_server.models import Frame, Syllable, ThreeLine, Word
+
+
+def noted(text: str) -> ThreeLine:
+    """A note with Korean in it, as a good annotate gives: `plain` has none, and a pick does not reuse that (spec
+    fixed-list-scripts 2)."""
+    return ThreeLine(words=[Word(syl=[Syllable(en=t, ko="가", m="n")]) for t in text.split()], reading="")
 
 
 def _response(text: str, stop_reason: str = "end_turn"):
@@ -159,7 +164,7 @@ class FakeClaude:
         if self.annotate_gate is not None:
             await self.annotate_gate.wait()
         self._maybe_fail()
-        return plain(text)
+        return noted(text)
 
     async def interpret(self, frame, line, before, after):
         self.interpret_calls.append({"frame": frame.model_dump(), "line": line, "before": before, "after": after})

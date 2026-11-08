@@ -92,3 +92,13 @@ def test_old_record_loads(tmp_path):
     (d / "roleplay.json").write_text(json.dumps(raw), encoding="utf-8")
     old = s.load(r.id)
     assert old.origin is None and old.attempts[0][0].at is None
+
+
+def test_old_record_without_pick_is_read():
+    # spec fixed-list-scripts 5: a field with a default, so records from before keep loading
+    from je_server.models import Roleplay
+
+    raw = {"id": "a" * 12, "created": "2026-11-07T10:00:00", "situation": "길 묻기",
+           "frame": {"title_ko": "길", "user_role_ko": "나", "ryan_role_ko": "R", "place_ko": "역", "goal_ko": "묻기"},
+           "lines": []}
+    assert Roleplay.model_validate(raw).pick is None
