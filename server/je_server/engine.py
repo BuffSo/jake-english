@@ -15,8 +15,9 @@ from .asr import WhisperError
 from .claude import ClaudeUnavailable
 from . import topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
-from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, Speaker, ThreeLine
+from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
 from .sentences import SentenceBuffer
+from .threeline import blank
 from .tts import VoiceError
 from .phrases import PHRASES
 from .review import first_try, group_of, latest_run, past_items, sentence_key
@@ -46,7 +47,8 @@ class Engine:
         self.tasks: dict[tuple[str, int], asyncio.Task] = {}
         self.locks: dict[str, asyncio.Lock] = {}
         self.sem = asyncio.Semaphore(3)
-        self.threes: dict[tuple[str, int], asyncio.Task] = {}  # notes asked for on demand, one call per line
+        # notes being made, one call per line: Ryan's when asked, the learner's in the background from the start
+        self.threes: dict[tuple[str, int], asyncio.Task] = {}
         self.kos: dict[tuple[str, int], asyncio.Task] = {}  # Sohee's Korean asked for, one call per line
         self.saved_lock = asyncio.Lock()  # the saved-sentence file is read and written one change at a time
 
@@ -91,9 +93,9 @@ class Engine:
 
     # --- create and prepare -------------------------------------------------------------------
 
-    async def create(self, situation: str, topic: str = topics.OTHER, first: Speaker | None = None) -> Roleplay:
-        """A new roleplay in a topic. `first`: who starts, from a list pick (spec situation-topics 5)."""
-        frame, draft = await self.claude.make_script(situation, topics.get(topic), first)
+    async def create(self, situation: str, topic: str = topics.OTHER) -> Roleplay:
+        """A new roleplay in a topic from a situation the learner described or Jake suggested: Claude writes it."""
+        frame, draft = await self.claude.make_script(situation, topics.get(topic))
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=situation, frame=frame, topic=topic,
                       lines=[ScriptLine(idx=i, speaker=s, text=t) for i, (s, t) in enumerate(draft)])
@@ -102,61 +104,101 @@ class Engine:
             self.schedule(rp.id, line.idx)
         return rp
 
+    async def create_pick(self, topic_id: str, pick_id: str) -> Roleplay:
+        """A list pick from its script in the repository, without Claude (spec fixed-list-scripts 2, ADR-0013). An
+        earlier run of the pick makes this the group's next run and lends what it already made. KeyError: no such
+        pick in the topic."""
+        p = topics.pick(topic_id, pick_id)
+        # no await from reading the records to saving the new one: two picks arriving together finish one after the
+        # other on the event loop, so the second finds the first and the pick keeps one group (spec 2)
+        runs = sorted((r for r in self.store.all() if r.pick == pick_id), key=lambda r: r.created)
+        rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
+                      situation=p.situation, frame=p.frame.model_copy(), topic=topic_id, pick=pick_id,
+                      origin=group_of(runs[0]) if runs else None,
+                      lines=[self._prepared(runs, ScriptLine(idx=i, speaker=s, text=t))
+                             for i, (s, t) in enumerate(p.script)])
+        self.store.save(rp)
+        for line in rp.lines:
+            if not self.prepared(line):
+                self.schedule(rp.id, line.idx)
+        return rp
+
+    @staticmethod
+    def _prepared(runs: list[Roleplay], line: ScriptLine) -> ScriptLine:
+        """The line with what earlier runs (oldest first) made for the same line: same place, speaker and words.
+        Each part comes from the newest run that has it; a note with no Korean is made again, Sohee's sound comes
+        with her Korean (spec 2)."""
+        same = [l for r in reversed(runs) for l in r.lines[line.idx:line.idx + 1]
+                if (l.speaker, l.text) == (line.speaker, line.text)]
+        three = next((l.three for l in same if l.three is not None and not blank(l.three)), None)
+        audio = next((l.audio for l in same if l.audio is not None), None)
+        ko = next((l for l in same if l.ko is not None), None)
+        return line.model_copy(update={"three": three, "audio": audio, "ko": ko and ko.ko,
+                                       "ko_audio": ko and ko.ko_audio})
+
     async def copy(self, rp_id: str) -> Roleplay:
         """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
-        sounds are reused, so it starts at once; the old record and its tries stay as they are."""
+        sounds are reused, so it starts at once; the old record and its tries stay as they are. A list pick plays its
+        script as it is now in the repository; one taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
+        if old.pick is not None and old.topic is not None:
+            try:
+                return await self.create_pick(old.topic, old.pick)
+            except KeyError:
+                pass
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
                       origin=old.origin or old.id,  # a copy of a copy still points at the first (ADR-0011)
-                      topic=old.topic)
+                      topic=old.topic, pick=old.pick)
         self.store.save(rp)
         for line in rp.lines:
-            if not self.ready(line):
+            if not self.prepared(line):
                 self.schedule(rp.id, line.idx)
         return rp
 
     def schedule(self, rp_id: str, idx: int) -> asyncio.Task:
+        """Starts what the line still lacks and returns its sound task. The learner's notes are made beside it on
+        the task `three` shares, so the line does not wait for them (spec dont-wait-for-line-notes 1); being made
+        apart, a sound that fails fast cannot leave the line without its notes either (PR #15 review)."""
+        _, line = self.get_line(rp_id, idx)
+        if line.speaker == "user" and line.three is None:
+            self._three_task(rp_id, idx)
         key = (rp_id, idx)
         task = self.tasks.get(key)
         if task is None or (task.done() and (task.cancelled() or task.exception() is not None)):
-            task = asyncio.create_task(self._prepare(rp_id, idx))
+            task = asyncio.create_task(self._sound(rp_id, idx))
             task.add_done_callback(_quiet)
             self.tasks[key] = task
         return task
 
     @staticmethod
     def ready(line: ScriptLine) -> bool:
+        """The line can be shown: its model sound is made. The learner's notes come apart (spec
+        dont-wait-for-line-notes 1): the line starts as plain text and they open only when asked."""
+        return line.audio is not None
+
+    @staticmethod
+    def prepared(line: ScriptLine) -> bool:
+        """Nothing is left to make: the sound, and the notes of a learner's line (Ryan's are made when asked)."""
         return line.audio is not None and (line.speaker == "ryan" or line.three is not None)
 
-    async def _prepare(self, rp_id: str, idx: int) -> None:
-        """Notes and model sound are made at the same time; the sound does not need the notes."""
-        rp, line = self.get_line(rp_id, idx)
-
-        async def notes():
-            if line.speaker == "user" and line.three is None:
-                async with self.sem:
-                    three = await self.claude.annotate(line.text, self.context(rp, idx))
-                await self.update_line(rp_id, idx, line.text, three=three)
-
-        async def sound():
-            if line.audio is None:
-                key = await self.voice.say(line.text, "ryan", "english", urgent=False, rank=idx)
-                await self.update_line(rp_id, idx, line.text, audio=key)
-
-        # both finish before either failure is raised: a sound that fails fast must not leave the line without
-        # its notes, since the roleplay screen does not ask for them again (PR #15 review)
-        results = await asyncio.gather(notes(), sound(), return_exceptions=True)
-        for r in results:
-            if isinstance(r, BaseException):
-                raise r
+    async def _sound(self, rp_id: str, idx: int) -> None:
+        _, line = self.get_line(rp_id, idx)
+        if line.audio is None:
+            key = await self.voice.say(line.text, "ryan", "english", urgent=False, rank=idx)
+            await self.update_line(rp_id, idx, line.text, audio=key)
 
     async def line(self, rp_id: str, idx: int) -> ScriptLine:
+        """The line once its sound is made; the learner's notes go on in the background (a server restarted
+        mid-way starts them again here)."""
         _, line = self.get_line(rp_id, idx)
+        if self.prepared(line):
+            return line
+        task = self.schedule(rp_id, idx)
         if self.ready(line):
             return line
         try:
-            await asyncio.wait_for(asyncio.shield(self.schedule(rp_id, idx)), LINE_WAIT)
+            await asyncio.wait_for(asyncio.shield(task), LINE_WAIT)
         except VoiceError:
             # the line comes without its sound rather than as an error: the roleplay moves on after a pause and
             # shadow practice can still record it (final review); the next request tries the sound again
@@ -179,11 +221,16 @@ class Engine:
         return {"no": min(before + 1, total), "total": total}
 
     async def three(self, rp_id: str, idx: int) -> ThreeLine:
-        """Notes on demand (Ryan's lines). Asks for the same line at once share one Claude call (PR #15 review:
-        the end screen asks for every Ryan line and the shadow screen asks again)."""
+        """A line's notes: Ryan's are made when asked; the learner's are being made in the background and this
+        waits for that same call (spec dont-wait-for-line-notes 1). Asks for the same line at once share one Claude
+        call (PR #15 review: the end screen asks for every Ryan line and the shadow screen asks again)."""
         _, line = self.get_line(rp_id, idx)
         if line.three is not None:
             return line.three
+        return await asyncio.shield(self._three_task(rp_id, idx))
+
+    def _three_task(self, rp_id: str, idx: int) -> asyncio.Task:
+        """The one task making this line's notes, started if none is running."""
         key = (rp_id, idx)
         task = self.threes.get(key)
         if task is None or task.done():
@@ -191,7 +238,7 @@ class Engine:
             task.add_done_callback(_quiet)
             task.add_done_callback(lambda _: self.threes.pop(key, None))
             self.threes[key] = task
-        return await asyncio.shield(task)
+        return task
 
     async def _make_three(self, rp_id: str, idx: int) -> ThreeLine:
         rp, line = self.get_line(rp_id, idx)

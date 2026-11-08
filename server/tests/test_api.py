@@ -68,11 +68,27 @@ def test_create_roleplay_and_get_lines(client):
     rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
     assert rp["lines"][0]["speaker"] == "ryan"
     line = client.get(f"/roleplays/{rp['id']}/lines/1").json()
-    assert line["three"]["words"] and len(line["audio"]) == 64
+    assert len(line["audio"]) == 64  # the learner's notes may still be on their way (spec dont-wait-for-line-notes)
+    assert client.get(f"/roleplays/{rp['id']}/lines/1/three").json()["words"]
     assert line["progress"] == {"no": 1, "total": 3}
     audio = client.get(f"/audio/{line['audio']}?rate=0.8")
     assert audio.status_code == 200 and audio.headers["content-type"] == "audio/mp4"
     assert client.get(f"/roleplays/{rp['id']}/lines/0/three").json()["words"]
+
+
+def test_learner_line_comes_while_claude_is_down(client, fake_claude):
+    # spec dont-wait-for-line-notes 1: notes that cannot be made no longer stop the line; only the notes say so
+    from je_server.claude import ClaudeUnavailable
+
+    async def down(text, context):
+        raise ClaudeUnavailable("fake")
+
+    fake_claude.annotate = down  # before the roleplay, so its notes fail in the background too
+    rp = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    line = client.get(f"/roleplays/{rp['id']}/lines/1")
+    assert line.status_code == 200 and len(line.json()["audio"]) == 64
+    three = client.get(f"/roleplays/{rp['id']}/lines/1/three")
+    assert three.status_code == 503 and three.json()["code"] == "claude_unavailable"
 
 
 def test_create_roleplay_claude_down_is_503(client, fake_claude):
@@ -290,12 +306,16 @@ def test_home_lists_topics(client):
 
 
 def test_create_from_a_pick(client, fake_claude):
+    # spec fixed-list-scripts 2: the repository's script, no Claude call for it; a second pick is the next run
     from je_server.topics import pick
 
     rp = client.post("/roleplays", json={"topic": "usa", "pick": "u-hotel-checkin"}).json()
-    assert rp["topic"] == "usa" and rp["lines"][0]["speaker"] == "user"
-    made = [a for n, a in fake_claude.calls if n == "make_script"][-1]
-    assert made == (pick("usa", "u-hotel-checkin").situation, "usa", "user")
+    assert (rp["topic"], rp["pick"], rp["origin"]) == ("usa", "u-hotel-checkin", None)
+    assert rp["frame"]["title_ko"] == "뉴욕 호텔 체크인"
+    assert [(l["speaker"], l["text"]) for l in rp["lines"]] == list(pick("usa", "u-hotel-checkin").script)
+    assert not any(n == "make_script" for n, _ in fake_claude.calls)
+    again = client.post("/roleplays", json={"topic": "usa", "pick": "u-hotel-checkin"}).json()
+    assert again["origin"] == rp["id"]
 
 
 def test_create_without_topic_is_other(client):

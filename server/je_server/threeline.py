@@ -82,6 +82,12 @@ def plain(text: str) -> ThreeLine:
     return ThreeLine(words=[Word(syl=[Syllable(en=t, ko="", m="n")]) for t in text.split()], reading="")
 
 
+def blank(three: ThreeLine) -> bool:
+    """No Korean anywhere: what `plain` leaves. A list pick makes such a note again rather than reuse it (spec
+    fixed-list-scripts 2)."""
+    return not any(s.ko for w in three.words for s in w.syl)
+
+
 def degrade(text: str, three: ThreeLine, problems: list[Problem]) -> ThreeLine:
     if not problems:
         return three

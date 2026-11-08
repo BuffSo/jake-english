@@ -17,6 +17,7 @@ import { Button } from "../ui/Button";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
 import { Named } from "../ui/Named";
+import { lineNotes, needsNotes } from "../ui/notesView";
 import { StarButton, StarMark } from "../ui/Star";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { useInterpret } from "../ui/useInterpret";
@@ -79,7 +80,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     };
   }, []);
 
-  // load the current line (the server waits until its notes and sound are ready)
+  // load the current line (the server waits until its sound is ready; a learner's notes may come later, fetched below)
   useEffect(() => {
     if (state.phase !== "loading") return;
     let alive = true;
@@ -118,9 +119,12 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     }
   }, [line, state.phase, state.mode, sounds, dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ryan's lines get their three-line notes only when asked; the end screen starts making them (spec 5)
+  // The line to say comes without its notes when they are not made yet: Ryan's in shadow practice are made only when
+  // asked (the end screen starts them, spec 5), the learner's are still being made on the Mac (spec
+  // dont-wait-for-line-notes 2). Fetched as soon as the line is up, so 「읽는 법 보기」 usually opens at once.
   useEffect(() => {
-    if (shadow && line && !line.three && state.phase === "ready" && !threes[line.idx]) fetchThree(line.idx);
+    const toSay = line && (line.speaker === "user" || shadow);
+    if (toSay && state.phase === "ready" && needsNotes(line, threes[line.idx])) fetchThree(line.idx);
   }, [shadow, line, state.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Always a moment later: on Android the new renderer runs a scroll before it adds the views committed with it, so
@@ -563,7 +567,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             <View style={[styles.bubble, styles.now]}>
               <LineToSay
                 text={line.text}
-                three={shadow ? (line.three ?? threes[line.idx] ?? null) : line.three}
+                three={lineNotes(line, threes[line.idx])}
                 open={state.reading}
                 onToggle={() => dispatch({ type: "toggleReading" })}
                 ko={{
