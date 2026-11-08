@@ -1,7 +1,7 @@
 """Situation topics and their prepared lists (spec situation-topics 1, 3)."""
 import pytest
 
-from je_server.topics import TOPICS, get, pick, public
+from je_server.topics import TOPICS, get, listed, pick, public
 
 
 def test_three_topics_in_order():
@@ -42,6 +42,16 @@ def test_pick_must_belong_to_the_topic():
         pick("usa", "u-none")
     with pytest.raises(KeyError):
         get("nope")
+
+
+def test_listed_is_the_pick_still_on_its_list():
+    # one place says whether a run copies the list's current script, for Engine.copy and the recording test script
+    # (PR #49 review: try_recordings had copied the branch by hand)
+    p = get("usa").picks[0]
+    assert listed("usa", p.id) is p
+    assert listed(None, p.id) is None and listed("usa", None) is None  # not a list pick
+    assert listed("usa", "gone-from-the-list") is None
+    assert listed("tourist", p.id) is None  # another topic's line
 
 
 def test_examples_end_at_the_situation_without_an_ending():

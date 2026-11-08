@@ -164,14 +164,11 @@ def run(http, data_dir: Path, rp_id: str, idx: int, files: list[Path], mode: str
 
 def copy_lines(rp: Roleplay) -> tuple[list[tuple[int, str, str]], bool]:
     """The lines a copy of `rp` gets, as (idx, speaker, text), and whether they are the list's current script: a list
-    pick still on its list plays the repository's script, anything else its own lines (`Engine.copy`)."""
-    if rp.pick is not None and rp.topic is not None:
-        try:
-            script = topics.pick(rp.topic, rp.pick).script
-        except KeyError:
-            pass  # taken off the list: copied from the record
-        else:
-            return [(i, speaker, text) for i, (speaker, text) in enumerate(script)], True
+    pick still on its list plays the repository's script, anything else its own lines. `topics.listed` decides, as
+    for `Engine.copy`. The script is this checkout's `topics.py`: run it where the server runs."""
+    p = topics.listed(rp.topic, rp.pick)
+    if p is not None:
+        return [(i, speaker, text) for i, (speaker, text) in enumerate(p.script)], True
     return [(l.idx, l.speaker, l.text) for l in rp.lines], False
 
 

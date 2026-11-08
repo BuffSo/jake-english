@@ -230,6 +230,18 @@ def pick(topic_id: str, pick_id: str) -> Pick:
     raise KeyError(pick_id)
 
 
+def listed(topic_id: str | None, pick_id: str | None) -> Pick | None:
+    """The list line a run was picked from, while it is still on its topic's list; None for a run not picked from a
+    list or one taken off it. A copy of the run plays this line's script as it is now (spec fixed-list-scripts 4):
+    `Engine.copy` and the recording test script both ask here, so they cannot drift apart (PR #49 review)."""
+    if topic_id is None or pick_id is None:
+        return None
+    try:
+        return pick(topic_id, pick_id)
+    except KeyError:
+        return None
+
+
 def public() -> list[dict]:
     """What the app needs to show the topics and their lists: no prompt text."""
     return [{"id": t.id, "name_ko": t.name_ko, "placeholder_ko": t.placeholder_ko,
