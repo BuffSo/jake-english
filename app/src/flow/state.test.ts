@@ -1,7 +1,7 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Resume, Roleplay, ScriptLine } from "../api/types";
 import { resumeHistory, resumeSeen } from "./resume";
-import { canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, modelKey, movesPlace, NO_SPEECH, notifiesSkip, practiceFor, reduce, showMicHint, type State } from "./state";
+import { canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, messageIsError, MIC_FAILED, modelKey, movesPlace, NO_SPEECH, notifiesSkip, practiceFor, reduce, showMicHint, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -849,10 +849,37 @@ describe("first-turn hint and the silent cancel (spec record-feedback 3, 4)", ()
     expect(showMicHint(at("evaluating"))).toBe(false);
   });
 
-  test("it goes for good once the mic starts, even after a cancel", () => {
-    const started = reduce(at("ready"), { type: "recordStart" });
+  test("it goes for good once the mic comes on, even after a cancel", () => {
+    const tapped = reduce(at("ready"), { type: "recordStart" });
+    expect(showMicHint(tapped)).toBe(false); // hidden from the tap: the screen shows 「말하기 끝」
+    const started = reduce(tapped, { type: "micOn" });
     expect(started.micUsed).toBe(true);
     expect(showMicHint(reduce(started, { type: "recordCancel" }))).toBe(false);
+  });
+
+  // todo 20261108_34 1, 5: a refused permission or a mic that did not start used to drop the hint for good and say
+  // nothing on the conversation screen
+  test("a mic that did not come on keeps the hint and says why", () => {
+    const s = reduce(reduce(at("ready"), { type: "recordStart" }), { type: "micFailed" });
+    expect([s.phase, s.micUsed, s.message]).toEqual(["ready", false, MIC_FAILED]);
+    expect(showMicHint(s)).toBe(true);
+    expect(messageIsError(s)).toBe(true);
+    expect(MIC_FAILED).toBe("마이크를 쓸 수 없어요. 앱의 마이크 권한을 확인해 주세요.");
+  });
+
+  test("a failed mic after it was used once keeps it used", () => {
+    const s = reduce(reduce(at("ready", { micUsed: true }), { type: "recordStart" }), { type: "micFailed" });
+    expect(s.micUsed).toBe(true);
+  });
+
+  test("the mic failing is taken only while recording", () => {
+    const ready = at("ready");
+    expect(reduce(ready, { type: "micFailed" })).toBe(ready);
+  });
+
+  test("the notice after no speech is not an error, the mic failing is", () => {
+    expect(messageIsError(reduce(at("recording"), { type: "noSpeech" }))).toBe(false);
+    expect(messageIsError(at("error", { message: "x" }))).toBe(true);
   });
 
   test("a skip keeps it for the next turn", () => {
@@ -885,7 +912,7 @@ describe("first-turn hint and the silent cancel (spec record-feedback 3, 4)", ()
   test("back from a line practised mid-roleplay brings the roleplay back as it was", () => {
     const mid = at("ready", { idx: 3, line: { ...user, idx: 3 }, seen: seenAll });
     let s = reduce(mid, { type: "practiseLine", kind: "mine", idx: 1 });
-    s = reduce(s, { type: "recordStart" });
+    s = reduce(reduce(s, { type: "recordStart" }), { type: "micOn" });
     expect(s.micUsed).toBe(true);
     s = reduce(reduce(s, { type: "recordCancel" }), { type: "back" });
     expect(s.micUsed).toBe(false);

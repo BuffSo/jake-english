@@ -78,8 +78,9 @@ export type State = {
   // there (spec situation-topics 2); null starts it at the topics. Back from the roleplay mid-way always starts at
   // the topics, whose last row resumes it (spec resume-roleplay 5)
   situationFrom: SituationStart | null;
-  // the mic was started in this conversation or practice: until then the turn shows 「🎤를 누르고 말하세요」 (spec
-  // record-feedback 3)
+  // the mic came on in this conversation or practice: until then the turn shows 「🎤를 누르고 말하세요」 (spec
+  // record-feedback 3). Set when it is on, not at the tap: a refused permission or a mic that did not start keeps it
+  // (todo 20261108_34 5)
   micUsed: boolean;
   // a resumed conversation's lines of mine recorded before, by line: 「다음」 and 「건너뛰기」 pass them as bubbles on the
   // way to the next unrecorded line (spec resume-unrecorded 3). null when the conversation was not resumed.
@@ -96,6 +97,8 @@ export type Action =
   | { type: "lineMissing" }
   | { type: "ryanDone" }
   | { type: "recordStart" }
+  | { type: "micOn" }
+  | { type: "micFailed" }
   | { type: "recordStop" }
   | { type: "recordCancel" }
   | { type: "noSpeech" }
@@ -154,6 +157,15 @@ export const initial: State = {
 
 // after the recording was thrown away for having no speech in it (spec record-feedback 4)
 export const NO_SPEECH = "말소리가 없어 녹음을 멈췄어요.";
+
+// the mic did not come on: no permission, or the recorder failed (todo 20261108_34 1); the situation screen says the same
+export const MIC_FAILED = "마이크를 쓸 수 없어요. 앱의 마이크 권한을 확인해 주세요.";
+
+// The message on screen is drawn as an error (red): after a failure, and when the mic could not be used. The notice
+// after no speech is not one.
+export function messageIsError(s: State): boolean {
+  return s.phase === "error" || s.message === MIC_FAILED;
+}
 
 export const OFFLINE = "맥에 연결할 수 없어요. 맥과 인터넷 연결을 확인해 주세요.";
 
@@ -354,7 +366,12 @@ export function reduce(s: State, a: Action): State {
       return { ...s, history: [...s.history, { kind: "ryan", text: s.line.text, idx: s.line.idx }], idx: s.idx + 1, phase: "loading" };
     case "recordStart":
       if (s.phase !== "ready" && s.phase !== "evaluated") return s;
-      return { ...s, phase: "recording", message: null, micUsed: true };
+      return { ...s, phase: "recording", message: null };
+    case "micOn":
+      return s.screen === "roleplay" ? { ...s, micUsed: true } : s;
+    case "micFailed":
+      // back to before speaking, saying why; the first-turn hint stays if the mic was never on (todo 20261108_34 1, 5)
+      return s.phase === "recording" ? { ...s, phase: "ready", message: MIC_FAILED } : s;
     case "recordCancel":
       return s.phase === "recording" ? { ...s, phase: "ready" } : s;
     case "noSpeech":

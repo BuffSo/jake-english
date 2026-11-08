@@ -25,6 +25,7 @@ import {
   type SituationStart,
   type SituationStep,
 } from "../flow/situation";
+import { MIC_FAILED } from "../flow/state";
 import { turnDown } from "../flow/turnedDown";
 import { whenSilent } from "../flow/whenSilent";
 import { BackButton, useBackKey } from "../ui/BackButton";
@@ -233,7 +234,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onResume, onBa
       if (my !== gen.current) await rec.discard(); // went back while the mic was starting (permission prompt)
     } catch {
       if (my !== gen.current) return;
-      setError("마이크를 쓸 수 없어요. 앱의 마이크 권한을 확인해 주세요.");
+      setError(MIC_FAILED);
     }
   }
 

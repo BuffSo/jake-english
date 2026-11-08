@@ -15,7 +15,7 @@ import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThe
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { pending } from "../flow/pending";
 import { scrollToShow, tapRow, toggleRow } from "../flow/review";
-import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, movesPlace, notifiesSkip, practiceFor, showMicHint, type Action, type State } from "../flow/state";
+import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, messageIsError, modelKey, movesPlace, notifiesSkip, practiceFor, showMicHint, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { HeardLine } from "../ui/HeardLine";
@@ -415,14 +415,19 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       () => rec.start(stopRecording, { onNoSpeech: silentCancel, onSpeechEnd: stopRecording }),
       () => !mounted.current || epoch.current !== my,
     );
-    if (how === "failed") dispatch({ type: "recordCancel" });
+    // no permission or the mic did not start: back to before speaking, saying so (todo 20261108_34 1)
+    if (how === "failed") dispatch({ type: "micFailed" });
     // left while the mic was starting (permission prompt)
     else if (how === "left") await rec.discard();
-    // 「취소」 tapped while the mic was starting: thrown away now that it is on, as `doCancel` does (todo 26 1)
-    else if (how === "cancelled") {
-      await rec.cancel();
-      dispatch({ type: "recordCancel" });
-      tapHold.start();
+    else {
+      // the mic came on: the first-turn hint goes for good (spec record-feedback 3, todo 20261108_34 5)
+      dispatch({ type: "micOn" });
+      // 「취소」 tapped while the mic was starting: thrown away now that it is on, as `doCancel` does (todo 26 1)
+      if (how === "cancelled") {
+        await rec.cancel();
+        dispatch({ type: "recordCancel" });
+        tapHold.start();
+      }
     }
   }
 
@@ -760,7 +765,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         )}
         {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" onShow={toEnd} />}
         {state.message &&
-          (state.phase === "error" ? <ErrorText text={state.message} /> : <Text style={styles.notice}>{keepWords(state.message)}</Text>)}
+          (messageIsError(state) ? <ErrorText text={state.message} /> : <Text style={styles.notice}>{keepWords(state.message)}</Text>)}
       </ScrollView>
 
       {/* No 「처음으로」 at the bottom: back does nearly the same, one screen at a time (2026-11-06 user). Without it

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RECORD_LIMIT_MS } from "../config";
 import { playCue } from "./cues";
 import { startLevelPoll } from "./levelPoll";
+import { turnMicOn } from "./micOn";
 
 type Level = (db: number | undefined) => void;
 
@@ -42,13 +43,15 @@ export function useRecorder() {
   // `onNoSpeech`: called once when no speech came in time after the mic came on; `onSpeechEnd`: called once after a
   // long pause following speech (the roleplay screen only)
   async function start(onAutoStop: () => void, opts: { onNoSpeech?: () => void; onSpeechEnd?: () => void } = {}): Promise<void> {
-    const perm = await requestRecordingPermissionsAsync();
-    if (!perm.granted) throw new Error("mic");
-    await recorder.prepareToRecordAsync();
     // the mic comes on as the start cue ends: a cue heard means recording, and the cue is not in the recording.
-    // A cue that cannot play is waited for its length, so recording still works (spec record-feedback 1).
-    await playCue("start");
-    recorder.record();
+    // A cue that cannot play is waited for its length, so recording still works (spec record-feedback 1). A mic that
+    // fails after the cue plays the cancel cue.
+    await turnMicOn({
+      permit: async () => (await requestRecordingPermissionsAsync()).granted,
+      prepare: () => recorder.prepareToRecordAsync(),
+      cue: playCue,
+      record: () => recorder.record(),
+    });
     active.current = true;
     setRecording(true);
     setLiveSince(Date.now());
