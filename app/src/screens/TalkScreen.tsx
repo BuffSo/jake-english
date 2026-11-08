@@ -20,7 +20,7 @@ import type { SoundQueue } from "../audio/player";
 import { tapPlay } from "../audio/tapPlay";
 import { useMic } from "../audio/useMic";
 import { usePlayingTag } from "../audio/usePlayingTag";
-import { createGate, tapHold, tapThenHold } from "../flow/gate";
+import { createGate, createGates, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView } from "../flow/interpret";
 import { tapRow } from "../flow/review";
 import {
@@ -120,6 +120,9 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
   const [soheeOpen, setSoheeOpen] = useState<Record<number, boolean>>({});
   const [hintThrees, setHintThrees] = useState<Record<number, ThreeLine | "loading">>({});
   const [hintNotesOpen, setHintNotesOpen] = useState<Record<number, boolean>>({});
+  // one request for the full sentence's notes per line at a time (REVIEW.md 「앱 화면」): the second tap of a double
+  // tap reads the state from before the first one's redraw
+  const hintNotesGates = useRef(createGates<number>()).current;
   const chanceRef = useRef<SoheeChance | null>(null);
   if (chanceRef.current === null) {
     const talkId = () => now.current.roleplay?.id ?? "";
@@ -385,14 +388,17 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
     if (hintNotesOpen[idx]) return setHintNotesOpen((o) => ({ ...o, [idx]: false }));
     setHintNotesOpen((o) => ({ ...o, [idx]: true }));
     if (hintThrees[idx] || !rp) return;
-    setHintThrees((t) => ({ ...t, [idx]: "loading" }));
-    try {
-      const three = await api.getHintThree(rp.id, idx);
-      setHintThrees((t) => ({ ...t, [idx]: three }));
-    } catch {
-      setHintThrees(({ [idx]: _, ...rest }) => rest);
-      setHintNotesOpen((o) => ({ ...o, [idx]: false }));
-    }
+    const id = rp.id;
+    await hintNotesGates.run(idx, async () => {
+      setHintThrees((t) => ({ ...t, [idx]: "loading" }));
+      try {
+        const three = await api.getHintThree(id, idx);
+        setHintThrees((t) => ({ ...t, [idx]: three }));
+      } catch {
+        setHintThrees(({ [idx]: _, ...rest }) => rest);
+        setHintNotesOpen((o) => ({ ...o, [idx]: false }));
+      }
+    });
   }
 
   // Sohee's bubble right under Ryan's line it belongs to: open while it is his latest reply (also while I record and

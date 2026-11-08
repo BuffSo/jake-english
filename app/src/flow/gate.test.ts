@@ -1,4 +1,34 @@
-import { createGate, createHold, createLatch, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, TAP_HOLD_MS, tapThenHold } from "./gate";
+import { createGate, createGates, createHold, createLatch, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, TAP_HOLD_MS, tapThenHold } from "./gate";
+
+// PR #67 review: a double tap on 「읽는 법 보기」 under Sohee's full sentence asked the Mac twice for its notes
+test("one gate per key: the same key waits its turn, another key runs", async () => {
+  const gates = createGates<number>();
+  const finish: Record<number, () => void> = {};
+  const calls: number[] = [];
+  const work = (k: number) => () =>
+    new Promise<string>((resolve) => {
+      calls.push(k);
+      finish[k] = () => resolve(`done ${k}`);
+    });
+  const first = gates.run(2, work(2));
+  expect(await gates.run(2, work(2))).toBeUndefined(); // the second tap of a double tap
+  expect(calls).toEqual([2]);
+  const other = gates.run(4, work(4)); // another line's notes are not held up
+  expect(calls).toEqual([2, 4]);
+  finish[4]();
+  expect(await other).toBe("done 4");
+  expect(gates.busy(2)).toBe(true);
+  finish[2]();
+  expect(await first).toBe("done 2");
+  expect(gates.busy(2)).toBe(false);
+});
+
+test("a key's gate opens again when its call ends, also after a failure", async () => {
+  const gates = createGates<number>();
+  await expect(gates.run(1, async () => Promise.reject(new Error("down")))).rejects.toThrow("down");
+  expect(gates.busy(1)).toBe(false);
+  expect(await gates.run(1, async () => "asked again")).toBe("asked again");
+});
 
 test("a second call while the first runs is ignored", async () => {
   // PR #12 review: a double tap on 「■ 말하기 끝」 uploaded the same recording twice
