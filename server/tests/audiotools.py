@@ -24,3 +24,20 @@ def duration(path: Path) -> float:
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
                          check=True, capture_output=True, text=True).stdout
     return float(out.strip())
+
+
+def top_boxes(path: Path) -> list[str]:
+    """The top-level MP4 boxes in order (ftyp, moov, mdat, ...), to see whether moov comes first."""
+    import struct
+
+    data = path.read_bytes()
+    out, off = [], 0
+    while off + 8 <= len(data):
+        size, kind = struct.unpack(">I4s", data[off:off + 8])
+        if size == 1:
+            size = struct.unpack(">Q", data[off + 8:off + 16])[0]
+        out.append(kind.decode("latin1"))
+        if size == 0:
+            break
+        off += size
+    return out

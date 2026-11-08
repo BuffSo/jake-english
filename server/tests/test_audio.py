@@ -50,3 +50,50 @@ async def test_a_single_click_is_not_speech(tmp_path):
     # review: a pocket bump or the tap that ends recording passed the peak-only gate, then whisper said "you"
     click = make_wav(tmp_path, "sine=f=1000:r=16000:duration=0.1,apad", 2)
     assert not await audio.has_speech(click)
+
+
+# spec play-button-feedback 4: the play copy of a recording starts just before the speech and ends just after it
+LOUD_1_TO_2 = "aevalsrc='if(between(t,1,2),0.5*sin(2*PI*220*t),0)':s=16000:d=5"
+
+
+async def test_speech_span_finds_the_loud_part(tmp_path):
+    span = audio.speech_span(make_wav(tmp_path, LOUD_1_TO_2, 5))
+    assert span is not None
+    assert abs(span[0] - 1.0) <= 0.05 and abs(span[1] - 2.0) <= 0.05
+
+
+async def test_speech_span_none_for_silence(tmp_path):
+    assert audio.speech_span(make_wav(tmp_path, "anullsrc=r=16000:cl=mono", 2)) is None
+
+
+async def test_a_soft_start_stays_in_the_cut(tmp_path):
+    # a soft first word (about -40 dBFS) before a loud one: -35 dBFS would start the cut after it
+    soft = "aevalsrc='if(between(t,0.5,1),0.014*sin(2*PI*220*t),if(between(t,1,2),0.5*sin(2*PI*220*t),0))':s=16000:d=3"
+    span = audio.speech_span(make_wav(tmp_path, soft, 3))
+    assert span is not None and abs(span[0] - 0.5) <= 0.05
+
+
+async def test_play_cut_trims_and_puts_moov_first(tmp_path):
+    from audiotools import top_boxes
+
+    src = make_m4a(tmp_path, LOUD_1_TO_2.replace("s=16000", "s=44100"), 5)
+    await audio.play_cut(src, (1.0, 2.0), 5.0, tmp_path / "cut.m4a")
+    assert 1.5 <= duration(tmp_path / "cut.m4a") <= 1.7  # 0.8 .. 2.4
+    boxes = top_boxes(tmp_path / "cut.m4a")
+    assert boxes.index("moov") < boxes.index("mdat")
+
+
+async def test_play_cut_without_speech_keeps_everything(tmp_path):
+    from audiotools import top_boxes
+
+    src = make_m4a(tmp_path, "anullsrc=r=44100:cl=mono", 3)
+    await audio.play_cut(src, None, 3.0, tmp_path / "cut.m4a")
+    assert abs(duration(tmp_path / "cut.m4a") - duration(src)) <= 0.05
+    boxes = top_boxes(tmp_path / "cut.m4a")
+    assert boxes.index("moov") < boxes.index("mdat")
+
+
+async def test_play_cut_keeps_the_ends_inside_the_recording(tmp_path):
+    src = make_m4a(tmp_path, "sine=f=220:r=44100", 2)
+    await audio.play_cut(src, (0.05, 1.9), 2.0, tmp_path / "cut.m4a")
+    assert abs(duration(tmp_path / "cut.m4a") - duration(src)) <= 0.05
