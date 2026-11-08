@@ -271,8 +271,9 @@ class Talks:
                     await engine.update_line(rp_id, first.idx, first.text, **made)
                 for line in lines:
                     engine.schedule(rp_id, line.idx)
-            rp = engine.load(rp_id)
-            lines = [line for line in rp.lines if line.kind == "fix"]
+        # the record as it is now, also with nothing to fix: a hint kept while Claude picked counts (`_end_body`)
+        rp = engine.load(rp_id)
+        lines = [line for line in rp.lines if line.kind == "fix"]
         # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
         log.info("talk end %s fixes=%d first_fix_sound=%.2f total=%.2f", rp_id, len(lines), first_sound,
                  time.perf_counter() - t0)

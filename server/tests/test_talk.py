@@ -798,6 +798,19 @@ async def test_end_counts_sohee_chances(talks, engine, speech_bytes, fake_whispe
     assert await talks.end(rp_id) == no_fixes(engine, count)  # nothing to fix: the count is still there
 
 
+async def test_end_with_nothing_to_fix_counts_a_hint_made_while_claude_picked(talks, engine, speech_bytes,
+                                                                               fake_whisper, fake_claude):
+    # PR review: the no-fixes answer was built from the record as read before the Claude call
+    rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])
+    fake_claude.fix_gate = asyncio.Event()
+    ending = asyncio.create_task(talks.end(rp_id))
+    await until(lambda: fake_claude.fix_calls)
+    await talks.hint(rp_id, 2)
+    await talks.show_full(rp_id, 2)
+    fake_claude.fix_gate.set()
+    assert await ending == no_fixes(engine, 2)
+
+
 async def test_end_with_fixes_counts_sohee_chances_too(talks, speech_bytes, fake_whisper, fake_claude):
     rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])
     await talks.hint(rp_id, 2)
