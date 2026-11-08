@@ -1,0 +1,8 @@
+{"type": "heard", "text": "I walk to the park every morning.", "n": 1, "idx": 1, "korean": false}
+{"type": "text", "delta": "Nice! "}
+{"type": "text", "delta": "Is it a big park?"}
+{"type": "reply", "idx": 2, "kind": "reply", "parts": [{"text": "Nice!", "audio": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, {"text": "Is it a big park?", "audio": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}]}
+{"type": "audio", "key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
+{"type": "audio", "key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}
+{"type": "done", "idx": 2}
+{"type": "error", "code": "no_speech", "say": {"text": "잘 안 들렸어요. 한 번 더 말해 줄래요?", "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}

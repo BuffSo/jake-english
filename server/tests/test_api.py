@@ -1,3 +1,9 @@
+import json
+
+from je_server.app import MAX_UPLOAD
+from je_server.phrases import PHRASES, TALK_OPENERS
+
+
 def test_unknown_roleplay_is_404(client):
     r = client.get("/roleplays/000000000000/lines/0")
     assert r.status_code == 404 and r.json()["code"] == "not_found"
@@ -20,6 +26,8 @@ def test_routes_need_token(settings, engine, fake_voice, fake_whisper):
                  "/roleplays/000000000000/lines/0/ko", "/roleplays/000000000000/lines/0/ko/audio"]:
         assert c.get(path).status_code == 401
     assert c.post("/roleplays", json={"situation": "x"}).status_code == 401
+    for path in ["/talks", "/talks/000000000000/turns", "/talks/000000000000/end"]:
+        assert c.post(path).status_code == 401
 
 
 def test_home_lists_fixed_lines(client):
@@ -367,3 +375,120 @@ def test_home_still_answers_when_the_tip_file_cannot_be_read(client, tmp_path):
     (tmp_path / "data" / "tip.json").mkdir()
     r = client.get("/home", params={"tip": 1})
     assert r.status_code == 200 and "tip" not in r.json() and "greeting" in r.json()["lines"]
+
+
+# --- free talk routes (spec free-talk-design 2, 6, 7) ------------------------------------------------------------
+
+def talk_events(r) -> list[dict]:
+    return [json.loads(l) for l in r.text.splitlines() if l]
+
+
+def fix_item(idx: int) -> dict:
+    # `said` is what the fake whisper hears for turn `idx`; the fix keeps its words (fixes.check)
+    return {"idx": idx, "said": "I go to the park yesterday.", "fixed": "I went to the park yesterday.",
+            "why_ko": "지난 일이라 go를 went로 바꿔요.", "sound": {"heard": "", "meant": "", "say_ko": ""}}
+
+
+def talked(client, fake_whisper, speech_bytes) -> str:
+    fake_whisper.text = "I go to the park yesterday."
+    rp = client.post("/talks").json()
+    client.post(f"/talks/{rp['id']}/turns", content=speech_bytes)
+    return rp["id"]
+
+
+def test_talk_routes_need_token(settings, engine, fake_voice, fake_whisper):
+    from fastapi.testclient import TestClient
+
+    from je_server.app import Services, create_app
+
+    c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
+    for path in ["/talks", "/talks/000000000000/turns", "/talks/000000000000/end"]:
+        assert c.post(path).status_code == 401
+
+
+def test_create_talk_route(client):
+    rp = client.post("/talks").json()
+    assert rp["kind"] == "talk" and rp["lines"][0]["parts"][0]["text"] == TALK_OPENERS[0]
+
+
+def test_turn_route_streams_ndjson(client, speech_bytes):
+    rp = client.post("/talks").json()
+    r = client.post(f"/talks/{rp['id']}/turns", content=speech_bytes)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
+    ev = talk_events(r)
+    assert ev[0]["type"] == "heard" and ev[-1]["type"] == "done" and "reply" in [e["type"] for e in ev]
+
+
+def test_turn_route_refuses_a_big_upload(client):
+    rp = client.post("/talks").json()
+    r = client.post(f"/talks/{rp['id']}/turns", content=b"x" * (MAX_UPLOAD + 1))
+    assert r.status_code == 413
+
+
+def test_turn_route_on_unknown_or_roleplay_is_404(client, speech_bytes):
+    assert client.post("/talks/000000000000/turns", content=speech_bytes).status_code == 404
+    roleplay = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    assert client.post(f"/talks/{roleplay['id']}/turns", content=speech_bytes).status_code == 404
+    assert client.post(f"/talks/{roleplay['id']}/end").status_code == 404
+    assert client.post("/talks/..%2Fx/turns", content=speech_bytes).status_code in (404, 422)
+
+
+def test_turn_after_end_is_409(client, fake_claude, fake_whisper, speech_bytes):
+    rp_id = talked(client, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(1)]
+    assert client.post(f"/talks/{rp_id}/end").status_code == 200
+    r = client.post(f"/talks/{rp_id}/turns", content=speech_bytes)
+    assert r.status_code == 409 and r.json()["code"] == "ended"
+
+
+def test_heard_must_be_a_small_count(client, speech_bytes):
+    rp_id = client.post("/talks").json()["id"]
+    for heard in (-1, 51):
+        assert client.post(f"/talks/{rp_id}/turns?heard={heard}", content=speech_bytes).status_code == 422
+        assert client.post(f"/talks/{rp_id}/end?heard={heard}").status_code == 422
+
+
+def test_a_whisper_failure_in_a_turn_is_an_error_event(client, fake_whisper, speech_bytes):
+    rp_id = client.post("/talks").json()["id"]
+    fake_whisper.fail_lang = "en"
+    r = client.post(f"/talks/{rp_id}/turns", content=speech_bytes)
+    assert r.status_code == 200
+    [ev] = talk_events(r)
+    assert ev["type"] == "error" and ev["code"] == "no_speech" and ev["say"]["text"] == PHRASES["no_speech"]
+    fake_whisper.fail_lang = None
+    assert talk_events(client.post(f"/talks/{rp_id}/turns", content=speech_bytes))[-1]["type"] == "done"  # not stuck
+
+
+def test_end_route_returns_items(client, fake_claude, fake_whisper, speech_bytes):
+    rp_id = talked(client, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(1)]
+    j = client.post(f"/talks/{rp_id}/end").json()
+    assert j["items"][0]["line"]["kind"] == "fix" and j["items"][0]["rec"] == {"rp_id": rp_id, "idx": 1, "n": 1}
+    assert j["say"] is None
+
+
+def test_end_route_when_claude_is_down_is_503(client, fake_claude, fake_whisper, speech_bytes):
+    rp_id = talked(client, fake_whisper, speech_bytes)
+    fake_claude.fail_next = True
+    r = client.post(f"/talks/{rp_id}/end")
+    assert r.status_code == 503 and r.json()["code"] == "claude_unavailable"
+    assert r.json()["say"]["text"] == PHRASES["claude_down"]
+
+
+def test_a_fix_line_is_practised_on_the_attempt_route(client, fake_claude, fake_whisper, speech_bytes):
+    rp_id = talked(client, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(1)]
+    fix_idx = client.post(f"/talks/{rp_id}/end").json()["items"][0]["line"]["idx"]
+    r = client.post(f"/roleplays/{rp_id}/lines/{fix_idx}/attempts?mode=practice", content=speech_bytes)
+    assert talk_events(r)[0]["type"] == "heard"
+    rp = client.get(f"/roleplays/{rp_id}").json()
+    assert [a["mode"] for a in rp["attempts"][str(fix_idx)]] == ["practice"]
+
+
+def test_a_saved_fix_is_listed_as_free_talk(client, fake_claude, fake_whisper, speech_bytes):
+    rp_id = talked(client, fake_whisper, speech_bytes)
+    fake_claude.fix_items = [fix_item(1)]
+    fix_idx = client.post(f"/talks/{rp_id}/end").json()["items"][0]["line"]["idx"]
+    assert client.post("/saved", json={"rp_id": rp_id, "idx": fix_idx, "on": True}).status_code == 200
+    [item] = client.get("/saved").json()["items"]
+    assert item["title_ko"] == "자유 대화" and item["speaker"] == "user" and item["idx"] == fix_idx

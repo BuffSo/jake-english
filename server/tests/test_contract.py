@@ -78,3 +78,22 @@ def test_records_from_before_read_as_roleplays():
     rp = Roleplay.model_validate(raw)
     assert rp.kind == "roleplay"
     assert all(l.parts is None and l.heard_upto is None and l.fix is None for l in rp.lines)
+
+
+def test_talk_events_example_has_the_engine_types():
+    events = [json.loads(l) for l in (CONTRACT / "talk-events.ndjson").read_text(encoding="utf-8").splitlines() if l]
+    assert {e["type"] for e in events} == {"heard", "text", "reply", "audio", "error", "done"}
+    keys = {"heard": {"type", "text", "n", "idx", "korean"}, "reply": {"type", "idx", "kind", "parts"},
+            "done": {"type", "idx"}}
+    for e in events:
+        if e["type"] in keys:
+            assert set(e) == keys[e["type"]]
+    assert next(e for e in events if e["type"] == "heard")["korean"] is False
+
+
+def test_talk_end_example_has_the_engine_shape():
+    raw = json.loads((CONTRACT / "talk-end.json").read_text(encoding="utf-8"))
+    assert set(raw) == {"items", "say"} and raw["say"] is None and raw["items"]
+    for item in raw["items"]:
+        assert set(item) == {"line", "rec"}
+        assert ScriptLine.model_validate(item["line"]).model_dump(mode="json") == item["line"]

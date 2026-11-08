@@ -1,0 +1,30 @@
+{
+ "items": [
+  {
+   "line": {
+    "idx": 7,
+    "speaker": "user",
+    "text": "Yesterday I went to the market and bought two apples.",
+    "kind": "fix",
+    "three": null,
+    "audio": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "ko": null,
+    "ko_audio": null,
+    "parts": null,
+    "heard_upto": null,
+    "fix": {
+     "of": 5,
+     "said": "Yesterday I go to the market and buy two apple.",
+     "why_ko": "지난 일이라 go와 buy를 went와 bought로 바꿔요. 사과가 둘이라 apples예요.",
+     "why_audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+   },
+   "rec": {
+    "rp_id": "b1b2c3d4e5f6",
+    "idx": 5,
+    "n": 1
+   }
+  }
+ ],
+ "say": null
+}
