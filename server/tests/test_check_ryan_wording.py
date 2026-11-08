@@ -24,3 +24,12 @@ def test_double_quotes_are_checked_on_the_model_answer():
     said = shown.replace("room이 loom", '"room"이 "loom"')
     assert "double quotes" in cw.flags(case, shown, aside=False, raw=said)
     assert cw.flags(case, shown, aside=False, raw=shown) == []
+
+
+def test_aside_flags_the_sorting_and_a_missing_retry():
+    # phone test 2026-11-08: teacher Ryan told the learner how the server had sorted the recording, and stopped there
+    case = next(c for c in cw.ASIDE if c.name == "off app wish")
+    bad = "대사와 상관없는 말로 들려서 따로 짚을 곳이 없어요."
+    assert {"names '짚을'", "names '상관없는 말'", "does not ask to try again"} <= set(cw.flags(case, bad, aside=True))
+    good = "그렇군요, 그런 게 있으면 편하겠어요. 지금은 대사를 말해야 다음으로 넘어가요. 다시 해 볼까요?"
+    assert cw.flags(case, good, aside=True) == []

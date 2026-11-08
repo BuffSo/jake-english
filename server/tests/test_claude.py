@@ -390,6 +390,16 @@ def test_aside_prompt_keeps_the_teacher_rules():
     assert "「역할극」이라고 하지 않고 「대화」라고 해요" in p
 
 
+def test_aside_prompt_hides_how_the_recording_was_sorted():
+    # phone test 2026-11-08: a Korean wish about the app got 「대사와 상관없는 말로 들려서 따로 짚을 곳이 없어요」,
+    # the server's sorting said to the learner; the prompt names it as what not to say and takes app wishes
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert "짚을 곳이 없어요" in p and "대사와 상관없는 말로 들렸어요" in p
+    assert "앱에 바라는 것" in p and "약속하지 않아요" in p
+
+
 @pytest.mark.parametrize("error", ["read", "timeout"])
 async def test_stream_cut_by_the_network_is_unavailable(error):
     # final review: the SDK raises transport errors met while reading the stream as they are, so a dropped
