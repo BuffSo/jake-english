@@ -39,3 +39,4 @@ AI가 처음 추천한 안과 사용자가 정한 것. 둘이 다르면 그 차�
 - [ADR-0010 화면 위아래 여백은 react-native-safe-area-context로 받아 앱 바깥 틀 한 곳에서 띄운다](0010-safe-area-insets.md) (채택)
 - [ADR-0011 다시 연습의 목록과 비교는 맥에 저장된 기록으로 만들고, 같은 대본의 회차를 원본 ID로 묶는다](0011-review-from-stored-records.md) (채택)
 - [ADR-0012 맥 서버는 launchd 사용자 에이전트로 띄운다](0012-server-autostart-with-launchd.md) (채택)
+- [ADR-0013 목록 상황의 대본은 저장소에 두고, 같은 목록 상황의 회차를 원본 ID로 묶는다](0013-fixed-scripts-for-list-picks.md) (채택)
