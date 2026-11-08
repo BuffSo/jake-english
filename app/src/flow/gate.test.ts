@@ -56,6 +56,17 @@ test("a stop that arrives while another runs sends nothing", async () => {
   expect(send).not.toHaveBeenCalled();
 });
 
+// REVIEW.md 「앱 화면」: 「소희 찬스」 and 「전체 문장 보기」 each ask the Mac (the hint calls Claude), one gate each
+test("a double tap on 「소희 찬스」 or 「전체 문장 보기」 asks once", async () => {
+  const hint = createGate();
+  const full = createGate();
+  const ask = jest.fn(() => new Promise<void>((r) => setTimeout(r, 0)));
+  const show = jest.fn(() => new Promise<void>((r) => setTimeout(r, 0)));
+  await Promise.all([hint.run(ask), hint.run(ask), full.run(show), full.run(show)]);
+  expect(ask).toHaveBeenCalledTimes(1);
+  expect(show).toHaveBeenCalledTimes(1);
+});
+
 // PR #18 review: a double tap on 「이걸로 할게요」 before the screen redrew asked for two scripts
 test("a latch takes one answer per question", () => {
   const choice = createLatch();

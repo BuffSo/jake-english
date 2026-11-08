@@ -65,7 +65,8 @@ export default function App() {
     screen = <ReviewScreen tab={state.screen} dispatch={dispatch} />;
   } else if (state.screen === "talk") {
     // the free talk keeps its own flow (`flow/talk.ts`); back, 「끝」 and a talk with nothing said go home
-    screen = <TalkScreen sounds={sounds} onHome={() => dispatch({ type: "home" })} />;
+    // Sohee's faces for her chance come from /home, as the thinking faces do (none from an older server)
+    screen = <TalkScreen sounds={sounds} sohee={home?.images.sohee} onHome={() => dispatch({ type: "home" })} />;
   } else if (state.screen === "roleplay") {
     // keyed by roleplay: saved practice moves between roleplays, and the screen's notes, Sohee's lines and the
     // models it has played are kept by line number (spec review-practice 7)
