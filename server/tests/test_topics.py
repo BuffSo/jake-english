@@ -89,6 +89,14 @@ def test_script_keeps_the_facts_of_its_description():
     assert "270" in said["u-sneaker-size"] and "men's 9" in said["u-sneaker-size"]
 
 
+def test_a_route_split_over_turns_says_more_is_coming():
+    # 2026-11-08 the user, after the gyeongbokgung pick on the phone: the first answer sounded like the whole way,
+    # so the tourist's 「And then what?」 sounded like it had waited for the next piece
+    p = pick("tourist", "t-gyeongbokgung")
+    first = next(i for i, (s, _) in enumerate(p.script) if s == "user")
+    assert "First," in p.script[first][1] and "먼저" in p.ko[first]
+
+
 def test_script_has_no_hangul_or_braces():
     import re
 
