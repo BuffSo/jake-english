@@ -121,7 +121,7 @@ def test_aside_only_run_is_not_a_past_situation():
 
 # --- the conversation to resume (spec resume-roleplay 1, 2) -----------------------------------------------------
 
-from je_server.review import said_before, to_resume
+from je_server.review import resume_start, said_on, to_resume, unrecorded
 
 
 def test_to_resume_is_the_newest_roleplay_with_my_line_left():
@@ -140,19 +140,65 @@ def test_no_resume_without_records():
 
 
 def test_no_resume_after_the_last_line_is_mine_and_done():
-    rp = make(A, "2026-11-05T10:00:00", pos=2)
+    rp = make(A, "2026-11-05T10:00:00", pos=2, tries=SAID)
     rp.lines = rp.lines[:2]  # Ryan, me: I end the conversation
-    assert to_resume([rp]) is None and to_resume([rp.model_copy(update={"pos": 1})]).id == A
+    assert to_resume([rp]) is None and to_resume([rp.model_copy(update={"attempts": {}})]).id == A
 
 
-def test_said_before_takes_the_last_roleplay_try():
+def test_said_on_takes_the_last_roleplay_try():
     rp = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", True, None), (2, "retry", True, None),
                                                    (3, "practice", True, None)]})
-    assert said_before(rp, 2) == [{"idx": 1, "heard": "x", "n": 2}]
-    assert said_before(rp, 1) == [] and said_before(make(B, "2026-11-05T10:00:00"), 2) == []  # skipped: no try
+    assert said_on(rp) == [{"idx": 1, "heard": "x", "n": 2}]
+    assert said_on(make(B, "2026-11-05T10:00:00")) == []  # skipped: no try
 
 
-def test_said_before_leaves_out_asides():
+def test_said_on_leaves_out_asides():
     rp = make(A, "2026-11-05T10:00:00", tries={1: [(1, "turn", True, None)]})
     rp.attempts[1].append(rp.attempts[1][0].model_copy(update={"n": 2, "aside": True, "followed": False}))
-    assert said_before(rp, 2) == [{"idx": 1, "heard": "x", "n": 1}]
+    assert said_on(rp) == [{"idx": 1, "heard": "x", "n": 1}]
+
+
+# --- lines of mine left unrecorded (spec resume-unrecorded 1, 3) ---------------------------------------------------
+
+
+def seven(pos, said):
+    """Ryan and me in turn, Ryan first and last: R0 U1 R2 U3 R4 U5 R6. `said`: my lines with a followed turn."""
+    rp = make(A, "2026-11-05T10:00:00", pos=pos, tries={i: [(1, "turn", True, None)] for i in said})
+    rp.lines = [ScriptLine(idx=i, speaker="ryan" if i % 2 == 0 else "user", text=f"Line number {i}.")
+                for i in range(7)]
+    return rp
+
+
+def test_practice_and_asides_are_not_recorded():
+    rp = make(A, "2026-11-05T10:00:00", pos=2, tries={1: [(1, "practice", True, None)]})
+    assert unrecorded(rp) == [1] and to_resume([rp]).id == A
+    rp.attempts[1].append(Attempt(n=2, mode="turn", heard="x", followed=False, issues=[], say_ko="", audio=[],
+                                  timings={}, aside=True))
+    assert unrecorded(rp) == [1]
+
+
+def test_a_conversation_gone_to_the_end_with_a_skipped_line_is_resumed():
+    rp = make(A, "2026-11-05T10:00:00", pos=2)  # my only line skipped: the place moved past it
+    assert to_resume([rp]).id == A and resume_start(rp) == (0, True)
+
+
+def test_no_resume_when_every_line_of_mine_was_recorded():
+    assert to_resume([make(A, "2026-11-05T10:00:00", pos=2, tries=SAID)]) is None
+    assert to_resume([seven(pos=2, said=[1, 3, 5])]) is None  # recorded, whatever the place says
+
+
+def test_gone_to_the_end_starts_at_the_ryan_line_before_the_first_unrecorded():
+    assert resume_start(seven(pos=6, said=[3])) == (0, True)  # U1, U5 unrecorded
+    assert resume_start(seven(pos=6, said=[1])) == (2, True)  # U3, U5 unrecorded
+
+
+def test_midway_resumes_at_pos_past_an_earlier_skip():
+    assert resume_start(seven(pos=4, said=[3])) == (4, False)  # U1 skipped, U3 said, left before U5
+
+
+def test_start_passes_a_recorded_line_after_pos():
+    assert resume_start(seven(pos=2, said=[1, 3])) == (4, False)  # U3's try stayed under pos (Ryan's voice cut)
+
+
+def test_said_on_takes_every_recorded_line():
+    assert [s["idx"] for s in said_on(seven(pos=6, said=[1, 5]))] == [1, 5]

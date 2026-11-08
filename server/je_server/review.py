@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from .models import Roleplay
+from .models import Attempt, Roleplay, ScriptLine
 
 _PIECE = re.compile(r"[a-z0-9']+")
 
@@ -25,12 +25,19 @@ def group_of(rp: Roleplay) -> str:
     return rp.origin or rp.id
 
 
+def kept_tries(rp: Roleplay, line: ScriptLine) -> list[Attempt]:
+    """The tries at a line of mine that the conversation keeps: inside the roleplay, asides to teacher Ryan left out
+    (spec offscript-aside 6). The end screen, the past list and resuming all go by these, so a line counts as
+    recorded in one place (spec resume-unrecorded 1). Ryan's lines have none."""
+    if line.speaker != "user":
+        return []
+    return [a for a in rp.attempts.get(line.idx, []) if a.mode in ROLEPLAY_MODES and not a.aside]
+
+
 def spoken(rp: Roleplay) -> bool:
     """The learner said at least one of their lines inside the roleplay; asides to teacher Ryan do not count
     (spec offscript-aside 6)."""
-    mine = {l.idx for l in rp.lines if l.speaker == "user"}
-    return any(a.mode in ROLEPLAY_MODES and not a.aside for idx, tries in rp.attempts.items() if idx in mine
-               for a in tries)
+    return any(kept_tries(rp, l) for l in rp.lines)
 
 
 def _groups(rps: list[Roleplay]) -> dict[str, list[Roleplay]]:
@@ -84,26 +91,42 @@ def first_try(group_runs: list[Roleplay], rp: Roleplay, idx: int) -> dict | None
     return {"rp_id": run_id, "idx": line_idx, "n": a.n}
 
 
-# --- the conversation to resume (spec resume-roleplay 1, 2) -----------------------------------------------------
+# --- the conversation to resume (spec resume-roleplay 1, 2; resume-unrecorded 1-3) ----------------------------------
+
+
+def unrecorded(rp: Roleplay) -> list[int]:
+    """My lines without a kept try: skipped, not reached yet, or said to teacher Ryan only. Practice does not record
+    a line of the conversation (spec resume-unrecorded 1)."""
+    return [l.idx for l in rp.lines if l.speaker == "user" and not kept_tries(rp, l)]
 
 
 def to_resume(rps: list[Roleplay]) -> Roleplay | None:
-    """The newest roleplay, when a line of mine is left at or after its place (`pos`). Only the newest: an older one
-    left midway is not looked for, since a new conversation was started after it (spec 1)."""
+    """The newest roleplay, when a line of mine is left unrecorded in it. Only the newest: an older one is not looked
+    for, since a new conversation was started after it (spec resume-roleplay 1, resume-unrecorded 2)."""
     if not rps:
         return None
     rp = max(rps, key=lambda r: (r.created, r.id))
-    return rp if any(l.speaker == "user" and l.idx >= rp.pos for l in rp.lines) else None
+    return rp if unrecorded(rp) else None
 
 
-def said_before(rp: Roleplay, upto: int) -> list[dict]:
-    """What was heard on my lines before `upto`, for the resumed conversation's bubbles: the last try inside the
-    roleplay (asides to teacher Ryan left out, like the end screen). A line without one was skipped (spec 2)."""
+def resume_start(rp: Roleplay) -> tuple[int, bool]:
+    """Where the resumed conversation starts, and whether it went to the end. Left mid-way (an unrecorded line at or
+    after its place): the first of those, so an earlier skipped line waits until the end is reached. Gone to the end:
+    the first unrecorded line. Either way from the line after my line before it, so Ryan's line leads in again
+    (spec resume-unrecorded 3)."""
+    left = unrecorded(rp)
+    ahead = [i for i in left if i >= rp.pos]
+    target = (ahead or left)[0]
+    mine_before = [l.idx for l in rp.lines if l.speaker == "user" and l.idx < target]
+    return (mine_before[-1] + 1 if mine_before else 0), not ahead
+
+
+def said_on(rp: Roleplay) -> list[dict]:
+    """What was heard on every recorded line of mine, for the resumed conversation's bubbles: the last kept try, like
+    the end screen. A line without one is unrecorded (spec resume-roleplay 2, resume-unrecorded 3)."""
     out = []
-    for line in rp.lines[:upto]:
-        if line.speaker != "user":
-            continue
-        tries = [a for a in rp.attempts.get(line.idx, []) if a.mode in ROLEPLAY_MODES and not a.aside]
+    for line in rp.lines:
+        tries = kept_tries(rp, line)
         if tries:
             out.append({"idx": line.idx, "heard": tries[-1].heard, "n": tries[-1].n})
     return out
