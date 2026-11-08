@@ -1,7 +1,7 @@
 import json
 
 from je_server.app import MAX_UPLOAD
-from je_server.phrases import PHRASES, TALK_OPENERS
+from je_server.phrases import PHRASES, TALK_OPENERS, TALK_PHRASES
 
 
 def test_unknown_roleplay_is_404(client):
@@ -458,7 +458,7 @@ def test_a_whisper_failure_in_a_turn_is_an_error_event(client, fake_whisper, spe
     r = client.post(f"/talks/{rp_id}/turns", content=speech_bytes)
     assert r.status_code == 200
     [ev] = talk_events(r)
-    assert ev["type"] == "error" and ev["code"] == "no_speech" and ev["say"]["text"] == PHRASES["no_speech"]
+    assert ev["type"] == "error" and ev["code"] == "no_speech" and ev["say"]["text"] == TALK_PHRASES["no_speech"]
     fake_whisper.fail_lang = None
     assert talk_events(client.post(f"/talks/{rp_id}/turns", content=speech_bytes))[-1]["type"] == "done"  # not stuck
 

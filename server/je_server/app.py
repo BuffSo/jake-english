@@ -374,7 +374,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
                     yield json.dumps(ev, ensure_ascii=False) + "\n"
             except WhisperError:
                 # whisper could not hear it: an error event the app shows, not a stream that breaks off
-                yield json.dumps(engine().error("no_speech"), ensure_ascii=False) + "\n"
+                yield json.dumps(engine().talk_error("no_speech"), ensure_ascii=False) + "\n"
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
 

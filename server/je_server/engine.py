@@ -23,7 +23,7 @@ from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLi
 from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
 from .tts import VoiceError
-from .phrases import PHRASES, TALK_ENGLISH, TALK_OPENERS, TIPS
+from .phrases import PHRASES, TALK_OPENERS, TALK_PHRASES, TIPS
 from .review import (first_try, group_of, kept_tries, latest_run, past_items, resume_start, said_on, sentence_key,
                      to_resume)
 from .store import Store
@@ -76,9 +76,10 @@ class Engine:
     def said(self, name: str) -> Said:
         return self._ryan_said(PHRASES[name])
 
-    def talk_english(self) -> Said:
-        """The fixed line for Korean said in a free talk: English, in Ryan's English voice (2026-11-08 user)."""
-        return Said(text=TALK_ENGLISH, audio=self.voice.key("ryan", "english", TALK_ENGLISH))
+    def talk_said(self, name: str) -> Said:
+        """A fixed line of a free talk: English, in Ryan's English voice (2026-11-08 user)."""
+        text = TALK_PHRASES[name]
+        return Said(text=text, audio=self.voice.key("ryan", "english", text))
 
     def _ryan_said(self, text: str) -> Said:
         return Said(text=text, audio=self.voice.key("ryan", "korean", text))
@@ -104,7 +105,7 @@ class Engine:
         # made once and played many times, so heard back (check); the tips too, said once a day
         for text in [*PHRASES.values(), *TIPS]:
             await self.voice.say(text, "ryan", "korean", urgent=False, check=True)
-        for text in (*TALK_OPENERS, TALK_ENGLISH):  # Ryan's first questions of a free talk and the line for Korean
+        for text in (*TALK_OPENERS, *TALK_PHRASES.values()):  # a free talk's first questions and its fixed lines
             await self.voice.say(text, "ryan", "english", urgent=False, check=True)
 
     # --- helpers ------------------------------------------------------------------------------
@@ -477,6 +478,10 @@ class Engine:
     def error(self, code: str, phrase: str | None = None) -> dict:
         return {"type": "error", "code": code, "say": self.said(phrase or code).model_dump()}
 
+    def talk_error(self, code: str, phrase: str | None = None) -> dict:
+        """`error` for a free talk: the fixed line is English (`TALK_PHRASES`)."""
+        return {"type": "error", "code": code, "say": self.talk_said(phrase or code).model_dump()}
+
     async def attempt(self, rp_id: str, idx: int, body: bytes, mode: Mode) -> AsyncIterator[dict]:
         """A followed line gets the Mac's feedback; anything else, in every mode, gets teacher Ryan's Korean answer
         and the same line again: the script never changes (spec offscript-aside). Sohee's sounds made ahead wait
@@ -642,11 +647,13 @@ class Engine:
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
                     timings: dict[str, float], t0: float, lang: Literal["korean", "english"] = "korean",
-                    on_text_end: Callable[[str], Awaitable[dict | None]] | None = None) -> AsyncIterator[dict]:
+                    on_text_end: Callable[[str], Awaitable[dict | None]] | None = None,
+                    down: dict | None = None) -> AsyncIterator[dict]:
         """Streams text events as they come and an audio event per finished sentence in Ryan's `lang` voice, in
         order: feedback and teacher Ryan in Korean, a free-talk reply in English from its first sentence on (spec
         free-talk-design 4). Once the text has ended without an error, `on_text_end` is given all of it and the event
-        it returns goes out at once, maybe between audio events: a free-talk reply is saved there (spec 2)."""
+        it returns goes out at once, maybe between audio events: a free-talk reply is saved there (spec 2). `down`: the
+        error event sent when Claude cannot answer (default: the Korean `claude_down`; a free talk sends English)."""
         out: asyncio.Queue = asyncio.Queue()
         sentences: asyncio.Queue = asyncio.Queue()
 
@@ -668,7 +675,7 @@ class Engine:
                 if on_text_end is not None and (ev := await on_text_end("".join(said))) is not None:
                     await out.put(ev)
             except ClaudeUnavailable:
-                await out.put(self.error("claude_unavailable", "claude_down"))
+                await out.put(down or self.error("claude_unavailable", "claude_down"))
             finally:
                 await sentences.put(None)
 

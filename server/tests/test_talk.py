@@ -9,8 +9,8 @@ from fakes import talk_example
 from je_server.claude import ClaudeUnavailable
 from je_server.engine import NotFound
 from je_server.models import Said
-from je_server.phrases import PHRASES, TALK_ENGLISH, TALK_OPENERS
-from je_server.prompts import TALK_CUT, TALK_CUT_SILENT, TALK_START
+from je_server.phrases import PHRASES, TALK_OPENERS, TALK_PHRASES
+from je_server.prompts import TALK_CUT, TALK_CUT_SILENT, TALK_ECHO, TALK_KOREAN, TALK_START
 from je_server.talk import TALK_FRAME, TalkBusy, TalkEnded, Talks, messages
 
 pytestmark = pytest.mark.anyio
@@ -48,8 +48,14 @@ async def test_openers_and_talk_phrases_are_made_ahead(engine, fake_voice):
     assert set(TALK_OPENERS) <= set(fake_voice.checked)
     for text in TALK_OPENERS:
         assert (text, "ryan", "english", False) in fake_voice.calls
-    assert (TALK_ENGLISH, "ryan", "english", False) in fake_voice.calls
-    assert (TALK_ENGLISH, "ryan", "korean", False) not in fake_voice.calls
+    for text in TALK_PHRASES.values():
+        assert (text, "ryan", "english", False) in fake_voice.calls
+        assert (text, "ryan", "korean", False) not in fake_voice.calls
+    assert set(TALK_PHRASES.values()) <= set(fake_voice.checked)
+
+
+async def test_roleplay_no_speech_stays_korean(engine):
+    assert engine.error("no_speech")["say"]["text"] == PHRASES["no_speech"]
 
 
 def test_messages_put_ryan_as_assistant_after_the_start():
@@ -69,12 +75,58 @@ def test_messages_say_when_ryan_was_cut_off_before_a_word():
     assert messages(rp)[3]["content"] == TALK_CUT_SILENT
 
 
-def test_messages_leave_korean_turns_and_fixes_out():
-    import re
+def _talk(*lines):
+    from je_server.models import ScriptLine
+    rp = talk_example()
+    rp.lines = [ScriptLine(idx=i, speaker=sp, kind=k, text=t) for i, (sp, k, t) in enumerate(lines)]
+    return rp
 
+
+def test_messages_send_korean_turns_marked():
+    rp = _talk(("ryan", "reply", "How was work today?"), ("user", "ask", "야근했다고 어떻게 말해요?"))
+    assert messages(rp)[-1] == {"role": "user", "content": TALK_KOREAN + "야근했다고 어떻게 말해요?"}
+    assert TALK_ECHO not in messages(rp)[-1]["content"]
+
+
+def test_messages_leave_fixes_and_old_help_lines_out():
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "ask", "안녕"), ("ryan", "help", "Could you try that in English?"),
+               ("user", "turn", "I walked."), ("ryan", "reply", "Nice!"), ("user", "fix", "I walked home."))
+    assert [m["content"] for m in messages(rp)] == [TALK_START, "Hi!", TALK_KOREAN + "안녕\nI walked.", "Nice!"]
+
+
+def test_messages_allow_echo_on_every_second_english_turn():
+    one = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go park."))
+    assert messages(one)[-1]["content"] == "I go park."
+    two = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go park."), ("ryan", "reply", "Fun!"),
+                ("user", "turn", "My dog like it."))
+    msgs = messages(two)
+    assert msgs[-1]["content"] == "My dog like it.\n" + TALK_ECHO
+    assert TALK_ECHO not in repr(msgs[:-1])
+    three = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a"), ("ryan", "reply", "b"), ("user", "turn", "c"),
+                  ("ryan", "reply", "d"), ("user", "turn", "e"))
+    assert TALK_ECHO not in messages(three)[-1]["content"]
+
+
+def test_fix_input_still_skips_old_help_lines_and_korean_turns():
+    from je_server.talk import fix_input
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "ask", "안녕"), ("ryan", "help", "Try English."),
+               ("user", "turn", "I walked."))
+    conversation, turns = fix_input(rp)
+    assert [c["말"] for c in conversation] == ["Hi!", "I walked."] and turns == {3: "I walked."}
+
+
+def test_korean_turns_do_not_count_for_the_echo_and_carry_none():
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a b"), ("ryan", "reply", "x"), ("user", "ask", "뭐요?"),
+               ("ryan", "reply", "y"), ("user", "turn", "c d"))
+    assert messages(rp)[-1]["content"] == "c d\n" + TALK_ECHO  # my 2nd English turn
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a b"), ("ryan", "reply", "x"), ("user", "turn", "c d"),
+               ("ryan", "reply", "y"), ("user", "ask", "뭐요?"))
+    assert messages(rp)[-1]["content"] == TALK_KOREAN + "뭐요?"
+
+
+def test_messages_after_ryans_reply_carry_no_echo():
     msgs = messages(talk_example())
-    assert not [m for m in msgs if re.search(r"[가-힣]", m["content"])]
-    assert not [m for m in msgs if "went to the market" in m["content"]]
+    assert TALK_ECHO not in repr(msgs)
     assert msgs[-1] == {"role": "assistant", "content": "Nice! What did you get there?"}
 
 
@@ -83,7 +135,8 @@ def test_messages_join_two_learner_turns_in_a_row():
     rp.lines = [rp.lines[0], rp.lines[3], rp.lines[5]]
     msgs = messages(rp)
     assert [m["role"] for m in msgs] == ["user", "assistant", "user"]
-    assert msgs[2]["content"] == "I walked to the park with my dog.\nYesterday I go to the market and buy two apple."
+    assert msgs[2]["content"] == ("I walked to the park with my dog.\nYesterday I go to the market and buy two apple."
+                                  "\n" + TALK_ECHO)  # my 2nd English turn
 
 
 # --- a turn ---------------------------------------------------------------------------------------
@@ -150,45 +203,30 @@ async def test_reply_goes_to_claude_as_turns(talks, speech_bytes, fake_whisper, 
     assert sent[-1]["content"] == fake_whisper.text
 
 
-async def test_hangul_in_the_english_transcript_is_heard_again_in_korean(talks, engine, speech_bytes, fake_whisper,
-                                                                         fake_claude):
+async def test_korean_turn_gets_ryans_english_reply_from_claude(talks, engine, speech_bytes, fake_whisper,
+                                                                 fake_claude):
     fake_whisper.by_lang = {"en": "I am 피곤해 today", "ko": "오늘 피곤해요"}
     rp = await talks.create()
     ev = await run(talks, rp.id, speech_bytes)
     assert fake_whisper.langs == ["en", "ko"]
     assert ev[0] == {"type": "heard", "text": "오늘 피곤해요", "n": 1, "idx": 1, "korean": True}
-    assert [e["type"] for e in ev] == ["heard", "text", "reply", "audio", "done"]
-    help_ = engine.talk_english()
-    assert ev[1] == {"type": "text", "delta": TALK_ENGLISH}
-    assert ev[2] == {"type": "reply", "idx": 2, "kind": "help", "parts": [help_.model_dump()]}
-    assert ev[3] == {"type": "audio", "key": help_.audio} and ev[4] == {"type": "done", "idx": 2}
+    assert ev[-1] == {"type": "done", "idx": 2}
     saved = engine.load(rp.id)
-    assert (saved.lines[1].kind, saved.lines[1].text) == ("ask", "오늘 피곤해요")
-    ryan = saved.lines[2]
-    assert (ryan.speaker, ryan.kind, ryan.text) == ("ryan", "help", TALK_ENGLISH)
-    assert ryan.audio == help_.audio and ryan.parts == [help_]
-    assert fake_claude.talk_calls == []
+    assert [l.kind for l in saved.lines[1:]] == ["ask", "reply"]
+    assert saved.lines[2].text == " ".join(REPLY)
+    assert fake_claude.talk_calls[-1][-1]["content"] == TALK_KOREAN + "오늘 피곤해요"
 
 
-async def test_korean_transcription_failing_still_gets_ryans_english_line(talks, engine, speech_bytes, fake_whisper):
+async def test_korean_transcription_failing_still_goes_to_claude(talks, engine, speech_bytes, fake_whisper,
+                                                                 fake_claude):
     fake_whisper.by_lang = {"en": "I am 피곤해 today"}
     fake_whisper.fail_lang = "ko"
     rp = await talks.create()
     ev = await run(talks, rp.id, speech_bytes)
     assert ev[0] == {"type": "heard", "text": "I am 피곤해 today", "n": 1, "idx": 1, "korean": True}
-    assert ev[2]["kind"] == "help" and ev[-1] == {"type": "done", "idx": 2}
-    assert engine.load(rp.id).lines[2].kind == "help"
-
-
-async def test_korean_turns_are_not_sent_to_claude(talks, speech_bytes, fake_whisper, fake_claude):
-    fake_whisper.by_lang = {"en": "I am 피곤해 today", "ko": "오늘 피곤해요"}
-    rp = await talks.create()
-    await run(talks, rp.id, speech_bytes)
-    fake_whisper.by_lang = {}
-    await run(talks, rp.id, speech_bytes)
-    [sent] = fake_claude.talk_calls  # the English turn's only
-    assert not [m for m in sent if HANGUL.search(m["content"])]
-    assert sent[-1] == {"role": "user", "content": fake_whisper.text}
+    assert ev[-1] == {"type": "done", "idx": 2}
+    assert [l.kind for l in engine.load(rp.id).lines[1:]] == ["ask", "reply"]
+    assert len(fake_claude.talk_calls) == 1
 
 
 async def test_claude_down_mid_reply_keeps_my_turn_only(talks, engine, speech_bytes, fake_whisper, fake_claude):
@@ -197,7 +235,7 @@ async def test_claude_down_mid_reply_keeps_my_turn_only(talks, engine, speech_by
     ev = await run(talks, rp.id, speech_bytes)
     kinds = [e["type"] for e in ev]
     assert [e for e in ev if e["type"] == "error"] == [
-        {"type": "error", "code": "claude_unavailable", "say": engine.said("claude_down").model_dump()}]
+        {"type": "error", "code": "claude_unavailable", "say": engine.talk_said("claude_down").model_dump()}]
     assert "done" not in kinds and "reply" not in kinds
     assert [(l.speaker, l.kind) for l in engine.load(rp.id).lines] == [("ryan", "reply"), ("user", "turn")]
     assert talks.turning == set()
@@ -209,7 +247,7 @@ async def test_claude_down_mid_reply_keeps_my_turn_only(talks, engine, speech_by
     assert ev[0]["idx"] == 2 and ev[-1] == {"type": "done", "idx": 3}
     sent = fake_claude.talk_calls[1]
     assert [m["role"] for m in sent] == ["user", "assistant", "user"]
-    assert sent[-1]["content"] == first + "\n" + "I went to the park."
+    assert sent[-1]["content"] == first + "\n" + "I went to the park." + "\n" + TALK_ECHO  # my 2nd English turn
 
 
 async def test_claude_down_mid_reply_frees_the_talk_at_the_error(talks, engine, speech_bytes, fake_claude,
@@ -256,7 +294,9 @@ async def test_a_reply_without_text_is_claude_down(talks, engine, speech_bytes, 
 async def test_no_speech_turn_saves_no_line(talks, engine, silent_bytes, fake_whisper):
     rp = await talks.create()
     ev = await run(talks, rp.id, silent_bytes)
-    assert ev == [{"type": "error", "code": "no_speech", "say": engine.said("no_speech").model_dump()}]
+    assert ev == [{"type": "error", "code": "no_speech", "say": engine.talk_said("no_speech").model_dump()}]
+    assert ev[0]["say"]["text"] == TALK_PHRASES["no_speech"]
+    assert ev[0]["say"]["audio"] == engine.voice.key("ryan", "english", TALK_PHRASES["no_speech"])
     assert len(engine.load(rp.id).lines) == 1 and fake_whisper.calls == 0
     assert engine.store.find_rec(rp.id, 1, 1) is not None  # the recording itself is kept, as in a roleplay
     assert talks.turning == set()
@@ -474,18 +514,19 @@ async def test_end_with_nothing_to_fix_says_so(talks, engine, speech_bytes, fake
     assert len(fake_claude.fix_calls) == 1 and engine.load(rp_id).lines == lines
 
 
-async def test_end_sends_english_turns_and_ryans_replies_only(talks, speech_bytes, fake_whisper, fake_claude):
+async def test_end_sends_english_turns_and_ryans_replies_not_korean_turns(talks, speech_bytes, fake_whisper, fake_claude):
     rp = await talks.create()
     fake_whisper.by_lang = {"en": "I am 피곤해 today", "ko": "오늘 피곤해요"}
-    await run(talks, rp.id, speech_bytes)  # my Korean turn (1) and Ryan's English help line (2)
+    await run(talks, rp.id, speech_bytes)  # my Korean turn (1) and Ryan's English reply (2)
     fake_whisper.by_lang = {}
     fake_whisper.text = SAID[0]
     await run(talks, rp.id, speech_bytes)  # my English turn (3) and Ryan's reply (4)
     await talks.end(rp.id)
     [sent] = fake_claude.fix_calls
-    assert [(c["차례"], c["말한 사람"]) for c in sent] == [(0, "라이언"), (3, "학습자"), (4, "라이언")]
+    assert [(c["차례"], c["말한 사람"]) for c in sent] == [
+        (0, "라이언"), (2, "라이언"), (3, "학습자"), (4, "라이언")]  # no Korean turn
     assert not [c for c in sent if HANGUL.search(c["말"])]
-    assert [c["말"] for c in sent] == [rp.lines[0].text, SAID[0], " ".join(REPLY)]
+    assert [c["말"] for c in sent] == [rp.lines[0].text, " ".join(REPLY), SAID[0], " ".join(REPLY)]
 
 
 async def test_end_while_a_turn_runs_is_busy(talks, speech_bytes, fake_claude):

@@ -2,14 +2,13 @@
 
 A free talk is a record of `kind "talk"`: it has no script, but it is kept like a roleplay and its lines go by number
 along the same routes. Ryan opens with the next of `TALK_OPENERS` in turn. The recordings stay on the Mac and Claude is
-given text only (ADR-0004). Ryan's replies and the fixes are asked with my English turns and Ryan's English replies
-(`messages`, `fix_input`): my Korean turns and Ryan's fixed `help` lines after them are left out. A Korean turn's
-transcript can still reach Claude as line context: 「읽는 법 보기」 and 「통역」 on Ryan's line next to it send the lines
-around that line (`Engine.context`, `Engine._make_ko`).
+given text only (ADR-0004). Ryan's replies and the fixes are asked with my turns (`messages`, `fix_input`): my Korean
+turns go to Claude marked `TALK_KOREAN` and Ryan answers them in English; only the fixes leave them out. Old records'
+fixed `help` lines are skipped.
 
 A turn (`Talks.turn`) is my line with its try and recording, then Ryan's line: his English reply streamed sentence by
-sentence (spec 4), or the fixed English `TALK_ENGLISH` when I spoke Korean (spec 3). The learner may cut Ryan's sounds
-off and speak again once his line is saved (spec 2).
+sentence (spec 4), also when I spoke Korean (spec 3). Its fixed error lines are English (`TALK_PHRASES`). The learner may
+cut Ryan's sounds off and speak again once his line is saved (spec 2).
 
 Ending a talk (`Talks.end`, spec 6, 7) asks Claude for the fixes, keeps those `fixes.check` lets through as my `fix`
 lines after the talk, and makes the first one's sounds before answering. Those lines mark the talk as ended.
@@ -31,7 +30,7 @@ from .compare import words
 from .engine import HANGUL, MAX_SECONDS, Engine, NotFound, _keep
 from .models import Attempt, Fix, Frame, Roleplay, Said, ScriptLine
 from .phrases import TALK_OPENERS
-from .prompts import TALK_CUT, TALK_CUT_SILENT, TALK_START
+from .prompts import TALK_CUT, TALK_CUT_SILENT, TALK_ECHO, TALK_KOREAN, TALK_START
 from .tts import VoiceError
 
 log = logging.getLogger("je_server")
@@ -51,28 +50,34 @@ def _ryan_text(line: ScriptLine) -> str:
 
 
 def messages(rp: Roleplay) -> list[dict]:
-    """What Claude is given for Ryan's next answer: the start, Ryan's replies (assistant) and my English turns (user).
-    My Korean turns, Ryan's `help` lines after them and the fixes are left out. The same role twice in a row is joined
-    by a line break (when Claude could not answer, my next turn follows my last)."""
+    """What Claude is given for Ryan's next answer: the start, Ryan's replies (assistant) and my turns (user). A Korean
+    turn is marked `TALK_KOREAN`. When my last line is an English turn and it is an even-numbered one (the 2nd, 4th ...;
+    Korean turns do not count), the server allows Ryan to echo the right form: `TALK_ECHO` ends that last message only.
+    Old records' `help` lines and the fixes are left out. The same role twice in a row is joined by a line break (when
+    Claude could not answer, my next turn follows my last)."""
     out: list[dict] = [{"role": "user", "content": TALK_START}]
     for line in rp.lines:
         if line.kind == "reply" and line.speaker == "ryan":
             role, text = "assistant", _ryan_text(line)
         elif line.kind == "turn":
             role, text = "user", line.text
+        elif line.kind == "ask":
+            role, text = "user", TALK_KOREAN + line.text
         else:
             continue
         if out[-1]["role"] == role:
             out[-1]["content"] += "\n" + text
         else:
             out.append({"role": role, "content": text})
+    if rp.lines and rp.lines[-1].kind == "turn" and sum(l.kind == "turn" for l in rp.lines) % 2 == 0:
+        out[-1]["content"] += "\n" + TALK_ECHO
     return out
 
 
 def fix_input(rp: Roleplay) -> tuple[list[dict], dict[int, str]]:
     """What Claude is given to pick the fixes (spec 7): Ryan's English replies and my English turns with their line
-    numbers, and my English turns by line number for `fixes.check`. My Korean turns and Ryan's `help` lines after them
-    are left out (spec 7 「고치지 않는 것」), as in `messages`."""
+    numbers, and my English turns by line number for `fixes.check`. My Korean turns and old records' `help` lines are
+    left out (spec 7 「고치지 않는 것」)."""
     conversation: list[dict] = []
     turns: dict[int, str] = {}
     for line in rp.lines:
@@ -264,7 +269,7 @@ class Talks:
             try:
                 shown, korean = await self._hear(rp_id, idx, n, rec)
             except _Unheard as e:
-                yield engine.error(e.code)  # no line is kept; the recording stays, as in a roleplay
+                yield engine.talk_error(e.code)  # no line is kept; the recording stays, as in a roleplay
                 return
             timings["transcribed"] = time.perf_counter() - t0
             await self._add(rp_id, ScriptLine(idx=idx, speaker="user", text=shown, kind="ask" if korean else "turn"),
@@ -274,37 +279,26 @@ class Talks:
 
             ryan = idx + 1
             failed = False
-            if korean:
-                # Korean said with 「말하기」 gets the fixed English line (`TALK_ENGLISH`) without Claude, and the turn is
-                # left out of Ryan's later replies and the fixes (spec 3). Its transcript may still go out as line
-                # context with 「읽는 법 보기」 or 「통역」 on Ryan's line next to it (module docstring)
-                help_ = engine.talk_english()
-                yield {"type": "text", "delta": help_.text}
-                await self._add(rp_id, ScriptLine(idx=ryan, speaker="ryan", text=help_.text, kind="help",
-                                                  audio=help_.audio, parts=[help_]))
+            async def saved(text: str) -> dict:
+                # the parts are the sentences `speak` voiced, so 「🔊 듣기」 and a cut-off count use the same ones
+                parts = [Said(text=s, audio=engine.voice.key("ryan", "english", s)) for s in sentences.split(text)]
+                await self._add(rp_id, ScriptLine(idx=ryan, speaker="ryan", text=text.strip(), kind="reply",
+                                                  parts=parts))
                 release()
-                yield {"type": "reply", "idx": ryan, "kind": "help", "parts": [help_.model_dump()]}
-                yield {"type": "audio", "key": help_.audio}
-            else:
-                async def saved(text: str) -> dict:
-                    # the parts are the sentences `speak` voiced, so 「🔊 듣기」 and a cut-off count use the same ones
-                    parts = [Said(text=s, audio=engine.voice.key("ryan", "english", s)) for s in sentences.split(text)]
-                    await self._add(rp_id, ScriptLine(idx=ryan, speaker="ryan", text=text.strip(), kind="reply",
-                                                      parts=parts))
-                    release()
-                    return {"type": "reply", "idx": ryan, "kind": "reply", "parts": [p.model_dump() for p in parts]}
+                return {"type": "reply", "idx": ryan, "kind": "reply", "parts": [p.model_dump() for p in parts]}
 
-                # Ryan speaks from his first sentence while the rest is written (spec 4, 5: 2.8 s sooner than voicing
-                # the whole reply). When Claude cannot answer, my line stays and Ryan's is not kept (spec 4)
-                async for ev in engine.speak(self._reply_text(rp_id), [], [], timings, t0, lang="english",
-                                             on_text_end=saved):
-                    if ev["type"] == "error":
-                        # no Ryan line can be kept after it (`saved` runs only for a whole reply), so the talk is free
-                        # as the app reads the error, not once the sentence already written is voiced (1-3 s): a quick
-                        # 「대화 끝내기」 or next turn is not refused as busy. `_keep_timings` finds its own try
-                        failed = True
-                        release()
-                    yield ev
+            # Ryan speaks from his first sentence while the rest is written (spec 4, 5: 2.8 s sooner than voicing
+            # the whole reply). When Claude cannot answer, my line stays and Ryan's is not kept (spec 4)
+            async for ev in engine.speak(self._reply_text(rp_id), [], [], timings, t0, lang="english",
+                                         on_text_end=saved,
+                                         down=engine.talk_error("claude_unavailable", "claude_down")):
+                if ev["type"] == "error":
+                    # no Ryan line can be kept after it (`saved` runs only for a whole reply), so the talk is free
+                    # as the app reads the error, not once the sentence already written is voiced (1-3 s): a quick
+                    # 「대화 끝내기」 or next turn is not refused as busy. `_keep_timings` finds its own try
+                    failed = True
+                    release()
+                yield ev
             timings["total"] = time.perf_counter() - t0
             await self._keep_timings(rp_id, idx, n, timings)
             # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
