@@ -61,3 +61,66 @@ def test_a_tip_cut_in_half_is_flagged():
     twice = next(c for c in cw.FEEDBACK if c.name == "same tip twice")
     once = "나머지 낱말은 다 알아들었어요. 그런데 fried가 flied처럼, rice가 lice처럼 들렸어요. " + cw.RL + " 한 번 더 해 볼까요?"
     assert cw.flags(twice, once, aside=False) == []
+
+
+def test_a_reworded_tip_is_flagged():
+    # todo 29: Haiku said both halves of the R and L tip but in another order and its own words; the halves check let it by
+    case = next(c for c in cw.FEEDBACK if c.name == "tip")
+    point = "나머지 낱말은 다 알아들었어요. 그런데 room이 loom처럼 들렸어요. "
+    swapped = point + "R은 혀가 어디에도 닿지 않게 하고 입술을 살짝 동그랗게 모으지만, L은 혀끝이 윗잇몸에 닿아요. 한 번 더 해 볼까요?"
+    assert cw.flags(case, swapped, aside=False) == ["tip reworded (room)"]
+
+
+def test_spacing_does_not_count_as_rewording():
+    case = next(c for c in cw.FEEDBACK if c.name == "tip")
+    spaced = "그런데 room이 loom처럼 들렸어요.\n" + cw.RL.replace(" ", "  ", 1) + " 한 번 더 해 볼까요?"
+    assert not [f for f in cw.flags(case, spaced, aside=False) if f.startswith("tip")]
+
+
+def test_a_tip_said_twice_is_flagged():
+    # todo 29: the R half first in Ryan's own words, then the whole tip
+    case = next(c for c in cw.FEEDBACK if c.name == "tip")
+    point = "그런데 room이 loom처럼 들렸어요. "
+    own = point + "R은 입술을 동그랗게 모아야 해요. " + cw.RL + " 한 번 더 해 볼까요?"
+    assert "tip repeated (room)" in cw.flags(case, own, aside=False)
+    assert "tip repeated (room)" in cw.flags(case, point + cw.RL + " " + cw.RL + " 한 번 더 해 볼까요?", aside=False)
+    # one tip for two words, said once: clean
+    twice = next(c for c in cw.FEEDBACK if c.name == "same tip twice")
+    once = "나머지 낱말은 다 알아들었어요. 그런데 fried가 flied처럼, rice가 lice처럼 들렸어요. " + cw.RL + " 한 번 더 해 볼까요?"
+    assert cw.flags(twice, once, aside=False) == []
+
+
+def test_a_made_up_tip_is_flagged():
+    # todo 29: a word that was not heard, with no tip from the Mac, got an F tip anyway
+    case = next(c for c in cw.FEEDBACK if c.name == "dropped")
+    point = "나머지 낱말은 다 알아들었어요. 그런데 by가 들리지 않았어요. "
+    made = point + "F는 윗니를 아랫입술에 대고 바람을 내보내요. 한 번 더 해 볼까요?"
+    assert cw.flags(case, made, aside=False) == ["tip made up"]
+    assert cw.flags(case, point + "한 번 더 해 볼까요?", aside=False) == []
+    # a given tip beside a word without one is not made up
+    second = next(c for c in cw.FEEDBACK if c.name == "tip second")
+    ok = "나머지 낱말은 다 알아들었어요. 그런데 on이 들리지 않았고, red가 led처럼 들렸어요. " + cw.RL + " 한 번 더 해 볼까요?"
+    assert cw.flags(second, ok, aside=False) == []
+
+
+def test_a_sound_named_outside_the_tip_is_flagged():
+    # todo 29: 「두 낱말 모두 R이 L로 들린 것이에요」 put before the tip
+    case = next(c for c in cw.FEEDBACK if c.name == "same tip twice")
+    framed = "그런데 fried가 flied처럼, rice가 lice처럼 들렸어요. 두 낱말 모두 R이 L로 들린 것이에요. " + cw.RL + " 한 번 더 해 볼까요?"
+    assert cw.flags(case, framed, aside=False) == ["sound named (fried)"]
+    # a praise that names a sound, with no tip given, is fine
+    improved = next(c for c in cw.FEEDBACK if c.name == "improved")
+    said = "이번에는 right의 R 소리가 제대로 났어요. 그런데 on이 들리지 않았어요. 한 번 더 해 볼까요?"
+    assert cw.flags(improved, said, aside=False) == []
+
+
+def test_every_listed_tip_has_halves_and_cases():
+    # a tip changed in data/sounds.json leaves the halves check looking for words that are gone
+    from je_server import sounds
+
+    for s in sounds.SOUNDS:
+        first, second = s.explain.split("지만, ", 1)
+        a, b = cw.TIP_HALVES[s.explain]
+        assert a in first and a not in second and b in second and b not in first, s.name
+        for cases in (cw.FEEDBACK, cw.ASIDE):
+            assert any(i.explain == s.explain for c in cases for i in c.issues), s.name
