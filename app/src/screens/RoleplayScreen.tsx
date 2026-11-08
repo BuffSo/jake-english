@@ -14,10 +14,11 @@ import { useRecorder } from "../audio/useRecorder";
 import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { pending } from "../flow/pending";
-import { scrollToShow, tapRow } from "../flow/review";
+import { scrollToShow, tapRow, toggleRow } from "../flow/review";
 import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, movesPlace, notifiesSkip, practiceFor, showMicHint, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
+import { HeardLine } from "../ui/HeardLine";
 import { InRowButton } from "../ui/InRowButton";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
@@ -77,6 +78,9 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // past bubbles show only what was said; one opens its buttons at a time (spec review-practice 8). The key is
   // "<place>:<line>", so two bubbles of one line (「다시 해 보기」) open apart.
   const [openRow, setOpenRow] = useState<string | null>(null);
+  // what was just heard, opened by a tap on it; kept by its text, so a new try's words come folded (spec
+  // heard-line-collapsed 2)
+  const [heardOpen, setHeardOpen] = useState<string | null>(null);
   const view = useRef({ offset: 0, height: 0 }); // the conversation's scroll, to bring an opened bubble into view
   const toShow = useRef<string | null>(null);
   const saved = useSaved();
@@ -535,7 +539,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     );
   }
 
-  // A past bubble of mine: the script line, what was heard under it, and its buttons once tapped (review-practice 8)
+  // A past bubble of mine: the script line, what was heard under it (one line until the bubble opens, spec
+  // heard-line-collapsed 2), and its buttons once tapped (review-practice 8)
   function myBubble(at: number, b: (typeof state.history)[number]) {
     const idx = b.idx;
     const row = idx !== undefined ? `${at}:${idx}` : undefined;
@@ -552,7 +557,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           {/* a line skipped without a recording has its script only (spec record-cancel-skip 3) */}
           {!b.skipped && (
             <View style={styles.heardRow}>
-              <Text style={[styles.heardLine, styles.shrink]}>{keepWords(`들린 말: ${b.text}`)}</Text>
+              <HeardLine text={b.text} open={opened} style={[styles.heardLine, styles.shrink]} />
               {opened && b.rec && (
                 <InRowButton
                   label="내 녹음"
@@ -717,10 +722,17 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </View>
           </Named>
         )}
-        {/* what was heard, and the recording just sent next to it (spec three-line-listen 4) */}
+        {/* what was heard, and the recording just sent next to it (spec three-line-listen 4); one line until tapped,
+            a tap of its own apart from 「🔊 내 녹음」 (spec heard-line-collapsed 2) */}
         {state.heard && (
           <View style={styles.heardNow}>
-            <Text style={[styles.heard, styles.shrink]}>{keepWords(`들린 말: ${state.heard}`)}</Text>
+            <HeardLine
+              text={state.heard}
+              open={heardOpen === state.heard}
+              onPress={() => state.heard && setHeardOpen(toggleRow(heardOpen, state.heard))}
+              style={styles.heard}
+              wrapStyle={styles.shrink}
+            />
             {state.heardRec && (
               <InRowButton
                 label="내 녹음"
