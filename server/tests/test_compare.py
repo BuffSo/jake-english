@@ -343,5 +343,24 @@ def test_hangul_at_the_name_is_not_korean():
     # next to other words heard wrong, word for word
     assert not korean_said("Get off at Hongdae, please.", "Get of a 홍대 peace")
     assert korean_said("Get off at Hongdae, please.", "Get 아 a 홍대 peace")
+
+
+@pytest.mark.parametrize("line,heard", [
+    ("Get off at Hongdae.", "Get off at 홍대 맞나요?"),  # the name, then a question (PR #62 review)
+    ("Take Line 2 and get off at Hongdae.", "Take line 2 and get off at 홍대 근데 이거 맞아요?"),
+    ("Get off at Hongdae.", "Get off at 네"),  # Korean where the name goes
+    ("Get off at Chungmuro.", "Get off at 어디였지"),
+])
+def test_korean_at_the_name_is_still_korean(line, heard):
+    # the engine then treats the try as not followed, however close the English words are
+    assert korean_said(line, heard)
+
+
+@pytest.mark.parametrize("line,heard", [
+    ("Get off at Chungmuro.", "Get off at 충무공."),  # a syllable changed: still a try at the name
+    ("Get off at Chungmuro.", "Get off at 충무."),  # a syllable dropped
+])
+def test_hangul_like_the_name_is_a_try_at_it(line, heard):
+    assert not korean_said(line, heard) and len(compare(line, heard).diffs) == 1
     # Korean outside the name: compared as before, without the Hangul
     assert compare("Get off at Hongdae.", "Get off at Hongdae 아 뭐였지").diffs == []

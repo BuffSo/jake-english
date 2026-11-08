@@ -13,7 +13,7 @@ from itertools import product
 
 from . import cmu, sounds
 from .models import Issue
-from .names import HANGUL_WORD, is_name, romanize, same_name, syllables  # noqa: F401 (romanize, syllables: tests)
+from .names import HANGUL_WORD, is_name, resembles, romanize, same_name, syllables  # noqa: F401 (romanize, syllables: tests)
 
 FOLLOW_MIN = 0.6  # word-level similarity at or above this counts as following the line
 SOUND_LETTERS = {"R": "R", "L": "L", "F": "F", "P": "P", "V": "V", "B": "B", "TH": "TH", "DH": "TH", "S": "S",
@@ -279,11 +279,13 @@ def _compare(target: str, heard: str, hangul: bool = False) -> Comparison:
         # a name the dictionary does not have, heard as one or more words (spec teacher-answer-context 3). Hangul
         # anywhere else is Korean said; word for word when the counts match, so a name in Hangul next to another
         # word heard wrong still stands for the name
+        # The Hangul has to look like the name too: a Korean word said where the name goes, or a question after it,
+        # is Korean said (PR #62 review: 「Get off at 홍대 맞나요?」 passed as followed)
         names = bool(ta) and all(map(is_name, ta))
         if tag == "replace" and len(ta) == len(hb):
-            korean |= any(HANGUL_WORD.match(h) and not is_name(t) for t, h in zip(ta, hb))
+            korean |= any(HANGUL_WORD.match(h) and not (is_name(t) and resembles(t, h)) for t, h in zip(ta, hb))
         else:
-            korean |= not names and any(HANGUL_WORD.match(h) for h in hb)
+            korean |= any(HANGUL_WORD.match(h) and not (names and any(resembles(t, h) for t in ta)) for h in hb)
         if tag == "equal" or "".join(ta) == "".join(hb):  # checkout and check out
             count += len(ta)
             heard_count += len(hb)

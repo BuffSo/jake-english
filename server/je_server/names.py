@@ -12,6 +12,7 @@ and split the same way, so a name written either way splits alike.
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 
 from . import cmu
 
@@ -111,6 +112,20 @@ def same_name(target: str, heard: str) -> bool:
     """The heard words, joined, are the line's name as the transcriber spelled it: as many syllables, each alike."""
     a, b = syllables(target), syllables(heard.replace(" ", ""))
     return a is not None and b is not None and len(a) == len(b) and all(map(_alike, a, b))
+
+
+def resembles(target: str, heard: str) -> bool:
+    """Hangul that may stand for the name at all: at least half its syllables match the name's in onset and vowel,
+    in order, finals aside. 충무공 and 충무 for Chungmuro do (a syllable changed or dropped is pointed out); a Korean
+    word said there instead (네, 어디였지) does not (PR #62 review)."""
+    a, b = syllables(target), syllables(heard.replace(" ", ""))
+    if not a or not b:
+        return False
+
+    def keys(s: list[Syllable]) -> list[tuple[str, str]]:
+        return [(_ONSET_CLASS.get(o, o), _VOWEL_CLASS.get(v.lstrip("yw") or v, v.lstrip("yw") or v)) for o, v, _ in s]
+
+    return SequenceMatcher(None, keys(a), keys(b), autojunk=False).ratio() >= 0.5
 
 
 def is_name(word: str) -> bool:

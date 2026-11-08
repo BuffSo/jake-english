@@ -725,6 +725,18 @@ async def test_aside_drops_how_the_recording_was_sorted():
     assert "".join(out) == "졸리신가 봐요. 다시 해 볼까요?"
 
 
+async def test_aside_keeps_a_sentence_that_only_ends_in_garae():
+    # PR #62 review: 「갈래」 alone also dropped 「넘어갈래요」, so the skip guidance could vanish
+    said = "「건너뛰기」를 누르면 다음 대사로 넘어갈래요? "
+    assert await _aside_out([said, "아니면 한 번 더 해 볼까요?"]) == [said, "아니면 한 번 더 해 볼까요?"]
+
+
+async def test_aside_cuts_after_a_closing_bracket():
+    # PR #62 review: a sentence ending in 「.」」 was not cut there, so the sentence after a dropped one went with it
+    out = await _aside_out(["「짚을 것」이 없다는 뜻이에요.」 ", "다시 해 볼까요?"])
+    assert out == ["다시 해 볼까요?"]
+
+
 async def test_aside_with_every_sentence_dropped_yields_nothing():
     # nothing left: `Engine._aside` says the fixed phrase, as for an empty answer
     assert await _aside_out(["짚을 곳이 없어요."]) == []
