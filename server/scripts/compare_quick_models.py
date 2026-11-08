@@ -2,7 +2,9 @@
 
 The three quick jobs go through the server's own `Claude`: Sohee's interpretation (`interpret`, JE_CLAUDE_QUICK),
 Jake's recommendation (`recommend`, JE_CLAUDE_RECOMMEND) and Ryan's feedback on a followed line (`feedback`,
-JE_CLAUDE_QUICK). Each input is asked of every model in turn, the order alternating, so a slow minute hits both.
+JE_CLAUDE_QUICK). Interpretation and feedback ask each input of every model in turn, the order alternating, so a
+slow minute hits both. Recommendations run one model after the other: each model's turned-down list follows its own
+answers, so their inputs part after the first press anyway.
 - interpret: the made-up lines below, the kinds that go wrong (numbers, directions, idioms, short answers)
 - recommend: per topic `--presses` suggestions, each turned down for the next as 「다른 걸로요」 does, with the ending
   from the server's `pick_ending` (same seed for every model) and check_jake_recommend's ten made-up recent situations
