@@ -331,6 +331,21 @@ test("a hint for an older line stays but is not the target", ...);           // 
 - [ ] **Step 4: 통과를 본다** — `npx jest && npx tsc --noEmit`
 - [ ] **Step 5: 커밋** — `feat(app): show how many sohee chances a free talk used`
 
+### Task 10: 대화 돌아보기의 짧은 답과 잘못 받아써진 낱말 (2026-11-09 사용자가 더함)
+
+**Files:**
+- Modify: `server/je_server/prompts.py`(`FIX_SYSTEM`, 필요하면 `TALK_SYSTEM`의 「받아쓰기가 틀릴 수 있다」), `server/scripts/compare_fix_models.py`(경우 더하기와 세기), `server/scripts/compare_talk_models.py`(잘못 받아써진 되묻기 경우)
+- Test: `server/tests/test_compare_fix_models.py`(새 세기 함수), `server/tests/test_fixes.py`(필요하면)
+
+**Interfaces:**
+- Consumes: 작업 4가 고친 `FIX_SYSTEM`(도움 받은 차례 규칙)과 `fixes.check(items, turns, helped)`.
+
+- [ ] **Step 1: 실패하는 시험** — `compare_fix_models.py`의 순수 세기 함수: 짧은 조각 답(동사 없음)이 고친 문장에서 완성 문장(동사 있음, 12낱말 안쪽)이 되었는지, 맞는 완성 문장이 바뀌었는지, 받아쓰기가 잘못 적은 낱말이 소리가 먼 낱말로 바뀌었는지(경우마다 정해 둔 「나와서는 안 될 낱말」)를 세는 함수.
+- [ ] **Step 2: 실패를 본다** — `uv run pytest -q tests/test_compare_fix_models.py`
+- [ ] **Step 3: 구현** — `FIX_SYSTEM`에 두 규칙(스펙 7 「짧은 답은 완성 문장으로」, 「잘못 받아써진 낱말을 엉뚱하게 메우지 않는다」)을 해요체로 넣는다. 예는 지어낸다(사용자 기록의 문장을 쓰지 않는다). 「뜻이 통하는 흔한 짧은 대답은 고치지 않아요」는 완성된 짧은 문장에만 남도록 고친다. 지어낸 경우를 더한다: 음식 이름만 한 답, 장소 이름만 한 답, 「Yes.」/「Good.」 같은 완성된 짧은 답, 맞는 완성 문장, 되묻는 말이 소리 비슷한 다른 낱말로 적힌 차례.
+- [ ] **Step 4: 통과를 본다** — `uv run pytest -q`
+- [ ] **Step 5: 커밋** — `fix(server): complete short answers and keep misheard words in fixes`
+
 ---
 
 ## 구현 뒤 확인(카드가 직접, 작업 아님)
