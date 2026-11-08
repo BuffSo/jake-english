@@ -145,10 +145,14 @@ def _paired(target: str, heard: str) -> tuple[list[str], list[str]]:
 
 
 def similarity(target: str, heard: str) -> float:
-    a, b = _paired(target, heard)
-    if not a or not b:
+    """How closely the transcript follows the line, 0 to 1: the words matched on both sides over all words, by
+    `compare`'s match. Notation (joined words, numbers), fillers and restarts do not count against it, so a short line
+    the transcriber wrote as more words is still followed (todo follow-feedback leftovers 1). Without those it is the
+    plain word match's ratio."""
+    c = compare(target, heard)
+    if not c.total or not c.heard_total:
         return 0.0
-    return SequenceMatcher(None, a, b, autojunk=False).ratio()
+    return (c.matched + c.heard_matched) / (c.total + c.heard_total)
 
 
 def sound_pairs(target_word: str, heard_word: str) -> list[tuple[str, str]]:
@@ -181,6 +185,8 @@ class Comparison:
     matched: int  # line words heard right
     total: int  # line words
     matched_words: set[str] = field(default_factory=set)
+    heard_matched: int = 0  # transcript words that matched the line (a word written in two counts both)
+    heard_total: int = 0  # transcript words, fillers and restarts aside
 
 
 def _same_sound(target_word: str, heard_word: str) -> bool:
@@ -218,25 +224,28 @@ def compare(target: str, heard: str) -> Comparison:
     b = [w for w in wb if w not in FILLERS]
     diffs: list[Issue] = []
     matched: set[str] = set()
-    count = 0
+    count = heard_count = restarted = 0
     for tag, i1, i2, j1, j2 in SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
         ta, hb = a[i1:i2], b[j1:j2]
         if tag == "equal" or "".join(ta) == "".join(hb):  # checkout and check out
             count += len(ta)
+            heard_count += len(hb)
             matched.update(ta)
         elif tag == "insert" and _restart(a, i1, hb):
-            continue
+            restarted += len(hb)
         elif tag == "replace" and len(ta) == len(hb):
             for t, h in zip(ta, hb):
                 if _same_sound(t, h):  # to for two, four for for: how the transcriber wrote it
                     count += 1
+                    heard_count += 1
                     matched.add(t)
                 else:
                     diffs.append(_issue([t], [h], _listed(t, h)))
         else:
             found = next((f for t in ta for h in hb if (f := _listed(t, h))), None)
             diffs.append(_issue(ta, hb, found))
-    return Comparison(diffs=diffs, matched=count, total=len(a), matched_words=matched)
+    return Comparison(diffs=diffs, matched=count, total=len(a), matched_words=matched, heard_matched=heard_count,
+                      heard_total=len(b) - restarted)
 
 
 def find_issues(target: str, heard: str, limit: int) -> list[Issue]:

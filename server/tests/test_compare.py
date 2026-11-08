@@ -211,3 +211,27 @@ def test_words_that_sound_the_same_are_notation():
     # the transcriber may write "to" for "two": they sound the same, so there is nothing to say
     assert compare("I wear two seventy.", "I wear to seventy.").diffs == []
     assert compare("Is this for me?", "Is this four me?").diffs == []
+
+
+# --- following by the matched words, and restarts (todo follow-feedback leftovers 1, 2) ------------------------
+
+def test_a_short_line_split_into_two_words_is_still_followed():
+    # the Mac matches joined words, fillers and restarts, so following is judged on that match too: a two-word line
+    # written as three words by the transcriber fell under FOLLOW_MIN before
+    assert similarity("Downstairs, please.", "Down stairs, please.") == 1.0
+    assert similarity("We need two tickets.", "We need, we need two tickets.") == 1.0
+    assert similarity("We need two tickets.", "Um, we need two tickets.") == 1.0
+
+
+def test_similarity_of_plain_differences_is_as_before():
+    # one word out of four: (3 + 3) / (4 + 4), what the word match gave before
+    assert similarity("We need two tickets.", "We need three tickets.") == 0.75
+    assert similarity("Turn left here.", "Sorry, I am new here.") < FOLLOW_MIN
+
+
+def test_a_word_added_inside_the_line_is_still_a_point():
+    assert find_issues("We need two tickets.", "We need two more tickets.", limit=2) == [
+        Issue(target="", heard="more")]
+    # not a try at the words after it: another first word
+    assert find_issues("Could I see the menu?", "Please, could I see the menu?", limit=2) == [
+        Issue(target="", heard="please")]
