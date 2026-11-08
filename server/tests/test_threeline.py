@@ -138,17 +138,20 @@ def test_tidy_puts_the_final_consonant_back():
     # the model gives the letter without its final consonant (ko 딛, hi 디): the one letter with that vowel is meant
     did = Word(syl=[S(en="did", ko="딛", m="s", hi="디")])
     spring = Word(syl=[S(en="spring.", ko="스프링", m="s", hi="리")])
-    out = tidy(line(I, did, spring, reading="[[딛]]"))
-    assert out.words[1].syl[0].hi == "딛" and out.words[2].syl[0].hi == "링"
+    bill = Word(syl=[S(en="bill", ko="빌", m="s", hi="이")])  # the bare vowel, as the model also gave
+    out = tidy(line(I, did, spring, bill, reading="[[딛]]"))
+    assert out.words[1].syl[0].hi == "딛" and out.words[2].syl[0].hi == "링" and out.words[3].syl[0].hi == "빌"
     assert out.words[0] == I and out.reading == "[[딛]]"
-    assert check("I did spring.", out) == []
+    assert check("I did spring bill", out) == []
 
 
 def test_tidy_leaves_what_it_cannot_tell():
     twice = Word(syl=[S(en="bilbil", ko="빌빌", m="s", hi="비")])  # two letters with that vowel
     other = Word(syl=[S(en="ob", ko="압", m="s", hi="옵"), S(en="ject?", ko="젝트", m="w")])  # no letter with it
     stray = Word(syl=[S(en="ob", ko="압", m="n", hi="아"), S(en="ject?", ko="젝트", m="w")])  # not a strong syllable
-    for w in (twice, other, stray):
+    # another first consonant than the bare vowel 「ㅇ」 is another letter, not one without its final consonant
+    unlike = Word(syl=[S(en="stop", ko="스탑", m="s", hi="즈")])
+    for w in (twice, other, stray, unlike):
         assert tidy(line(w)) == line(w)
         assert kinds(check(word_text_of(w), tidy(line(w)))) == ["hi"]
 

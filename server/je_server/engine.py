@@ -201,7 +201,8 @@ class Engine:
     async def copy(self, rp_id: str) -> Roleplay:
         """The same script as a new roleplay, to play it again from the start (spec roleplay-practice 6). Notes and
         sounds are reused, so it starts at once, except sounds made for an older key (`_current_sounds`) and notes
-        without Korean or a reading (`threeline.settled`), made again in the background; the old
+        without Korean or a reading (`threeline.settled`), made again: the learner's in the background, Ryan's when
+        asked; the old
         record and its tries stay as they are. A list pick plays its
         script as it is now in the repository; one taken off the list is copied (spec fixed-list-scripts 4)."""
         old = self.load(rp_id)
