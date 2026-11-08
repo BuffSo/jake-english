@@ -33,11 +33,13 @@
 | `app/src/screens/RoleplayScreen.tsx` | 모아 둔 고친 문장의 「앞 대사」, 「이 상황 다시 하기」 숨기기 |
 | `server/scripts/compare_talk_models.py`, `compare_fix_models.py`(새), `try_talk.py`(새) | 실제 모델 확인, 학습자 목소리 녹음 시험 |
 
+> **2026-11-08 바뀜:** 사용자가 자유 대화에서는 라이언이 영어로만 말하기로 정했다. 그래서 이 정해진 말은 한국어 `PHRASES["talk_english"]`가 아니라, 라이언의 영어 목소리로 하는 영어 `TALK_ENGLISH` "Could you try that in English? Short is fine."(`PHRASES` 밖)가 되었다. 아래에서 한국어 말 「영어로 말해 볼까요? 짧게 말해도 괜찮아요.」나 `PHRASES["talk_english"]`를 적은 곳은 옛 버전을 가리킨다. 계획은 기록이라 고쳐 쓰지 않았다.
+
 ## Global Constraints
 
 - **첫 화면 카드(그대로 쓴다):** 차례 「대화 연습하기」(파랑) → 「자유 대화」(보라) → 「복습하기」(청록). 「자유 대화」의 설명은 「대본 없이 라이언과 영어로 이야기해요」, 그림 글자 🗣️, 색 `colors.free = "#7048E8"`(첫 화면 카드에만 쓴다).
 - **대화 화면:** 위 「‹ 뒤로」, 제목 「자유 대화」, 「N번째」(내가 말한 차례). 맨 아래 「🎤 말하기」(주된 버튼, 남은 너비)와 「대화 끝내기」(덜 주된 버튼). 녹음 중에는 「취소」와 「● 말하기 끝」(`StopButton`). 「건너뛰기」 없음. 첫 내 차례에 「🎤를 누르고 말하세요」. 기다릴 때 라이언의 생각하는 얼굴(`Waiting who="ryan"`).
-- **정해진 말(그대로):** `talk_english` 「영어로 말해 볼까요? 짧게 말해도 괜찮아요.」, `talk_no_fixes` 「이번 대화에서는 고칠 곳을 찾지 못했어요. 수고했어요.」. 지금 것 `no_speech` 「잘 안 들렸어요. 한 번 더 말해 줄래요?」, `claude_down`, `too_long`.
+- **정해진 말(그대로):** `TALK_ENGLISH` "Could you try that in English? Short is fine."(바뀜), `talk_no_fixes` 「이번 대화에서는 고칠 곳을 찾지 못했어요. 수고했어요.」. 지금 것 `no_speech` 「잘 안 들렸어요. 한 번 더 말해 줄래요?」, `claude_down`, `too_long`.
 - **라이언의 답(지시문 규칙):** 영어 두세 문장, 모두 35낱말 안쪽, 첫 문장은 2~5낱말 맞장구이고 같은 대화에서 쓴 맞장구로 시작하지 않는다, 대답하기 쉬운 질문 하나로 끝, 고치지 않는다, 못 알아들으면 지어내지 말고 다시 말해 달라고 한다, 어떻게 말하는지 물으면 짧은 영어 문장 하나로 알려 주고 이어 간다, 목록·따옴표·이모지·행동 묘사 없음. 큰따옴표는 서버가 지운다.
 - **모델:** 대화 상대 `JE_CLAUDE_TALK`(`haiku`, `sonnet`, `opus`), 기본 `sonnet`(생각 끔, effort low = `WRITERS["sonnet"]`). 고쳐 주기는 글쓰기 모델(`JE_CLAUDE_WRITER`). 대화 상대는 실시간 호출 설정(`LIVE_OPTIONS`)으로 빨리 실패한다.
 - **받아쓰기:** 「🎤 말하기」는 영어로만 받아쓴다(자동 언어 없음). 영어 받아쓰기에 한글이 있으면 한국어로 고정해 다시 받아쓰고, 그 글을 보이고 `talk_english`로 답한다. 이 차례는 Claude에 보내지 않는다.
