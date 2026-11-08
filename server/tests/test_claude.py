@@ -470,6 +470,10 @@ async def test_recommend_keeps_an_answer_with_an_unknown_ending(caplog):
     # and once the space before 연습해 was lost
     ("공항에서 짐을 찾는 상황으로연습해 볼까요?", "상황으로 연습해 볼까요?", "공항에서 짐을 찾는 상황으로 연습해 볼까요?"),
     ("공항에서 짐을 찾는상황을 골라 봤어요. ", "상황을 추천해요.", "공항에서 짐을 찾는 상황을 추천해요."),
+    # second real run: 4 in 21 put another ending before the given one
+    ("공항에서 짐을 찾는 상황을 추천해요. 상황으로 연습해 볼까요?", "상황으로 연습해 볼까요?",
+     "공항에서 짐을 찾는 상황으로 연습해 볼까요?"),
+    ("공항에서 짐을 찾는 상황을 추천해요. 상황을 골라 봤어요.", "상황을 골라 봤어요.", "공항에서 짐을 찾는 상황을 골라 봤어요."),
 ])
 async def test_recommend_swaps_a_known_ending_for_the_given_one(caplog, answer, ending, said):
     # the clause before 상황 fits every ending, so the server swaps only the ending: still one call
@@ -478,3 +482,23 @@ async def test_recommend_swaps_a_known_ending_for_the_given_one(caplog, answer, 
         text = await Claude(fake).recommend([], [], OTHER, ending)
     assert text == said and len(fake.requests) == 1
     assert "ending swapped" in caplog.text and "did not keep" not in caplog.text and "상황" not in caplog.text
+
+
+async def test_recommend_logs_nothing_when_the_ending_is_kept(caplog):
+    fake = FakeAnthropic([json.dumps({"request_ko": "공항에서 짐을 찾는 상황을 추천해요."})])
+    with caplog.at_level(logging.INFO, logger="je_server"):
+        text = await Claude(fake).recommend([], [], OTHER, "상황을 추천해요.")
+    assert text == "공항에서 짐을 찾는 상황을 추천해요." and "ending" not in caplog.text
+
+
+async def test_recommend_keeps_an_answer_that_is_only_an_ending():
+    # nothing before the ending: no situation to keep, so the answer goes as it came
+    fake = FakeAnthropic([json.dumps({"request_ko": "상황을 추천해요."})])
+    assert await Claude(fake).recommend([], [], OTHER, "상황을 골라 봤어요.") == "상황을 추천해요."
+
+
+def test_recommend_system_shows_no_ending_of_its_own():
+    # second real run: the system's example 「…묻는 상황을 추천해요.」 was followed by the given ending (doubled)
+    from je_server import prompts
+
+    assert not any(e in prompts.RECOMMEND_SYSTEM for e, _ in JAKE_ENDINGS) and "추천해요" not in prompts.RECOMMEND_SYSTEM
