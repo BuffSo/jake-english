@@ -151,6 +151,7 @@ Expected: FAIL (`recommend()` takes 4 positional arguments, `endings` 없음, �
 
 - `Claude.recommend`: 넷째 인자 `ending`을 메시지에 넣고, 답이 `ending`으로 끝나지 않으면 `log.warning("recommendation did not keep the given ending")`(문장은 남기지 않는다).
 - `RECOMMEND_SYSTEM`: 「…어때요?」 줄과 「in the same form as the topic's example」을 빼고, 문장은 상황 다음에 사용자가 준 끝말(`"끝말"`)을 글자 그대로 붙인 해요체 한 문장이라고 쓴다. 끝말이 「상황」으로 시작하니 상황은 그 앞 낱말까지 쓴다는 것을 장면 없는 예(`"…묻는" + "상황을 추천해요." → "…묻는 상황을 추천해요."`)로 보인다. 끝말 셋을 지시문에 늘어놓지 않는다(고르는 것은 서버다).
+  - (나중에 뺐다, 2026-11-08) 이 예는 Task 3의 두 번째 실제 하이쿠 시험에서 빠졌다. 모델이 예의 「상황을 추천해요.」를 쓰고 넘긴 끝말을 또 붙였기 때문이다. 지금 지시문에는 끝말이 든 예가 없다(`docs/guide/PROMPT_정해진_말투를_섞기_20261108.md` 「지시문의 예를 쓰고 꼴을 또 붙였다」).
 - `topics.py`: 예문 셋을 「인사동에서 외국인 관광객이 한복 빌리는 곳을 묻는 상황」, 「뉴욕 지하철역에서 역무원에게 표 사는 법을 묻는 상황」, 「외국 회사에 전화해서 주문한 물건이 언제 오는지 묻는 상황」으로. 필드 주석은 「one situation Jake might suggest, without his ending (the server picks it)」.
 - `Engine.recommend`: `pick_ending(turned_down)`으로 고른 끝말을 넘긴다. docstring에 한 줄.
 - `FakeClaude`: 위 Interfaces대로.
