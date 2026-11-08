@@ -58,3 +58,8 @@ def test_summary_counts_without_lines():
     assert "degraded 2 (ref 2, stress 1)" in s
     assert "calls 9 (2.25 a line)" in s and "$0.090" in s and "median 7.5s" in s
     assert ASK not in s
+
+
+def test_summary_without_degraded_lines():
+    s = ct.summary([{"outcome": "1", "calls": 1, "secs": 3.0, "cost": 0.01}])
+    assert "degraded 0;" in s and "()" not in s

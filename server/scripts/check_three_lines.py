@@ -76,7 +76,8 @@ def summary(rows: list[dict]) -> str:
     calls = sum(r["calls"] for r in rows)
     other = len(rows) - sum(tries[k] for k in ("1", "2", "3")) - len(degraded)
     return (f"lines {len(rows)}: first try {tries['1']}, two tries {tries['2']}, three tries {tries['3']}, "
-            f"degraded {len(degraded)} ({', '.join(f'{k} {n}' for k, n in sorted(kinds.items()))})"
+            f"degraded {len(degraded)}"
+            + (f" ({', '.join(f'{k} {n}' for k, n in sorted(kinds.items()))})" if kinds else "")
             + (f", other {other}" if other else "")
             + f"; calls {calls} ({calls / max(len(rows), 1):.2f} a line); cost ${sum(r['cost'] for r in rows):.3f}; "
             f"median {statistics.median(r['secs'] for r in rows):.1f}s")
