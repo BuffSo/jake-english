@@ -5,16 +5,31 @@ from je_server.topics import TOPICS, get, listed, pick, public
 
 
 def test_three_topics_in_order():
-    # 2026-11-07 the user named them; 「돕기」 was turned down, then the long name was cut short
+    # 2026-11-07 the user named them; 2026-11-08 the user renamed two and kept the ids, which the records hold
+    # (spec korea-english-topic 1)
     assert [t.id for t in TOPICS] == ["tourist", "usa", "other"]
-    assert [t.name_ko for t in TOPICS] == ["외국인 관광객", "미국 여행", "그 밖의 상황"]
+    assert [t.name_ko for t in TOPICS] == ["한국에서 영어 쓰기", "미국 여행하기", "그 밖의 상황"]
 
 
-def test_tourist_starts_with_ryan_and_is_strangers():
-    # the user: the foreigner asks first; people the learner knows (a coworker) are left out
+def test_korea_topic_is_strangers_and_either_may_start():
+    # the user: a foreigner the learner has never met, a tourist or someone living here; asking for help or just
+    # greeting and chatting; the learner may speak first (spec korea-english-topic 2, 3). People the learner knows
+    # (a coworker) stay out, as before
     t = get("tourist")
-    assert t.first == "ryan" and "stranger" in t.roles_en.lower()
-    assert get("usa").first is None and get("other").first is None
+    assert t.first is None and get("usa").first is None and get("other").first is None
+    for text in (t.roles_en, t.scenes_en):
+        low = text.lower()
+        assert "never met" in low and "tourist" in low and "lives in korea" in low and "coworkers" in low
+    assert all(w in t.scenes_en.lower() for w in ("help", "small talk", "park", "cafe", "market",
+                                                  "learner speaks first"))
+    assert "learner may speak first" in t.roles_en.lower()
+
+
+def test_other_leaves_out_the_korea_topic():
+    # 「그 밖의 상황」 is what the two topics do not cover; talking in Korea with a foreigner one has never met is now
+    # the first topic, chatting included
+    s = get("other").scenes_en.lower()
+    assert "helping a foreign tourist" not in s and "never met" in s and "united states" in s
 
 
 def test_starting_lists():

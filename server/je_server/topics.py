@@ -58,23 +58,32 @@ class Topic:
     scenes_en: str  # what kind of moments, for Jake's suggestion
     example_ko: str  # one situation Jake might suggest, without his ending (the server picks it, claude.pick_ending)
     placeholder_ko: str  # the example in the input box when the learner describes it
-    first: Speaker | None  # who always speaks first in this topic; None: whoever would in the situation
+    # who always speaks first in this topic; None: whoever would in the situation. No topic fixes one since
+    # 2026-11-08: in Korea the learner may greet first (spec korea-english-topic 3)
+    first: Speaker | None
     picks: tuple[Pick, ...] = ()
 
 
 TOPICS: tuple[Topic, ...] = (
     Topic(
+        # 2026-11-08 the user renamed it from 「외국인 관광객」 and widened it: any foreigner the learner has never met,
+        # a tourist or someone living in Korea; asking for help, or greeting and small talk; and the learner may be
+        # the one who speaks first (spec korea-english-topic). The id stays: past records hold it
         id="tourist",
-        name_ko="외국인 관광객",
-        roles_en=("Ryan is a foreign tourist visiting Korea, a stranger to the learner who comes up and asks for help. "
-                  "The learner is a Korean local who helps in English. They are strangers, never coworkers or "
-                  "friends."),
-        scenes_en=("A foreign tourist in Korea, a stranger, asks the learner for help in English: asking the way, "
-                   "how to use the subway, where to eat, and so on. Use real places in Korea. Never people the "
+        name_ko="한국에서 영어 쓰기",
+        roles_en=("The learner is a Korean local in Korea. Ryan is a foreigner the learner has never met: a tourist "
+                  "visiting Korea or someone who lives in Korea. They are strangers, never coworkers, friends or "
+                  "anyone else the learner knows. Ryan may come up and ask for help, or the two may just greet each "
+                  "other and chat; the learner may speak first, greeting Ryan or offering help."),
+        scenes_en=("The learner, a Korean in Korea, speaks English with a foreigner they have never met: a tourist "
+                   "or someone who lives in Korea. Either the foreigner asks for help (the way, the subway, where to "
+                   "eat), or the two run into each other in a park, at a cafe or a market, at a gym or on a morning "
+                   "walk, and share a greeting and small talk. Sometimes the learner speaks first: greets the "
+                   "foreigner, or offers help to one who looks lost. Use real places in Korea. Never people the "
                    "learner knows, such as coworkers or friends."),
         example_ko="인사동에서 외국인 관광객이 한복 빌리는 곳을 묻는 상황",
-        placeholder_ko="예: 외국인이 명동에서 환전소를 묻는 상황",
-        first="ryan",
+        placeholder_ko="예: 공원에서 외국인에게 먼저 인사하는 상황",
+        first=None,
         picks=(
             _pick("t-gyeongbokgung", "명동역에서 경복궁 가는 길",
                   "명동역 근처에서 외국인 관광객이 경복궁 가는 법을 묻는다. 4호선을 타고 한 정거장 가서 충무로역에서 "
@@ -137,7 +146,7 @@ TOPICS: tuple[Topic, ...] = (
     ),
     Topic(
         id="usa",
-        name_ko="미국 여행",
+        name_ko="미국 여행하기",  # 「미국 여행」 until 2026-11-08 (the user)
         roles_en=("The learner is a Korean traveler visiting the United States. Ryan is someone there: a shop or "
                   "restaurant worker, hotel staff, or a passerby."),
         scenes_en=("The learner is traveling in the United States: ordering at a cafe or a fast-food place, checking "
@@ -250,8 +259,9 @@ TOPICS: tuple[Topic, ...] = (
         id=OTHER,
         name_ko="그 밖의 상황",
         roles_en="Ryan plays the other person in the situation. The learner plays themself.",
-        scenes_en=("Any real moment in daily life where the learner must speak English, other than helping a foreign "
-                   "tourist in Korea or traveling in the United States."),
+        scenes_en=("Any real moment in daily life where the learner must speak English, other than talking in Korea "
+                   "with a foreigner they have never met (asking for help or chatting) or traveling in the United "
+                   "States."),
         example_ko="외국 회사에 전화해서 주문한 물건이 언제 오는지 묻는 상황",
         placeholder_ko="예: 외국 회사에 전화해 주문을 확인하는 상황",
         first=None,
