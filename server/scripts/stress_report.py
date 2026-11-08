@@ -27,6 +27,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--since", help="only recordings from this day on (YYYY-MM-DD)")
     args = parser.parse_args(argv)
     data_dir = Path(env().get("JE_DATA_DIR") or DEFAULT_DATA_DIR).expanduser()
+    if not (data_dir / "roleplays").is_dir():  # a mistyped path would print empty tables
+        print("stress: JE_DATA_DIR has no roleplays/; check the path in server/.env")
+        return 1
     records, broken = load(data_dir, args.since)
     print(render(records, broken), end="")
     return 0

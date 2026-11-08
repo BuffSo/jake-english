@@ -140,6 +140,7 @@ def test_pending_takes_english_tries_with_a_recording_not_yet_measured(data):
     assert job.words == ["i'd", "like", "two", "coffees"]  # the heard words, numbers read out
     assert job.rec == data / "roleplays" / RP / "rec" / "1-1.m4a"
     assert (job.mode, job.followed, job.aside, job.at) == ("turn", True, False, "2026-11-08T09:00:00")
+    assert job.created == "2026-11-08T08:00:00"
     assert job.three is not None and len(job.three.words) == 4
 
 
@@ -178,9 +179,11 @@ ALIGNED = {
 def test_build_adds_judgement_and_keeps_the_try(data):
     job = pending(data)[0][0]
     rec = build(job, ALIGNED, tools={"mfa": "3.4.3"}, measured="2026-11-08T10:00:00")
-    assert {k: rec[k] for k in ("v", "rp", "idx", "n", "mode", "followed", "aside", "at", "measured", "status")} == {
+    assert {k: rec[k] for k in ("v", "rp", "idx", "n", "mode", "followed", "aside", "at", "created", "measured",
+                                "status")} == {
         "v": 1, "rp": RP, "idx": 1, "n": 1, "mode": "turn", "followed": True, "aside": False,
-        "at": "2026-11-08T09:00:00", "measured": "2026-11-08T10:00:00", "status": "ok"}
+        "at": "2026-11-08T09:00:00", "created": "2026-11-08T08:00:00", "measured": "2026-11-08T10:00:00",
+        "status": "ok"}
     assert rec["tools"] == {"mfa": "3.4.3"} and rec["quality"] == ALIGNED["quality"]
     first, cof = rec["words"][0], rec["words"][3]
     assert first["content"] is False and first["pick"] is None and first["dict"] == {"primary": [0], "secondary": False}

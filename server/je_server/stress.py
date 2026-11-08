@@ -139,6 +139,7 @@ class Job:
     words: list[str]
     rec: Path
     three: ThreeLine | None
+    created: str | None = None  # when the roleplay was made: `--since` uses it for tries without `at` (before 11-07)
 
     @property
     def key(self) -> str:
@@ -169,7 +170,8 @@ def pending(data_dir: Path) -> tuple[list[Job], int]:
                     continue
                 line = lines.get(idx)
                 jobs.append(Job(rp_id=rp.id, idx=idx, n=a.n, mode=a.mode, followed=a.followed, aside=a.aside,
-                                at=a.at, words=words, rec=rec, three=line.three if line else None))
+                                at=a.at, words=words, rec=rec, three=line.three if line else None,
+                                created=rp.created))
     return jobs, skipped
 
 
@@ -193,7 +195,7 @@ def build(job: Job, aligned: dict | None, tools: dict, measured: str) -> dict:
         for w, score in zip(words, sentence_scores(words)):
             w["score"] = score
     return {"v": FORMAT, "rp": job.rp_id, "idx": job.idx, "n": job.n, "mode": job.mode, "followed": job.followed,
-            "aside": job.aside, "at": job.at, "measured": measured, "tools": tools,
+            "aside": job.aside, "at": job.at, "created": job.created, "measured": measured, "tools": tools,
             "status": "ok" if aligned is not None else "unaligned",
             "quality": aligned.get("quality") if aligned is not None else None, "words": words}
 

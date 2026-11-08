@@ -8,7 +8,8 @@ environment has. So it imports nothing from je_server, only the standard library
 For every TextGrid MFA wrote, reads the WAV beside it in the corpus and keeps, per vowel, its length, its loudest
 intensity (dB) and its highest and median pitch (semitones over 100 Hz), with Praat's default settings like the
 2026-11-05 test. The pitch and intensity curves are never written out (ADR-0004). Words are copied from the TextGrid
-into the output file only; nothing is printed.
+into the output file only; nothing is printed. A file that cannot be measured (a tier missing, a Praat error) is
+listed under `failed` and the others go on: one bad file used to fail its whole chunk on every run.
 """
 from __future__ import annotations
 
@@ -83,16 +84,21 @@ def measure(wav: Path, grid: Path) -> list[dict]:
 
 def main(corpus: Path, out_dir: Path, dest: Path) -> None:
     scores = quality(out_dir)
-    files = {}
+    files, failed = {}, []
     for grid in sorted(out_dir.rglob("*.TextGrid")):
         wav = corpus / grid.relative_to(out_dir).with_suffix(".wav")
         if not wav.exists():
             continue
-        files[grid.stem] = {"words": measure(wav, grid),
+        try:
+            words = measure(wav, grid)
+        except Exception:  # noqa: BLE001 - that file is tried again on the next run; its words are not printed
+            failed.append(grid.stem)
+            continue
+        files[grid.stem] = {"words": words,
                             "quality": scores.get(grid.stem, {"speech_log_likelihood": None,
                                                               "phone_duration_deviation": None})}
-    dest.write_text(json.dumps({"praat": parselmouth.PRAAT_VERSION, "files": files}, ensure_ascii=False),
-                    encoding="utf-8")
+    dest.write_text(json.dumps({"praat": parselmouth.PRAAT_VERSION, "files": files, "failed": failed},
+                               ensure_ascii=False), encoding="utf-8")
 
 
 if __name__ == "__main__":
