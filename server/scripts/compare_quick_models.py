@@ -45,8 +45,8 @@ from je_server.config import load_settings  # noqa: E402
 from je_server.models import Frame  # noqa: E402
 from je_server.topics import TOPICS  # noqa: E402
 
-# $ per million tokens in/out (claude-api skill, 2026-11-08), for every model a quick job can pick
-PRICE = {"claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}
+# $ per million tokens in/out, for every model a quick job can pick: check_jake_recommend's table (one place to fix)
+PRICE = cjr.PRICE
 
 
 class Counting:

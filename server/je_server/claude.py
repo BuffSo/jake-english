@@ -23,11 +23,11 @@ from .topics import Topic
 HAIKU: dict[str, Any] = {"model": "claude-haiku-5-5", "thinking": {"type": "disabled"}}
 SONNET: dict[str, Any] = {"model": "claude-sonnet-5-5", "thinking": {"type": "between_tools"}, "effort": "low"}
 
-# The models server/.env can pick (JE_CLAUDE_WRITER, JE_CLAUDE_QUICK; defaults Sonnet and Haiku, the spec's). A role
-# keeps its settings and only the model changes: writing has thinking off and effort low, quick wording has thinking
-# off and no effort (feedback() streams without output_config). Opus 5.5 rejects disabled thinking with a 400 at every
-# effort, so it writes with adaptive thinking at effort low. Disabled (Haiku) and between_tools (Sonnet) need effort
-# high or below.
+# The models server/.env can pick (JE_CLAUDE_WRITER, JE_CLAUDE_QUICK; defaults Sonnet and Haiku, the spec's;
+# JE_CLAUDE_RECOMMEND picks from QUICKS too, default Sonnet, below). A role keeps its settings and only the model
+# changes: writing has thinking off and effort low, quick wording has thinking off and no effort (feedback() streams
+# without output_config). Opus 5.5 rejects disabled thinking with a 400 at every effort, so it writes with adaptive
+# thinking at effort low. Disabled (Haiku) and between_tools (Sonnet) need effort high or below.
 WRITERS: dict[str, dict[str, Any]] = {
     "haiku": {**HAIKU, "effort": "low"},
     "sonnet": SONNET,
