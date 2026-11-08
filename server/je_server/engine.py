@@ -30,7 +30,8 @@ log = logging.getLogger("je_server")
 LINE_WAIT = 120
 MAX_SECONDS = 60
 NEAR_MIN = 0.3  # below FOLLOW_MIN but at least this close to the line: a try at it, not something else
-# the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer
+# the asides after the line's last try at it sent with a new one, for a question that follows Ryan's answer; that
+# try goes too, for a question about what it pointed out (todo 40 1)
 ASIDES_KEPT = 3
 HANGUL = re.compile(r"[가-힣]")
 ENDS = (".", "?", "!")  # the marks SentenceBuffer cuts a sentence at
@@ -539,13 +540,14 @@ class Engine:
             # the Mac's points only for a try at the line; far from it, they would point at unrelated words
             if near:
                 issues = find_issues(line.text, heard, limit=2)
-            # 「바로 앞에」 (spec 3): only what came after the last try at the line (followed, with points, or an old
-            # record's), so an earlier practice's exchange is not sent along
+            # 「바로 앞에」 (spec 3): the last try at the line (followed, with points, or an old record's) and what came
+            # after it, so an earlier practice's exchange is not sent along. The try itself goes for a question about
+            # its points: without it Ryan said he had pointed out nothing (todo 40 1)
             tries = rp.attempts.get(idx, [])
-            since = next((i + 1 for i in range(len(tries) - 1, -1, -1) if not tries[i].aside), 0)
-            asides = tries[since:][-ASIDES_KEPT:]
+            last = next((i for i in range(len(tries) - 1, -1, -1) if not tries[i].aside), None)
+            kept = ([tries[last]] if last is not None else []) + tries[0 if last is None else last + 1:][-ASIDES_KEPT:]
             text = self._aside(self.claude.aside(rp.frame, self.history(rp, idx), line.text, heard, heard_ko, issues,
-                                                 [(a.heard, a.say_ko) for a in asides]))
+                                                 [(a.heard, a.issues, a.say_ko) for a in kept]))
             # a try at the line with points moves on like a followed one, so a line whisper keeps mishearing never
             # traps the learner (user, 2026-11-07); anything else is an aside and stays on the line
             nxt = idx + 1 if (mode == "turn" and issues) else idx

@@ -381,7 +381,8 @@ async def test_aside_streams_korean_on_the_writer_and_sends_only_text():
     issue = Issue(target="large", heard="launch", sound=("R", "N"), explain="")
     out = [d async for d in Claude(fake).aside(
         Frame(**FRAME), [("ryan", "What size?")], "A large one, please.", "A launch one, peace.", None,
-        [issue], [("다시 할게요", "괜찮아요. 다시 해 볼까요?")])]
+        [issue], [("A launch one, please.", [issue], "large가 launch처럼 들렸어요. 한 번 더 해 볼까요?"),
+                  ("다시 할게요", [], "괜찮아요. 다시 해 볼까요?")])]
     assert out == ["괜찮아요. ", "다시 해 볼까요?"]
     req = fake.requests[0]
     assert req["model"] == "claude-sonnet-5-5" and req["system"] == prompts.ASIDE_SYSTEM
@@ -390,7 +391,12 @@ async def test_aside_streams_korean_on_the_writer_and_sends_only_text():
     assert body["대사"] == "A large one, please." and body["들린 말(영어 받아쓰기)"] == "A launch one, peace."
     assert body["들린 말(한국어 받아쓰기)"] == ""
     assert body["짚을 것"] == [{"대사 낱말": "large", "들린 낱말": "launch", "소리 내는 법": ""}]
-    assert body["앞서 선생님에게 한 말"] == [{"들린 말": "다시 할게요", "라이언의 답": "괜찮아요. 다시 해 볼까요?"}]
+    # todo 40 1: the line's last try goes with what it pointed out, so a question about that point can be answered
+    assert body["이 대사의 앞 시도"] == [
+        {"들린 말": "A launch one, please.", "짚은 것": [{"대사 낱말": "large", "들린 낱말": "launch"}],
+         "라이언의 답": "large가 launch처럼 들렸어요. 한 번 더 해 볼까요?"},
+        {"들린 말": "다시 할게요", "짚은 것": [], "라이언의 답": "괜찮아요. 다시 해 볼까요?"}]
+    assert "앞서 선생님에게 한 말" not in body
     assert body["지금까지 대화"] == [{"speaker": "ryan", "text": "What size?"}]
 
 
@@ -433,6 +439,15 @@ def test_aside_prompt_keeps_a_given_tip_whole():
     p = prompts.ASIDE_SYSTEM
     assert "처음부터 끝까지 그대로 말해요" in p and "한쪽 소리만" in p
     assert '"짚을 것", "소리 내는 법", "받아쓰기"' in p
+
+
+def test_aside_prompt_answers_about_an_earlier_point():
+    # todo 40 1: asked about a point the try before made, teacher Ryan said he had pointed out nothing
+    from je_server import prompts
+
+    p = prompts.ASIDE_SYSTEM
+    assert '"이 대사의 앞 시도"' in p and "물을 때만" in p and "이어서 빨리 말하면" in p
+    assert "앞서 선생님에게 한 말" not in p
 
 
 def test_aside_prompt_points_to_skip():

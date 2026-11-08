@@ -116,8 +116,37 @@ async def test_earlier_asides_on_the_line_go_to_claude(engine_with_rp, speech_by
     for _ in range(4):
         await run(engine, rp_id, user_idx, speech_bytes)
     earlier = fake_claude.aside_calls[-1]["earlier"]
-    assert len(earlier) == 3 and earlier[-1] == ("Wait, let me try that again.",
+    assert len(earlier) == 3 and earlier[-1] == ("Wait, let me try that again.", [],
                                                   "괜찮아요, 말이 꼬일 수 있어요. 다시 해 볼까요?")
+
+
+async def test_the_last_try_goes_with_the_asides(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    # todo 40 1: asked about a point right after the try that made it, teacher Ryan had nothing of that try and said
+    # he had pointed out nothing
+    engine, rp_id, user_idx = engine_with_rp
+    for heard in ["It's light over hair.", "What does this mean?"]:
+        fake_whisper.text = heard
+        await run(engine, rp_id, user_idx, speech_bytes, "practice")
+    tried = engine.store.load(rp_id).attempts[user_idx][0]
+    assert tried.issues and not tried.aside
+    assert fake_claude.aside_calls[-1]["earlier"] == [("It's light over hair.", tried.issues, tried.say_ko)]
+
+
+async def test_a_kept_try_stays_past_three_asides(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    for heard in ["It's right over there.", *["What does this mean?"] * 5]:
+        fake_whisper.text = heard
+        await run(engine, rp_id, user_idx, speech_bytes, "practice")
+    earlier = fake_claude.aside_calls[-1]["earlier"]
+    assert len(earlier) == 4 and earlier[0][0] == "It's right over there."
+    assert [e[0] for e in earlier[1:]] == ["What does this mean?"] * 3
+
+
+async def test_no_try_before_sends_no_earlier(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "What does this mean?"
+    await run(engine, rp_id, user_idx, speech_bytes)
+    assert fake_claude.aside_calls[-1]["earlier"] == []
 
 
 async def test_aside_claude_down_says_the_fixed_phrase(engine_with_rp, speech_bytes, fake_whisper, fake_claude):
@@ -314,5 +343,8 @@ async def test_earlier_asides_stop_at_the_last_try_at_the_line(engine_with_rp, s
     for heard in ["Wait, let me try that again.", boundary, "What does this mean?", "What does this mean?"]:
         fake_whisper.text = heard
         await run(engine, rp_id, user_idx, speech_bytes, "practice")
-    assert fake_claude.aside_calls[-1]["earlier"] == [("What does this mean?",
-                                                       "괜찮아요, 말이 꼬일 수 있어요. 다시 해 볼까요?")]
+    # the try at the line itself goes first (todo 40 1): the learner may ask about what it pointed out
+    tried = engine.store.load(rp_id).attempts[user_idx][1]
+    assert fake_claude.aside_calls[-1]["earlier"] == [
+        (boundary, tried.issues, tried.say_ko),
+        ("What does this mean?", [], "괜찮아요, 말이 꼬일 수 있어요. 다시 해 볼까요?")]

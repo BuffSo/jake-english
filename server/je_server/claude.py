@@ -347,18 +347,20 @@ class Claude:
     # --- teacher Ryan, when the line was not followed -------------------------------------------
 
     async def aside(self, frame: Frame, history: Draft, line: str, heard: str, heard_ko: str | None,
-                    issues: list[Issue], earlier: list[tuple[str, str]]) -> AsyncIterator[str]:
+                    issues: list[Issue], earlier: list[tuple[str, list[Issue], str]]) -> AsyncIterator[str]:
         """Streams teacher Ryan's Korean answer to a recording that did not follow the line (spec offscript-aside
         3), on the writer model. `heard` is the English transcript, `heard_ko` the Korean one when auto-detection
-        heard Korean, `issues` what the Mac found against the line, `earlier` the asides before on this line as
-        (heard, Ryan's answer). Only text goes out (ADR-0004)."""
+        heard Korean, `issues` what the Mac found against the line, `earlier` the line's tries before as (heard,
+        points, Ryan's answer): its last try at the line and the asides after it (todo 40 1). Only text goes out
+        (ADR-0004)."""
         body = {
             **self._talk(frame, history),
             "대사": line,
             "들린 말(영어 받아쓰기)": heard,
             "들린 말(한국어 받아쓰기)": heard_ko or "",
             "짚을 것": _points(issues),
-            "앞서 선생님에게 한 말": [{"들린 말": h, "라이언의 답": a} for h, a in earlier],
+            "이 대사의 앞 시도": [{"들린 말": h, "짚은 것": [{"대사 낱말": i.target, "들린 낱말": i.heard} for i in p],
+                               "라이언의 답": a} for h, p, a in earlier],
         }
         async for text in self._stream(self._request(self.writer, {}), prompts.ASIDE_SYSTEM, body, 600,
                                        whole=True):
