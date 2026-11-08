@@ -4,16 +4,18 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChange
 
 import { api } from "../api";
 import { ApiError } from "../api/client";
-import type { AttemptEvent, ScriptLine, ThreeLine } from "../api/types";
+import type { AttemptEvent, ScriptLine, ThreeLine, TryRef } from "../api/types";
 import type { SoundQueue } from "../audio/player";
+import { useAnswering } from "../audio/useAnswering";
 import { usePlaying } from "../audio/usePlaying";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, stopThenSend } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
-import { askFirst, canReplay, leavesScreen, modelKey, practiceFor, type Action, type State } from "../flow/state";
+import { askFirst, canReplay, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
+import { InRowButton } from "../ui/InRowButton";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
 import { keepWords } from "../ui/keepWords";
@@ -68,9 +70,16 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const copyGate = useRef(createGate()).current;
+  // Ryan's answer to a recording is playing: a sound asked for from a bubble waits for it (spec three-line-listen 5)
+  const { answering, mark: markAnswer } = useAnswering(sounds);
+  const answeringNow = useRef(answering);
+  answeringNow.current = answering;
+  const listenOk = mayListen(state.phase, answering);
   const interp = useInterpret(rp.id, sounds, (auto) =>
     mounted.current &&
-    (auto ? mayAutoPlay("roleplay", now.current.phase, sounds.isPlaying()) : mayReplay("roleplay", now.current.phase, false)),
+    (auto
+      ? mayAutoPlay("roleplay", now.current.phase, sounds.isPlaying())
+      : mayReplay("roleplay", now.current.phase, answeringNow.current)),
   );
 
   useEffect(() => {
@@ -169,10 +178,27 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
   useBackKey(askLeave);
 
-  function replayJake() {
-    if (!state.jake || !canReplay(state.phase)) return;
+  // A sound asked for from a bubble (🔊, or a tap on a bubble that plays): stops what plays and plays it, only while
+  // my turn waits and not over Ryan's answer (`mayListen`, spec three-line-listen 5)
+  function playFromBubble(src: ReturnType<typeof api.audioSource>) {
+    if (!mayListen(now.current.phase, answeringNow.current)) return;
     sounds.clear();
-    sounds.enqueue(api.audioSource(state.jake.audio));
+    sounds.enqueue(src);
+  }
+
+  const playRec = (r: TryRef) => playFromBubble(api.recordingSource(r.rp_id, r.idx, r.n));
+
+  // 「🔊 듣기」 on a past bubble: Ryan's voice or my line's model, at the rate last picked below (spec three-line-listen 3)
+  function listenButton(idx: number) {
+    const audio = lineAt(idx)?.audio;
+    if (!audio) return null;
+    return (
+      <InRowButton label="🔊 듣기" onPress={() => playFromBubble(api.audioSource(audio, rate))} dim={!listenOk} textStyle={styles.link} />
+    );
+  }
+
+  function replayJake() {
+    if (state.jake) playFromBubble(api.audioSource(state.jake.audio));
   }
 
   async function fetchThree(idx: number): Promise<boolean> {
@@ -289,9 +315,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
 
   // the Ryan line before a practised line of mine, to know what it answers (spec 4)
   function playBefore(audio: string | null) {
-    if (!audio || !canReplay(state.phase)) return;
-    sounds.clear();
-    sounds.enqueue(api.audioSource(audio));
+    if (audio) playFromBubble(api.audioSource(audio));
   }
 
   const startRecording = () => gate.run(doStart);
@@ -342,8 +366,14 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     const live = () => mounted.current && epoch.current === my;
     const onEvent = (e: AttemptEvent) => {
       if (!live()) return;
-      if (e.type === "audio") sounds.enqueue(api.audioSource(e.key));
-      if (e.type === "error" && e.say?.audio) sounds.enqueue(api.audioSource(e.say.audio));
+      if (e.type === "audio") {
+        sounds.enqueue(api.audioSource(e.key));
+        markAnswer();
+      }
+      if (e.type === "error" && e.say?.audio) {
+        sounds.enqueue(api.audioSource(e.say.audio));
+        markAnswer();
+      }
       dispatch({ type: "event", e });
     };
     try {
@@ -390,6 +420,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {idx !== undefined && (!folds || opened) && (
           <View style={styles.links}>
             <View style={styles.linkGroup}>
+              {folds && listenButton(idx)}
               <Pressable onPress={() => toggleThree(idx)} hitSlop={8}>
                 <Text style={styles.link}>{open[idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
               </Pressable>
@@ -430,10 +461,16 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             {star?.saved && !opened && <Text> </Text>}
             {star?.saved && !opened && <StarMark />}
           </Text>
-          <Text style={styles.heardLine}>{keepWords(`들린 말: ${b.text}`)}</Text>
+          <View style={styles.heardRow}>
+            <Text style={[styles.heardLine, styles.shrink]}>{keepWords(`들린 말: ${b.text}`)}</Text>
+            {opened && b.rec && (
+              <InRowButton label="🔊 내 녹음" onPress={() => b.rec && playRec(b.rec)} dim={!listenOk} textStyle={styles.link} />
+            )}
+          </View>
           {opened && idx !== undefined && koLine(idx)}
           {opened && idx !== undefined && (
             <View style={[styles.linkGroup, styles.gap]}>
+              {listenButton(idx)}
               <KoButton view={koViewAt(idx)} onPress={() => toggleKo(idx)} />
               {practiceFor(state, b) === "mine" && (
                 <PractiseLink label="이 줄 다시 ›" disabled={!canPractise} onPress={() => practise("mine", idx)} inRow />
@@ -508,7 +545,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           <Named part="jake">
             <Pressable onPress={replayJake} style={[styles.bubble, styles.ryan]}>
               <Text style={styles.plainText}>{keepWords(state.jake.text)}</Text>
-              <Text style={styles.hint}>눌러서 다시 듣기</Text>
+              <Text style={styles.hint}>🔊 눌러서 다시 듣기</Text>
             </Pressable>
           </Named>
         )}
@@ -538,7 +575,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
               <Text style={styles.beforeText}>{before.text}</Text>
               {koLine(before.idx)}
               <View style={styles.linkGroup}>
-                <Text style={styles.hint}>눌러서 듣기</Text>
+                <Text style={styles.hint}>🔊 눌러서 듣기</Text>
                 <View style={styles.linkRow}>
                   <KoButton view={koViewAt(before.idx)} onPress={() => toggleKo(before.idx)} />
                 </View>
@@ -558,7 +595,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
               style={[styles.bubble, savedBefore.speaker === "ryan" ? styles.ryan : styles.user]}
             >
               <Text style={styles.beforeText}>{savedBefore.text}</Text>
-              <Text style={styles.hint}>눌러서 듣기</Text>
+              <Text style={styles.hint}>🔊 눌러서 듣기</Text>
             </Pressable>
           </Named>
         )}
@@ -582,7 +619,20 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </View>
           </Named>
         )}
-        {state.heard && <Text style={styles.heard}>{keepWords(`들린 말: ${state.heard}`)}</Text>}
+        {/* what was heard, and the recording just sent next to it (spec three-line-listen 4) */}
+        {state.heard && (
+          <View style={styles.heardNow}>
+            <Text style={[styles.heard, styles.shrink]}>{keepWords(`들린 말: ${state.heard}`)}</Text>
+            {state.heardRec && (
+              <InRowButton
+                label="🔊 내 녹음"
+                onPress={() => state.heardRec && playRec(state.heardRec)}
+                dim={!listenOk}
+                textStyle={styles.link}
+              />
+            )}
+          </View>
+        )}
         {state.feedback !== "" && (
           <Named part="feedback">
             <View style={[styles.bubble, styles.feedback]}>
@@ -602,7 +652,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           {myTurn && state.phase !== "error" && (
             <>
               <View style={styles.row}>
-                <Button label="다시 듣기" onPress={() => listen()} kind="plain" small disabled={busy || state.phase === "recording"} />
+                <Button label="🔊 다시 듣기" onPress={() => listen()} kind="plain" small disabled={busy || state.phase === "recording"} />
                 {RATES.map((r) => (
                   <Button
                     key={r}
@@ -641,8 +691,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
 }
 
 // A small link under a past bubble: practise that line on its own (spec 9). Dimmed while it cannot be used, but
-// still taking the tap (`practise` ignores it then): a disabled Pressable passes the tap to the Ryan bubble around
-// it, which opened the notes instead (final review).
+// still taking the tap (`practise` ignores it then): a disabled Pressable passes the tap to the bubble around it,
+// which would fold the bubble instead (final review; then the Ryan bubble opened the notes).
 function PractiseLink(props: { label: string; disabled: boolean; onPress: () => void; inRow?: boolean }) {
   const { label, disabled, onPress, inRow } = props;
   return (
@@ -660,7 +710,10 @@ const styles = StyleSheet.create({
   // in my blue, like my bubbles (2026-11-06 user); it was yellow, which is Ryan's feedback
   count: { fontSize: 14, fontWeight: "700", color: colors.primary, backgroundColor: colors.user, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   gap: { marginTop: 8 },
-  heardLine: { fontSize: 14, color: colors.sub, marginTop: 4 },
+  heardLine: { fontSize: 14, color: colors.sub },
+  heardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 },
+  heardNow: { flexDirection: "row", alignItems: "center", alignSelf: "flex-end", gap: 12, marginTop: 4, maxWidth: "100%" },
+  shrink: { flexShrink: 1 },
   ryanOpen: { backgroundColor: "#E9ECEF" },
   userOpen: { backgroundColor: "#D0EBFF" },
   beforeToggle: { alignSelf: "flex-end", marginTop: 4 },
@@ -682,7 +735,7 @@ const styles = StyleSheet.create({
   link: { fontSize: 15, color: colors.primary, fontWeight: "600" },
   practiseText: { fontSize: 14, color: colors.primary, fontWeight: "600" },
   off: { opacity: 0.4 },
-  heard: { fontSize: 14, color: colors.sub, marginTop: 4, alignSelf: "flex-end" },
+  heard: { fontSize: 14, color: colors.sub },
   notice: { fontSize: 16, color: colors.sub, marginTop: 8 },
   controls: { padding: 12, borderTopWidth: 1, borderTopColor: "#E9ECEF" },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" },
