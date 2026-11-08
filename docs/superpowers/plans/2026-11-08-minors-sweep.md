@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 같이 도는 server-small-fixes 카드가 `server/je_server/claude.py`, `prompts.py`, `topics.py`, `tests/test_claude.py`, `tests/test_topics.py`, `scripts/check_ryan_wording.py`를 고친다. 이 파일을 건드리는 Task S8은 그 PR이 머지된 뒤 origin/main을 merge하고 한다.
-- 테스트와 문서의 문장은 지어낸 것을 쓴다. 맥의 기록과 녹음에서 나온 낱말은 공개 파일에 옮기지 않는다. 기록으로 잰 것은 숫자만 적는다.
+- 테스트와 문서의 문장은 지어낸 것을 쓴다. 맥의 기록과 녹음에서 나온 낱말은 공개 파일에 옮기지 않는다. 기록으로 잰 것은 숫자만 적는다. 할 일 파일에 적힌 예문도 출처를 알 수 없으면 옮기지 않고 새로 지어낸다(PR #43 리뷰).
 - 커밋은 `/usr/bin/git`, `git commit -F - <<'EOF'`, 앞 커밋이 성공해야 다음이 돌게 `&&`로 잇는다. `git add`는 파일을 지정한다.
 - 테스트: 서버 `cd server && uv run pytest -q`, 앱 `cd app && npx jest && npx tsc --noEmit`.
 - 시험 서버는 `JE_HOST=127.0.0.1 JE_PORT=8793 JE_WHISPER_PORT=8794`, 데이터는 복사본. 원래 폴더 서버(launchd)는 멈추지 않는다.
@@ -50,7 +50,7 @@
 - **기준 녹음 지문(S4):** 작업 프로세스가 준비될 때 목소리와 언어마다 기준 녹음(`.wav`, `.txt`) 내용의 sha256 앞 16자를 알린다. 영어 소리는 영어 기준 녹음만 쓰므로 그것만, 한국어 소리는 영어 조각을 섞어 읽을 수 있어 그 목소리의 기준 녹음을 모두 넣는다. 그래서 라이언의 한국어 기준 녹음만 바꾸면 영어 대사 소리(가장 많다)는 그대로 쓴다. 지문이 없으면(옛 작업 프로세스, 시험 가짜) 지금 키와 같다. 처음 바꿀 때 모든 소리 키가 한 번 바뀌어 새로 만든다(맥에서만, 돈 들지 않음).
 - **옛 키(08-4, S4):** 목록 회차와 「이 상황 다시 하기」는 앞 회차의 소리 키가 지금 키와 같을 때만 가져온다. 역할극 자기 기록의 키는 그대로 둔다(그때 들은 소리다).
 - **같은 정도(S5):** `compare`가 맞춘 결과로 낸다. 맞은 낱말 수를 양쪽에서 세어 `(맞은 대사 낱말 + 맞은 들린 낱말) / (대사 낱말 + 들린 낱말)`. 군말과 되풀이는 양쪽 수에서 뺀다. 그냥 같은 글이면 지금 값과 같다.
-- **되풀이(S5):** 바로 앞이나 뒤의 대사 낱말 덩어리를 여러 번 되풀이한 것(I, I, I want), 그 덩어리와 첫 낱말이 같고 반 넘게 같은 것(I'd lie a, I'd like a)도 되풀이로 본다. 바꾼 뒤 맥의 기록으로 짚은 수를 다시 재 숫자만 적는다.
+- **되풀이(S5):** 바로 앞이나 뒤의 대사 낱말 덩어리를 여러 번 되풀이한 것(We, we, we need), 그 덩어리와 첫 낱말이 같고 반 넘게 같은 것(Could I sit the, could I see the)도 되풀이로 본다. 바꾼 뒤 맥의 기록으로 짚은 수를 다시 재 숫자만 적는다.
 - **대소문자(S6):** 끝 화면 문구만 대사와 들린 말에 적힌 꼴로 되돌린다. 같은 낱말이 소문자로도 적혀 있으면 소문자로 둔다. 저장하는 `Issue`와 비교는 소문자 그대로다.
 - **dollar 뺀 값(S6):** `$5.99`를 「five dollars ninety nine」, 「five ninety nine」, 「five dollars and ninety nine cents」 셋 다 맞게 본다(숫자 읽기 후보와 같은 방법).
 - **끊긴 조각 끝(S7):** 닫는 괄호와 따옴표를 떼고 `.`, `?`, `!`, `…`로 끝나면 마침표를 더하지 않는다. 조각이 `.`, `?`, `!`로 끝나면 뒤 공백을 잡아 두지 않는다.
@@ -174,7 +174,7 @@ test("back pressed twice before a render leaves only the practice", () => {
 
 **Files:** Modify `server/je_server/compare.py` (`Comparison`, `compare`, `_restart`, `similarity`). Test `server/tests/test_compare.py`.
 
-- [ ] 실패하는 테스트: `similarity("Checkout, please.", "Check out, please.") >= FOLLOW_MIN`, `similarity("I'd like a coffee.", "I'd like a, I'd like a coffee.") == 1.0`. `find_issues("I want a coffee.", "I, I, I want a coffee.")`와 `find_issues("I'd like a coffee.", "I'd lie a, I'd like a coffee.")`가 빈 목록. 진짜 더한 낱말(`and`)은 그대로 짚는다.
+- [ ] 실패하는 테스트: `similarity("Downstairs, please.", "Down stairs, please.") >= FOLLOW_MIN`, `similarity("We need two tickets.", "We need, we need two tickets.") == 1.0`. `find_issues("We need two tickets.", "We, we, we need two tickets.")`와 `find_issues("Could I see the menu?", "Could I sit the, could I see the menu?")`가 빈 목록. 진짜 더한 낱말(`and`)은 그대로 짚는다.
 - [ ] 바꾸기 전과 뒤에 맥의 기록으로 같은 정도가 문턱을 넘나드는 차례 수, 짚은 수를 잰다(숫자만).
 - [ ] 커밋 `fix(server): judge following by the matched words`, `fix(server): skip stutters and garbled restarts as restarts`.
 
