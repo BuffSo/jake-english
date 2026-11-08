@@ -369,7 +369,10 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const skipLine = () => runThenHold(gate, tapHold, doSkip);
   // no speech for a while after the mic came on: thrown away the way 「취소」 does, through the same gate and hold, so a
   // 「말하기 끝」 at the same moment either sends first or finds nothing, and a tap on the 「🎤 말하기」 drawn in its
-  // place starts nothing (spec record-feedback 4, 5)
+  // place starts nothing (spec record-feedback 4, 5).
+  // `levelPoll` calls this once and never again, and `runThenHold` does nothing while taps are held: a recording
+  // without speech would then go on to 55 s. Nothing holds taps while the mic is on today; a new hold that can start
+  // during a recording must not drop this cancel (todo 20261108_34 3).
   const silentCancel = () => void runThenHold(gate, tapHold, doSilentCancel);
 
   // 「취소」: the recording is stopped and deleted on the phone, never sent; back to before speaking, in the same mode
