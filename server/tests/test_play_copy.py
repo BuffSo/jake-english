@@ -93,6 +93,24 @@ async def test_a_failing_cut_serves_the_original(engine_with_rp, quiet_then_tone
     assert not engine.store.play_path(rp_id, idx, 1).exists()
 
 
+@pytest.mark.parametrize("error", [ValueError("bad span"), EOFError(), RuntimeError("anything else")])
+async def test_any_failure_serves_the_original(engine_with_rp, quiet_then_tone, monkeypatch, caplog, error):
+    # not only `AudioError` and `OSError`: `wave.Error`, `EOFError` or `ValueError` from reading the WAV went out as a
+    # 500 and nothing could be heard (todo 20261108_39 1). The log names the kind only, never the path.
+    engine, rp_id, idx = engine_with_rp
+
+    def broken(*args):
+        raise error
+
+    monkeypatch.setattr(audio, "speech_span", broken)
+    await run(engine, rp_id, idx, quiet_then_tone)
+    caplog.set_level("INFO", logger="je_server")
+    path = await engine.recording(rp_id, idx, 1)
+    assert path == engine.store.find_rec(rp_id, idx, 1)
+    assert f"play copy failed: {type(error).__name__}" in caplog.text
+    assert rp_id not in caplog.text
+
+
 async def test_the_copy_is_not_a_try(engine_with_rp, quiet_then_tone):
     engine, rp_id, idx = engine_with_rp
     await run(engine, rp_id, idx, quiet_then_tone)

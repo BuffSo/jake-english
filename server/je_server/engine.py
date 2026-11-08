@@ -307,8 +307,10 @@ class Engine:
             return dst
         try:
             await asyncio.shield(self._play_job(src, dst))
-        except (audio.AudioError, OSError) as e:
-            # its kind only, never the path (REVIEW.md 「녹음 처리」)
+        except Exception as e:
+            # any failure, not only ffmpeg's and the disk's: `wave.Error`, `EOFError` or `ValueError` from reading the WAV
+            # went out as a 500 and nothing could be heard (todo 20261108_39 1). Its kind only, never the path
+            # (REVIEW.md 「녹음 처리」). A cancelled request is not an `Exception` and goes on as it was.
             log.info("play copy failed: %s", type(e).__name__)
             return src
         return dst
