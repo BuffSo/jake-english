@@ -16,7 +16,7 @@ from .claude import ClaudeUnavailable, pick_ending
 from . import topics
 from .compare import FOLLOW_MIN, find_issues, issue_ko, praise_candidates, similarity, words
 from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLine, ThreeLine
-from .sentences import SentenceBuffer
+from .sentences import NewSentence, SentenceBuffer
 from .threeline import blank
 from .tts import VoiceError
 from .phrases import PHRASES
@@ -539,11 +539,13 @@ class Engine:
         if not sent:
             yield fixed
             return
-        # a cut sentence ends before the fixed phrase, at the marks SentenceBuffer cuts at, so both read and voice it
-        # as two sentences. A piece that already ends one, 「…」 or a mark inside a closing bracket or quote included,
-        # takes no other period (todo teacher-answer-cut 2).
-        ended = sent.rstrip().rstrip(CLOSERS).endswith((*ENDS, "…"))
-        yield ("" if ended else ".") + ("" if sent != sent.rstrip() else " ") + fixed
+        # a cut sentence ends before the fixed phrase, so both read and voice it as two sentences. A piece that already
+        # ends one, 「…」 or a mark inside a closing bracket or quote included, takes no other period (todo
+        # teacher-answer-cut 2); SentenceBuffer does not cut after those, so the fixed phrase starts a new sentence for
+        # the voice on its own (`NewSentence`, PR #44 review)
+        if not sent.rstrip().rstrip(CLOSERS).endswith((*ENDS, "…")):
+            yield "."
+        yield NewSentence(("" if sent != sent.rstrip() else " ") + fixed)
 
     async def speak(self, text: AsyncIterator[str], said: list[str], keys: list[str],
                     timings: dict[str, float], t0: float) -> AsyncIterator[dict]:
@@ -556,6 +558,10 @@ class Engine:
             try:
                 async for delta in text:
                     timings.setdefault("first_text", time.perf_counter() - t0)
+                    if isinstance(delta, NewSentence):  # the sentence so far ends here for the voice
+                        for s in buf.flush():
+                            await sentences.put(s)
+                    delta = str(delta)
                     said.append(delta)
                     await out.put({"type": "text", "delta": delta})
                     for s in buf.feed(delta):

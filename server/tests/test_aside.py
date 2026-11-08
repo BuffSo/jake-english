@@ -170,19 +170,23 @@ async def test_aside_cut_midsentence_ends_it_before_the_fixed_phrase(engine_with
 @pytest.mark.parametrize(("pieces", "cut"), [(["음, 그건…"], "음, 그건…"),
                                             (["라이언이 「좋아요.」"], "라이언이 「좋아요.」")])
 async def test_a_cut_piece_already_ending_a_sentence_gets_no_extra_period(engine_with_rp, speech_bytes, fake_whisper,
-                                                                         fake_claude, pieces, cut):
+                                                                         fake_claude, fake_voice, pieces, cut):
     # todo teacher-answer-cut 2: 「…」 ends a sentence, and so does 「.」 inside a closing bracket or quote: the fixed
-    # phrase follows without 「….」 or 「.」.」
+    # phrase follows without 「….」 or 「.」.」. The voice still gets two sentences, though SentenceBuffer cuts only
+    # right after 「.」, 「?」 or 「!」 (PR #44 review; e83a26a added the period for the voice)
     engine, rp_id, user_idx = engine_with_rp
     fake_whisper.text = "Wait, let me try that again."
     fake_claude.aside_pieces = pieces + ["다음 조각"]  # the last piece never comes
     fake_claude.aside_fail_after = len(pieces)
     ev = await run(engine, rp_id, user_idx, speech_bytes)
-    assert said(ev) == f"{cut} {engine.said('retry_offscript').text}"
+    fixed = engine.said("retry_offscript").text
+    assert said(ev) == f"{cut} {fixed}"
+    spoken = [text for text, voice, lang, _ in fake_voice.calls if (voice, lang) == ("ryan", "korean")]
+    assert spoken[-2:] == [cut, fixed]
 
 
 async def test_a_piece_ending_its_sentence_is_sent_with_its_space(engine_with_rp, speech_bytes, fake_whisper,
-                                                                  fake_claude):
+                                                                  fake_claude, fake_voice):
     # todo teacher-answer-cut 3: the space after 「.」 was held for the next piece, so the sentence's voice waited for
     # it; now it goes at once, and a cut after it still leaves one space before the fixed phrase
     engine, rp_id, user_idx = engine_with_rp
@@ -192,7 +196,10 @@ async def test_a_piece_ending_its_sentence_is_sent_with_its_space(engine_with_rp
     ev = await run(engine, rp_id, user_idx, speech_bytes)
     texts = [e["delta"] for e in ev if e["type"] == "text"]
     assert texts[0] == "괜찮아요. "
-    assert said(ev) == f"괜찮아요. {engine.said('retry_offscript').text}"
+    fixed = engine.said("retry_offscript").text
+    assert said(ev) == f"괜찮아요. {fixed}"
+    spoken = [text for text, voice, lang, _ in fake_voice.calls if (voice, lang) == ("ryan", "korean")]
+    assert spoken[-2:] == ["괜찮아요.", fixed]
 
 
 async def test_both_transcripts_empty_is_no_speech(engine_with_rp, speech_bytes, fake_whisper):
