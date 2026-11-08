@@ -134,6 +134,14 @@ LEAKS = ("끝말", "학습자", "learner", "주제:", "예:", "목록", "최근"
 ODD_START = ("제가", "저는", "제이크", "잭", "Jake")
 
 
+def _situation(text: str) -> str:
+    """`text` without its ending and a 상황 at its end, letters only: what a repeat is told by. A recent situation
+    keeps the ending it was said with, or none when the learner typed it (todo 28 1: 「…상황을 골라 봤어요.」 said
+    again as 「…상황을 추천해요.」 slipped through)."""
+    stem = strip_endings(text)
+    return re.sub(r"\W", "", stem if stem is not None else text).removesuffix("상황")
+
+
 def rec_flags(raw: str, said: str, ending: str, seen: list[str]) -> list[str]:
     """Known mistakes in a recommendation: `raw` as the model wrote it, `said` as the server says it, `seen` the
     situations it was told to avoid."""
@@ -147,7 +155,7 @@ def rec_flags(raw: str, said: str, ending: str, seen: list[str]) -> list[str]:
         out.append("odd start")
     if strip_endings(raw) is not None and strip_endings(raw[: raw.rfind("상황")]) is not None:
         out.append("doubled ending")
-    if any(re.sub(r"\W", "", s) in re.sub(r"\W", "", said) for s in seen):
+    if any((stem := _situation(s)) and stem in _situation(said) for s in seen):
         out.append("repeats a listed situation")
     if said.count(".") + said.count("?") > 1:
         out.append("more than one sentence")
