@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 from . import prompts
 from .models import Draft, Frame, Issue, Speaker, ThreeLine
-from .threeline import Problem, check, degrade, plain
+from .threeline import Problem, check, degrade, plain, tidy
 from .topics import Topic
 
 # Spec 「기다리는 시간과 모델」: Haiku with thinking off for quick wording, Sonnet with thinking off and low
@@ -256,7 +256,7 @@ class Claude:
                 + _problems_text([f"{p.kind}: {p.detail}" for p in problems]))
             data = await self._json(self.writer, prompts.THREE_SYSTEM, content, prompts.THREE_SCHEMA, 4000)
             try:
-                three = ThreeLine.model_validate(data)
+                three = tidy(ThreeLine.model_validate(data))
             except ValidationError:
                 continue
             problems = check(text, three)

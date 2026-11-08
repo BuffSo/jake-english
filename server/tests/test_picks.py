@@ -105,8 +105,21 @@ async def test_blank_note_is_made_again(engine):
     assert engine.store.load(second.id).lines[0].three != plain(rec.lines[0].text)
 
 
-async def test_note_without_reading_is_kept(engine):
-    # Korean but no reading (the 「ref」 degrade) is still worth reusing; the fake's notes have reading ""
+async def test_note_without_reading_is_made_again(engine):
+    # Korean but no reading (the 「ref」 degrade) would also come back on every run; with the checks fixed it is rare
+    # enough to make again (todo three_line_notes_degrade_rate 3)
+    first = await engine.create_pick(*SNEAKER)
+    await ready(engine, first)
+    rec = engine.store.load(first.id)
+    rec.lines[0] = rec.lines[0].model_copy(update={"three": rec.lines[0].three.model_copy(update={"reading": " "})})
+    engine.store.save(rec)
+    second = await engine.create_pick(*SNEAKER)
+    assert second.lines[0].three is None and second.lines[0].audio == rec.lines[0].audio
+    await ready(engine, second)
+    assert engine.store.load(second.id).lines[0].three.reading.strip()
+
+
+async def test_settled_note_is_reused(engine):
     first = await engine.create_pick(*SNEAKER)
     await ready(engine, first)
     second = await engine.create_pick(*SNEAKER)
