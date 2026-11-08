@@ -167,7 +167,8 @@ TOPICS: tuple[Topic, ...] = (
                     "좋아요. 마늘 맛이 아주 진하다고 들었어요."),
                    ("ryan", "Oh, it is, with lots of garlic. Enjoy!",
                     "그럼요, 마늘이 듬뿍 들어가요. 맛있게 드세요!"))),
-            # the name on the booking and the checkout time are small made-up values: the hotel has no name
+            # the name on the booking, the checkout time and the Wi-Fi password on the key card sleeve are small
+            # made-up values: the hotel has no name (REVIEW.md 「목록 대본의 사실」)
             _pick("u-hotel-checkin", "뉴욕 호텔 체크인",
                   "뉴욕 맨해튼의 호텔 프런트에서 예약한 방에 체크인한다. 예약한 이름을 말하고 여권과 카드를 내고, "
                   "체크아웃 시간과 와이파이를 묻는다.", "user",
