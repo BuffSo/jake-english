@@ -293,7 +293,12 @@ class Talks:
                 # the whole reply). When Claude cannot answer, my line stays and Ryan's is not kept (spec 4)
                 async for ev in engine.speak(self._reply_text(rp_id), [], [], timings, t0, lang="english",
                                              on_text_end=saved):
-                    failed = failed or ev["type"] == "error"
+                    if ev["type"] == "error":
+                        # no Ryan line can be kept after it (`saved` runs only for a whole reply), so the talk is free
+                        # as the app reads the error, not once the sentence already written is voiced (1-3 s): a quick
+                        # 「대화 끝내기」 or next turn is not refused as busy. `_keep_timings` finds its own try
+                        failed = True
+                        release()
                     yield ev
             timings["total"] = time.perf_counter() - t0
             await self._keep_timings(rp_id, idx, n, timings)

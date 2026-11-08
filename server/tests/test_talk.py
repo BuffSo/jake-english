@@ -212,6 +212,38 @@ async def test_claude_down_mid_reply_keeps_my_turn_only(talks, engine, speech_by
     assert sent[-1]["content"] == first + "\n" + "I went to the park."
 
 
+async def test_claude_down_mid_reply_frees_the_talk_at_the_error(talks, engine, speech_bytes, fake_claude,
+                                                                 fake_voice):
+    # the error goes out at once while the sentence already written is still being voiced (1-3 s): no Ryan line can be
+    # kept after it, so the talk is free from the error on and 「대화 끝내기」 right after it is not refused as busy
+    rp = await talks.create()
+    fake_claude.talk_fail_after = 1
+    gate = asyncio.Event()
+    say = fake_voice.say
+
+    async def held(text, voice, lang, urgent, rank=0, check=False):
+        if text == REPLY[0]:
+            await gate.wait()
+        return await say(text, voice, lang, urgent, rank, check)
+
+    fake_voice.say = held
+    events = talks.turn(rp.id, speech_bytes, None)
+    try:
+        async for ev in events:
+            if ev["type"] == "error":
+                break
+        assert ev["code"] == "claude_unavailable"
+        assert rp.id not in talks.turning
+        assert talks.check_open(rp.id).id == rp.id
+        assert await talks.end(rp.id) == no_fixes(engine)
+    finally:
+        gate.set()
+    rest = [e async for e in events]
+    assert rest == [{"type": "audio", "key": fake_voice.key("ryan", "english", REPLY[0])}]  # voiced; no done
+    assert talks.turning == set()
+    assert [(l.speaker, l.kind) for l in engine.load(rp.id).lines] == [("ryan", "reply"), ("user", "turn")]
+
+
 @pytest.mark.parametrize("pieces", [[], ["  "]])
 async def test_a_reply_without_text_is_claude_down(talks, engine, speech_bytes, fake_claude, pieces):
     fake_claude.talk_pieces = pieces
