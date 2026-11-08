@@ -9,17 +9,24 @@ vowel are kept, never the pitch or loudness curves (ADR-0004).
 from __future__ import annotations
 
 import difflib
+import json
 import re
 import statistics
+from dataclasses import dataclass
+from pathlib import Path
 
 from . import cmu
+from .compare import words as heard_words
 from .models import ThreeLine
+from .store import Store
 from .threeline import word_text
 
 FORMAT = 1
 DB_STEP = 3.0
 ST_STEP = 2.0
 DUR_STEP = 0.04
+IN_USE_SECONDS = 600  # a record changed this recently means the app is in use
+HANGUL = re.compile(r"[가-힣]")  # as in engine: Korean said, which an English aligner cannot measure
 
 # Closed-class words, read weak in a sentence by the rule the PRD's 「강세 기준」 states (content words strong, words
 # like has, of, and weak). Negative forms (don't, can't, not, no) are left out: they are usually stressed.
@@ -113,3 +120,84 @@ def sentence_scores(words: list[dict]) -> list[float | None]:
             for v in map(_stressed, words)]
     feats = {k: _z([v[k] if v is not None else None for v in rows]) for k in ("db", "st", "dur")}
     return [None if v is None else feats["db"][i] + feats["st"][i] + feats["dur"][i] for i, v in enumerate(rows)]
+
+
+# --- which tries to measure, and the record kept for each (spec 「어떻게 재나」 1, 「남기는 곳과 모양」) ----------------
+
+
+@dataclass(frozen=True)
+class Job:
+    """One try to measure: its recording, the heard words to align and the line's three-line display."""
+
+    rp_id: str
+    idx: int
+    n: int
+    mode: str
+    followed: bool
+    aside: bool
+    at: str | None
+    words: list[str]
+    rec: Path
+    three: ThreeLine | None
+
+    @property
+    def key(self) -> str:
+        return f"{self.rp_id}_{self.idx}_{self.n}"
+
+
+def out_path(data_dir: Path, rp_id: str, idx: int, n: int) -> Path:
+    """The values of one recording, apart from the roleplay records so the whole folder can go when this ends."""
+    return data_dir / "stress" / rp_id / f"{idx}-{n}.json"
+
+
+def pending(data_dir: Path) -> tuple[list[Job], int]:
+    """The tries with a recording that have no values yet, and how many were left out for Korean or no English words.
+    A try whose recording is gone (none was kept when no speech was found) is left out without counting. Records are
+    only read."""
+    jobs, skipped = [], 0
+    store = Store(data_dir)
+    for rp in sorted(store.all(), key=lambda r: (r.created, r.id)):
+        lines = {line.idx: line for line in rp.lines}
+        for idx, tries in sorted(rp.attempts.items()):
+            for a in tries:
+                rec = store.roleplays / rp.id / "rec" / f"{idx}-{a.n}.m4a"
+                if not rec.is_file() or out_path(data_dir, rp.id, idx, a.n).exists():
+                    continue
+                words = heard_words(a.heard)
+                if HANGUL.search(a.heard) or not words:
+                    skipped += 1
+                    continue
+                line = lines.get(idx)
+                jobs.append(Job(rp_id=rp.id, idx=idx, n=a.n, mode=a.mode, followed=a.followed, aside=a.aside,
+                                at=a.at, words=words, rec=rec, three=line.three if line else None))
+    return jobs, skipped
+
+
+def in_use(data_dir: Path, now: float, window: float = IN_USE_SECONDS) -> bool:
+    """Whether a roleplay record or recording changed in the last `window` seconds: the app is being used."""
+    root = data_dir / "roleplays"
+    files = [*root.glob("*/roleplay.json"), *root.glob("*/rec/*")]
+    return any(now - f.stat().st_mtime < window for f in files if f.is_file())
+
+
+def build(job: Job, aligned: dict | None, tools: dict, measured: str) -> dict:
+    """The record kept for one try. `aligned` is that recording's part of the feature script's output (words with
+    their phones and vowel values) or None when MFA could not align it."""
+    words = []
+    if aligned is not None:
+        marks = line_marks(job.three, [w["w"] for w in aligned["words"]])
+        for w, mark in zip(aligned["words"], marks):
+            pick, margin = judge(w["syl"])
+            words.append({**w, "content": w["w"] not in FUNCTION_WORDS, "dict": dict_stress(w["w"], w["phones"]),
+                          "mark": mark, "pick": pick, "margin": margin})
+        for w, score in zip(words, sentence_scores(words)):
+            w["score"] = score
+    return {"v": FORMAT, "rp": job.rp_id, "idx": job.idx, "n": job.n, "mode": job.mode, "followed": job.followed,
+            "aside": job.aside, "at": job.at, "measured": measured, "tools": tools,
+            "status": "ok" if aligned is not None else "unaligned",
+            "quality": aligned.get("quality") if aligned is not None else None, "words": words}
+
+
+def write(path: Path, record: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Store._write(path, json.dumps(record, ensure_ascii=False, indent=1))
