@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -34,8 +35,10 @@ from je_server.topics import TOPICS  # noqa: E402
 # $ per million tokens in/out, for the models the recommendation can pick (claude.QUICKS)
 PRICE = {"claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}
 # How a suggestion opens when it starts with the speaker instead of the situation (todo 27): in Jake's voice it
-# sounds like Jake is the one doing it
+# sounds like Jake is the one doing it. A word counts only as a whole word, before a space, a comma or a particle, so
+# a place that starts like a name (잭슨빌) does not.
 ODD_START = ("제가", "저는", "제이크", "잭", "Jake")
+_ODD = re.compile(rf"^\s*(?:{'|'.join(ODD_START)})(?=[\s,이가은는의]|$)")
 
 # Made up (REVIEW.md), in the shapes the server keeps: an accepted suggestion keeps Jake's ending, a typed one not
 RECENT: dict[str, list[str]] = {
@@ -94,8 +97,9 @@ class Counting:
 
 
 def odd_start(text: str) -> bool:
-    """`text` opens with the speaker; the learner inside the situation (「카페에서 제가 시킨 …」) does not count."""
-    return text.lstrip().startswith(ODD_START)
+    """`text` opens with the speaker. The learner inside the situation (「카페에서 제가 시킨 …」) does not count, but
+    one at the very front (「제가 묵는 호텔에서 …」) reads the same and does: read the flagged lines before acting."""
+    return bool(_ODD.match(text))
 
 
 def label(raw: str, said: str, ending: str) -> str:
