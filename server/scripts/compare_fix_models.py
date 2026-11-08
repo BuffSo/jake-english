@@ -103,19 +103,21 @@ async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--only", type=int, help="one case by its number (from 1)")
+    ap.add_argument("--models", nargs="+", choices=list(MODELS), default=list(MODELS), help="default: both")
     args = ap.parse_args()
+    models = {m: MODELS[m] for m in args.models}
     client = anthropic.AsyncAnthropic(api_key=load_settings().anthropic_api_key, max_retries=2, timeout=60)
-    counting = {m: Counting(client) for m in MODELS}
-    claude = {m: Claude(counting[m], writer=MODELS[m]) for m in MODELS}
+    counting = {m: Counting(client) for m in models}
+    claude = {m: Claude(counting[m], writer=models[m]) for m in models}
     cases = [CASES[args.only - 1]] if args.only else CASES
-    stat = {m: {"n": 0, "flagged": 0, "keep_off": 0, "items": 0, "kept": 0, "failed": 0} for m in MODELS}
+    stat = {m: {"n": 0, "flagged": 0, "keep_off": 0, "items": 0, "kept": 0, "failed": 0} for m in models}
     for c, case in enumerate(cases):
         print(f"\n## {case.name}")
         for i, (who, text) in enumerate(case.conversation):
             print(f"   {i} {who:5} {text}" + ("   (keep off)" if i in case.keep_off else ""))
         conv, turns = conversation(case)
         for run in range(args.runs):
-            for m in (list(MODELS) if (c + run) % 2 == 0 else list(reversed(MODELS))):
+            for m in (list(models) if (c + run) % 2 == 0 else list(reversed(models))):
                 s = stat[m]
                 s["n"] += 1
                 try:
