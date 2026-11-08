@@ -33,7 +33,9 @@ def test_recast_counts_the_right_form_only():
 
 def test_every_mistake_regex_ignores_ryans_own_story():
     stories = ["I went shopping too, and I bought a jacket!", "My sister lives far away and has a dog.",
-               "I get bored on rainy days too.", "I had a sandwich and ate it at my desk."]
+               "I get bored on rainy days too.", "I had a sandwich and ate it at my desk.",
+               "I went to the mall too, and I bought two pairs of shoes!", "I have two kids and they live in Seoul.",
+               "My sister has two children, so she is busy.", "I got two pairs of socks there."]
     for name, turns, pattern in ct.MISTAKES:
         for s in stories:
             assert not re.search(pattern, s, re.I), (name, s)

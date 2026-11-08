@@ -62,9 +62,9 @@ KOREAN_CASES: list[tuple[str, list[str]]] = [
 # ("I went shopping too") is not counted. Each case is asked twice: with and without the echo mark.
 MISTAKES: list[tuple[str, list[str], str]] = [
     ("mistake: go/buy", ["What did you do yesterday?", "Yesterday I go to shopping mall and buy two shoes."],
-     r"\byou (went|bought)\b|\bwent to the (shopping )?mall\b|\bbought two pairs\b"),
+     r"\byou (went|bought|got)\b|\byou('ve| have) (been|bought)\b"),
     ("mistake: live/have", ["Do you have any family nearby?", "My sister live in Busan and she have two child."],
-     r"\b(your sister|she) (lives|has)\b|\btwo (children|kids)\b"),
+     r"\b(your sister|she) (lives|has)\b|\byour sister('s| has) (got )?two (children|kids)\b"),
     ("mistake: boring", ["How is your day going?", "I am very boring today, nothing to do."],
      r"\byou('re| are| feel| felt) (so |very |really )?bored\b|\bfeeling bored\b"),
     ("mistake: eat", ["What did you have for lunch?", "I eat bibimbap with my friend at noon."],
