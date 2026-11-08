@@ -37,7 +37,8 @@ export const soheeFullTag = (idx: number) => `sohee:${idx}:full`;
 export const hintSoundTag = (idx: number, n: number) => `hint:${idx}:${n}`;
 
 // Ryan's latest reply, whatever the phase: its Sohee bubble stays open while I record and wait, and folds once a newer
-// reply comes. His fixed `help` line after a Korean turn is not a reply, so the chance stays on the reply before it.
+// reply comes. A fixed `help` line (only in records from an older server, which made one after a Korean turn) is not a
+// reply, so the chance stays on the reply before it.
 export function lastReply(s: TalkState): number | null {
   for (let i = s.bubbles.length - 1; i >= 0; i -= 1) {
     const b = s.bubbles[i];

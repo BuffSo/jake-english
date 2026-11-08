@@ -131,9 +131,10 @@ export type AttemptEvent =
   | { type: "audio"; key: string }
   | { type: "error"; code: string; say: Said | null }
   | { type: "done"; next: number; issues: number };
-// Free talk (spec free-talk-design 2; contract/talk-events.ndjson, talk-end.json). `heard` is my English turn heard: idx
-// is its line, n its recording, korean whether it was heard again in Korean (then Ryan's fixed English `help` line
-// follows, with no Claude).
+// Free talk (spec free-talk-design 2; contract/talk-events.ndjson, talk-end.json). `heard` is my turn heard: idx is its
+// line, n its recording, korean whether it was heard again in Korean (Ryan then answers in English, as after any turn).
+// A `reply` of kind `help` (his fixed English line after a Korean turn, with no Claude) comes only from an older server,
+// and such lines are only in records from one.
 export type TalkEvent =
   | { type: "heard"; text: string; n: number; idx: number; korean: boolean }
   | { type: "text"; delta: string }
