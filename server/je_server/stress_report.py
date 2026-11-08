@@ -21,8 +21,9 @@ ROW_NAMES = {
 
 
 def load(data_dir: Path, since: str | None = None) -> tuple[list[dict], int]:
-    """The value files of this format, from `since` (YYYY-MM-DD, by when recorded, else when measured) on, and how
-    many files could not be read."""
+    """The value files of this format, from `since` (YYYY-MM-DD) on, and how many files could not be read. A try is
+    dated by when it was recorded; tries before 2026-11-07 have no such time and are dated by when their roleplay was
+    made, then by when they were measured (value files written before `created` was kept)."""
     records, broken = [], 0
     for path in sorted((data_dir / "stress").glob("*/*.json")):
         try:
@@ -32,7 +33,7 @@ def load(data_dir: Path, since: str | None = None) -> tuple[list[dict], int]:
             continue
         if not isinstance(r, dict) or r.get("v") != FORMAT:
             continue
-        if since and (r.get("at") or r.get("measured") or "")[:10] < since:
+        if since and (r.get("at") or r.get("created") or r.get("measured") or "")[:10] < since:
             continue
         records.append(r)
     return records, broken
@@ -63,7 +64,8 @@ def word_rows(records: list[dict]) -> list[tuple[str, int, float | None, float |
     no_second = [w for w in by_dict if not w["dict"]["secondary"]]
     top: list[dict] = []
     if len(by_dict) >= 2:
-        cut = statistics.quantiles([w["margin"] for w in by_dict], n=4)[2]
+        # inclusive: the default (exclusive) puts the cut above the largest margin when there are only a few words
+        cut = statistics.quantiles([w["margin"] for w in by_dict], n=4, method="inclusive")[2]
         top = [w for w in by_dict if w["margin"] >= cut]
     marked = [w for w in judged if (m := w.get("mark")) and m["s"] is not None and m["n"] == len(w["syl"])]
 

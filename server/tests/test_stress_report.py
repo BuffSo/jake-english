@@ -49,6 +49,12 @@ def test_word_rows_without_secondary_and_top_quarter():
     assert rows["top_quarter"] == (1, 1.0, 1.0)
 
 
+def test_top_quarter_is_not_empty_for_a_small_sample():
+    """The default (exclusive) quartile put the cut above the largest of two margins (todo 20261108_41 4)."""
+    rows = {r[0]: r[1:] for r in word_rows([rec([two(0, [0], margin=1.0), two(1, [0], margin=2.0)])])}
+    assert rows["top_quarter"] == (1, 0.0, 1.0)
+
+
 def test_mark_row_needs_the_same_syllable_count():
     words = [two(1, [0], mark={"s": 1, "w": [0], "emph": True, "n": 2}),
              two(0, [0], mark={"s": 0, "w": [], "emph": False, "n": 3}),
@@ -88,7 +94,15 @@ def test_load_takes_format_1_since_a_day_and_counts_broken_files(tmp_path):
     assert json.loads((tmp_path / "stress" / "a1a1a1a1a1a1" / "1-1.json").read_text())["v"] == 1
 
 
-def test_the_script_prints_the_tables_of_the_data_folder(tmp_path, monkeypatch, capsys):
+def test_since_uses_when_the_roleplay_was_made_when_the_try_has_no_time(tmp_path):
+    """Tries before 2026-11-07 have no `at`; measuring them again must not bring them in under the new day (todo
+    20261108_41 3)."""
+    write(out_path(tmp_path, "a1a1a1a1a1a1", 1, 1), {**rec([], at=None), "created": "2026-11-05T09:00:00"})
+    assert load(tmp_path, since="2026-11-08")[0] == []
+    assert len(load(tmp_path, since="2026-11-05")[0]) == 1
+
+
+def script_module():
     import importlib.util
     from pathlib import Path
 
@@ -96,6 +110,19 @@ def test_the_script_prints_the_tables_of_the_data_folder(tmp_path, monkeypatch, 
         "stress_report_script", Path(__file__).resolve().parent.parent / "scripts" / "stress_report.py")
     script = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(script)
+    return script
+
+
+def test_the_script_stops_on_a_data_folder_without_roleplays(tmp_path, monkeypatch, capsys):
+    script = script_module()
+    monkeypatch.setattr(script, "env", lambda: {"JE_DATA_DIR": str(tmp_path / "typo")})
+    assert script.main([]) == 1
+    assert "roleplays" in capsys.readouterr().out
+
+
+def test_the_script_prints_the_tables_of_the_data_folder(tmp_path, monkeypatch, capsys):
+    script = script_module()
+    (tmp_path / "roleplays").mkdir()
     write(out_path(tmp_path, "a1a1a1a1a1a1", 1, 1), rec([two(0, [0])]))
     monkeypatch.setattr(script, "env", lambda: {"JE_DATA_DIR": str(tmp_path)})
     assert script.main(["--since", "2026-11-01"]) == 0
