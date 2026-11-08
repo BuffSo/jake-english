@@ -13,7 +13,8 @@ E = "상황을 추천해요."
 def test_an_unknown_ending_is_counted_as_missed():
     # the server says an unknown ending as it came, so the model's text and what is said are the same: that is a
     # miss, not a kept ending (it was counted as kept)
-    assert cj.label("카페에서 주문하는 상황이에요.", "카페에서 주문하는 상황이에요.", E) == "MISSED"
+    # (「…상황이에요.」 was the example until PR #42 made a short tail after 상황 an ending the server swaps)
+    assert cj.label("카페에서 주문하는 연습을 해 봐요.", "카페에서 주문하는 연습을 해 봐요.", E) == "MISSED"
 
 
 def test_kept_swapped_and_doubled():
