@@ -193,8 +193,8 @@ def test_walk_in_host_asks_for_a_reservation_first():
 def test_reservation_values_are_in_the_description():
     # the made-up values the scripts say are facts of their descriptions too (REVIEW.md 「목록 대본의 사실」)
     hotel, food = pick("usa", "u-hotel-online").situation, pick("usa", "u-seafood-walkin").situation
-    assert all(w in hotel for w in ("온라인", "확인 번호", "킹 침대", "2박", "높은 층"))
-    assert all(w in food for w in ("예약 없이", "30분", "바", "대기 명단"))
+    assert all(w in hotel for w in ("온라인", "확인 번호", "킹 침대", "2박", "높은 층", "12층"))
+    assert all(w in food for w in ("예약 없이", "30분", "바에는", "대기 명단", "제이크"))
 
 
 def test_walk_in_korean_says_no_more_than_the_english():
