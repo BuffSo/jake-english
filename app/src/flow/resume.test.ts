@@ -60,14 +60,24 @@ test("nothing before the first line", () => {
   expect(resumeSeen(resume(0, []))).toEqual({});
 });
 
+// the spaces inside the count stay on one line (U+00A0): at 360dp 「녹음 안 한」 and 「줄 2개」 came out on two lines
+const shown = (label: string) => label.replace(/\u00A0/g, " ");
+
 test("the label of a conversation left mid-way", () => {
-  expect(resumeLabel(resume(2, [], false))).toBe("호텔 체크인하기 · 내 대사 2/2");
+  expect(shown(resumeLabel(resume(2, [], false)))).toBe("호텔 체크인하기 · 내 대사 2/2");
 });
 
 test("the label of a conversation gone to the end: how many lines of mine are unrecorded", () => {
   const said = [{ idx: 3, heard: "Sure, here you go.", n: 1 }];
-  expect(resumeLabel(resume(0, said, true))).toBe("호텔 체크인하기 · 녹음 안 한 줄 1개");
-  expect(resumeLabel(resume(0, [], true))).toBe("호텔 체크인하기 · 녹음 안 한 줄 2개");
+  expect(shown(resumeLabel(resume(0, said, true)))).toBe("호텔 체크인하기 · 녹음 안 한 줄 1개");
+  expect(shown(resumeLabel(resume(0, [], true)))).toBe("호텔 체크인하기 · 녹음 안 한 줄 2개");
+});
+
+test("the label breaks only after the situation's title", () => {
+  for (const r of [resume(2, [], false), resume(0, [], true)]) {
+    const [, count] = resumeLabel(r).split(" · ");
+    expect(count).not.toMatch(/ /);
+  }
 });
 
 // --- passing recorded lines in a resumed conversation (spec resume-unrecorded 3) ---------------------------------
