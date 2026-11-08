@@ -40,6 +40,9 @@ def _guess(sound: object, said: str) -> str | None:
     listed = listed_sound(meant, heard)
     if listed is None or not _HANGUL.search(say) or "처럼 들렸" not in say or "말했" in say:
         return None
+    # the sentence names both words (Haiku once wrote the template "meant가 heard처럼 들렸어요." as it stood)
+    if meant.lower() not in say.lower() or heard.lower() not in say.lower():
+        return None
     return " ".join([say, listed[1]])
 
 

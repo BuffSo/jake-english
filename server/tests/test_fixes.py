@@ -85,3 +85,10 @@ def test_line_before_skips_ryans_korean_help_line():
     rp.lines[7] = moved.model_copy(update={"idx": 7})
     # the turn it fixes (3) comes right after Ryan's Korean help line (2): the line before is Ryan's English opener (0)
     assert line_before(rp, 7).idx == 0
+
+
+def test_a_guess_whose_say_is_the_unfilled_template_is_dropped():
+    guess = dict(heard="light", meant="right", say="meant가 heard처럼 들렸어요.")
+    assert check([item(5, "I turned light at the bank.", "I turned right at the bank.", why="", **guess)], TURNS) == []
+    [f] = check([item(5, "I turned light at the bank.", "I turned right at the bank.", why="방향이에요.", **guess)], TURNS)
+    assert f.why_ko == "방향이에요."
