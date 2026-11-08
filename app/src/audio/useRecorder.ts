@@ -3,7 +3,7 @@
 // its level is read for the voice line and, on the roleplay screen, for throwing a recording without speech away (4).
 import { RecordingPresets, requestRecordingPermissionsAsync, useAudioRecorder } from "expo-audio";
 import { File } from "expo-file-system";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { RECORD_LIMIT_MS } from "../config";
 import { playCue } from "./cues";
@@ -92,13 +92,14 @@ export function useRecorder() {
     void playCue("cancel");
   }
 
-  // the voice line listens to the level while the mic is on; the returned function stops listening
-  function onLevel(cb: Level): () => void {
+  // the voice line listens to the level while the mic is on; the returned function stops listening. The same
+  // function every render, so the line does not subscribe again each time the screen draws.
+  const onLevel = useCallback((cb: Level): (() => void) => {
     levelSubs.current.add(cb);
     return () => {
       levelSubs.current.delete(cb);
     };
-  }
+  }, []);
 
   return { start, stop, discard, cancel, onLevel, recording, liveSince, isRecording: () => active.current };
 }

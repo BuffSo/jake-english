@@ -12,7 +12,7 @@ import { useRecorder } from "../audio/useRecorder";
 import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { scrollToShow, tapRow } from "../flow/review";
-import { askFirst, canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
+import { askFirst, canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, showMicHint, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { InRowButton } from "../ui/InRowButton";
@@ -22,6 +22,7 @@ import { keepWords } from "../ui/keepWords";
 import { Named } from "../ui/Named";
 import { lineNotes, needsNotes } from "../ui/notesView";
 import { StarButton, StarMark } from "../ui/Star";
+import { SoonEnds, StopButton } from "../ui/StopButton";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { useInterpret } from "../ui/useInterpret";
 import { useSaved } from "../ui/useSaved";
@@ -333,13 +334,24 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // (spec record-cancel-skip 5). While the mic starts the gate is busy: the cancel is kept and done when it is on.
   const cancelRecording = () => (startCancel.ask() ? undefined : runThenHold(gate, tapHold, doCancel));
   const skipLine = () => runThenHold(gate, tapHold, doSkip);
+  // no speech for a while after the mic came on: thrown away the way 「취소」 does, through the same gate and hold, so a
+  // 「말하기 끝」 at the same moment either sends first or finds nothing, and a tap on the 「🎤 말하기」 drawn in its
+  // place starts nothing (spec record-feedback 4, 5)
+  const silentCancel = () => void runThenHold(gate, tapHold, doSilentCancel);
 
   // 「취소」: the recording is stopped and deleted on the phone, never sent; back to before speaking, in the same mode
   // (spec record-cancel-skip 1). Nothing to cancel when a stop or the auto-stop got there first.
   async function doCancel(): Promise<boolean> {
     if (!rec.isRecording()) return false;
-    await rec.discard();
+    await rec.cancel();
     dispatch({ type: "recordCancel" });
+    return true;
+  }
+
+  async function doSilentCancel(): Promise<boolean> {
+    if (!rec.isRecording()) return false; // a stop or 「취소」 got there first
+    await rec.cancel();
+    dispatch({ type: "noSpeech" });
     return true;
   }
 
@@ -358,13 +370,17 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     const my = epoch.current;
     sounds.clear();
     dispatch({ type: "recordStart" });
-    const how = await startKeepingCancel(startCancel, () => rec.start(stopRecording), () => !mounted.current || epoch.current !== my);
+    const how = await startKeepingCancel(
+      startCancel,
+      () => rec.start(stopRecording, { onNoSpeech: silentCancel }),
+      () => !mounted.current || epoch.current !== my,
+    );
     if (how === "failed") dispatch({ type: "recordCancel" });
     // left while the mic was starting (permission prompt)
     else if (how === "left") await rec.discard();
     // 「취소」 tapped while the mic was starting: thrown away now that it is on, as `doCancel` does (todo 26 1)
     else if (how === "cancelled") {
-      await rec.discard();
+      await rec.cancel();
       dispatch({ type: "recordCancel" });
       tapHold.start();
     }
@@ -705,16 +721,24 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
                 ))}
               </View>
               {/* outlined on the left, blue filling the rest, like 「다시 해 보기 | 다음」 (spec record-cancel-skip 4, button-colors 1) */}
+              {/* the first turn says to tap 🎤 first; near the 55 s stop, that recording ends soon (spec record-feedback 2, 3) */}
+              {showMicHint(state) && <Text style={styles.micHint}>{keepWords("🎤를 누르고 말하세요")}</Text>}
+              {state.phase === "recording" && <SoonEnds since={rec.liveSince} />}
               {state.phase !== "evaluated" && (
                 <View style={styles.pair}>
                   {canSkip(state) && <Button label="건너뛰기" onPress={skipLine} kind="secondary" />}
                   {state.phase === "recording" && <Button label="취소" onPress={cancelRecording} kind="secondary" />}
-                  <Button
-                    label={state.phase === "recording" ? "■ 말하기 끝" : busy ? "평가하고 있어요" : shadow ? "🎤 따라 말하기" : "🎤 말하기"}
-                    onPress={state.phase === "recording" ? stopRecording : startRecording}
-                    disabled={busy}
-                    grow
-                  />
+                  {/* 「● 말하기 끝」: blue, a blinking red dot and the voice line once the mic is on (spec record-feedback 2) */}
+                  {state.phase === "recording" ? (
+                    <StopButton live={rec.liveSince !== null} onLevel={rec.onLevel} onPress={stopRecording} />
+                  ) : (
+                    <Button
+                      label={busy ? "평가하고 있어요" : shadow ? "🎤 따라 말하기" : "🎤 말하기"}
+                      onPress={startRecording}
+                      disabled={busy}
+                      grow
+                    />
+                  )}
                 </View>
               )}
               {/* after teacher Ryan's answer the same line again, or past it without a recording (spec offscript-aside 5,
@@ -788,6 +812,7 @@ const styles = StyleSheet.create({
   off: { opacity: 0.4 },
   heard: { fontSize: 14, color: colors.sub },
   notice: { fontSize: 16, color: colors.sub, marginTop: 8 },
+  micHint: { textAlign: "center", color: colors.primary, fontSize: 15, fontWeight: "600", marginBottom: 2 },
   controls: { padding: 12, borderTopWidth: 1, borderTopColor: "#E9ECEF" },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" },
   pair: { flexDirection: "row", gap: 8 },
