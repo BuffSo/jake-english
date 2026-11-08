@@ -2,17 +2,15 @@
 // (spec roleplay-practice 9). expo-audio's player is replaced by one the test finishes by hand.
 const mockFinish: ((s: { didJustFinish: boolean }) => void)[] = [];
 const mockPlayed: unknown[] = [];
-let mockRemoved = 0;
+// what the queue asked of the player's pause and remove, in order
+const mockCalls: string[] = [];
 jest.mock("expo-audio", () => ({
   createAudioPlayer: () => ({
     addListener: (_: string, cb: (s: { didJustFinish: boolean }) => void) => mockFinish.push(cb),
     replace: (src: unknown) => mockPlayed.push(src),
     play: () => {},
-    // a released native player throws on use
-    pause: () => {
-      if (mockRemoved) throw new Error("released");
-    },
-    remove: () => mockRemoved++,
+    pause: () => mockCalls.push("pause"),
+    remove: () => mockCalls.push("remove"),
   }),
 }));
 
@@ -21,7 +19,7 @@ import { SoundQueue } from "./player";
 beforeEach(() => {
   mockFinish.length = 0;
   mockPlayed.length = 0;
-  mockRemoved = 0;
+  mockCalls.length = 0;
   jest.useFakeTimers();
 });
 
@@ -245,19 +243,23 @@ describe("close", () => {
     expect(q.isPlaying()).toBe(false);
   });
 
+  // expo-audio's `remove()` on Android only lets the player go: a greeting already playing plays on unless it is
+  // paused first (final review)
+  test("pauses what plays, then lets the phone's player go", () => {
+    const q = new SoundQueue();
+    q.enqueue("a");
+    q.close();
+    expect(mockCalls).toEqual(["pause", "remove"]);
+  });
+
   // the screens under the root are taken down after it, and may still stop the queue or wait for quiet
-  test("the queue can still be cleared and waited on after the close", () => {
+  test("after the close the player is left alone, and waiting for quiet ends at once", () => {
     const q = new SoundQueue();
     q.close();
-    expect(() => q.clear()).not.toThrow();
+    q.clear();
+    expect(mockCalls).toEqual(["pause", "remove"]);
     const done = jest.fn();
     q.onIdle(done);
     expect(done).toHaveBeenCalled();
-  });
-
-  test("lets the phone's player go", () => {
-    const q = new SoundQueue();
-    q.close();
-    expect(mockRemoved).toBe(1);
   });
 });
