@@ -39,7 +39,7 @@ server/scripts/autostart.sh status
 - 추천만 따로 둔 것은 2026-11-08 세 일을 견준 결과다. 추천은 Sonnet이 확실히 나았고, 평가와 통역은 비슷한데 Sonnet이 느렸다(`docs/guide/PROMPT_일마다_모델_견주기_20261108.md`).
 - Opus는 아직 써 보지 않았다. 생각하는 단계가 켜져 있어, 학습자가 기다리는 대답(대본 밖 말에 대답)이 12초 제한에 걸려 「지금은 대답할 수 없어요」로 끝날 수 있다.
 - 없는 값이면 서버가 시작할 때 `JE_CLAUDE_WRITER must be one of haiku, sonnet, opus, not '…'` 오류로 멈춘다.
-- 서버 로그에 `claude models: writer …, quick …, recommend …` 줄로 고른 모델이 찍힌다.
+- 서버 로그에 `claude models: writer …, quick …, recommend …, talk …` 줄로 고른 모델이 찍힌다.
 
 ## 시험
 
