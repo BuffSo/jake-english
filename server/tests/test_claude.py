@@ -447,6 +447,8 @@ def test_aside_prompt_answers_about_an_earlier_point():
 
     p = prompts.ASIDE_SYSTEM
     assert '"이 대사의 앞 시도"' in p and "물을 때만" in p and "이어서 빨리 말하면" in p
+    # live, after the first fix: 「낱말 끝의 t 소리가 약하게 나면 lake처럼 들리기도 해요」, a sound guessed at
+    assert "어느 소리가 어떻게 났는지는 짐작해 말하지 않아요" in p
     assert "앞서 선생님에게 한 말" not in p
 
 

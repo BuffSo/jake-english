@@ -175,7 +175,7 @@ ASIDE = [
                    "나머지 낱말은 다 알아들었어요. 그런데 late가 lake처럼 들렸어요. 한 번 더 해 볼까요?")],
          must=("late", "lake", "get a"),
          never=("짚은 곳은 없", "짚은 곳이 없", "짚은 것은 없", "짚은 것이 없", "짚은 게 없", "짚은 게 아니",
-                "짚은 말이 아니", "짚어 드리지 못")),
+                "짚은 말이 아니", "짚어 드리지 못", "소리가")),
     # made up in the shape of todo 40 2: a try at the line that auto-detection heard as Korean, so no points came.
     # Ryan read out his rules (「짚을 것」, what he would not say) and told the learner to speak slowly
     Case("try heard as korean", "Take Line 2 and get off at Hongdae.", "Take lime too and get of at Hongdae.", [],
