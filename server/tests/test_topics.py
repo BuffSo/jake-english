@@ -94,3 +94,36 @@ def test_tmoney_does_not_send_a_cashless_tourist_to_a_store():
     # fact the description does not have (spec fixed-list-scripts 1); the store is only another place to top up
     said = " ".join(t for _, t in pick("tourist", "t-tmoney").script).lower()
     assert "cash" not in said.replace("only takes cash", "")
+
+
+# --- Sohee's Korean for each line (todo 13) -----------------------------------------------------------------------
+
+def test_every_line_has_sohee_korean():
+    # read aloud by Sohee: Korean only, one line, nothing a voice would read out as a mark
+    import re
+
+    from je_server.claude import QUOTES
+
+    for p in ALL:
+        assert len(p.ko) == len(p.script), p.id
+        for ko in p.ko:
+            assert re.search(r"[가-힣]", ko) and not re.search(r"[A-Za-z{}\n]", ko), (p.id, ko)
+            assert not any(q in ko for q in QUOTES), (p.id, ko)
+
+
+def test_korean_keeps_the_facts():
+    # the same facts as the English (test_script_keeps_the_facts_of_its_description), said in Korean
+    said = {p.id: " ".join(p.ko) for p in ALL}
+    assert all(w in said["t-gyeongbokgung"] for w in ("4호선", "한 정거장", "충무로", "3호선", "5번 출구"))
+    assert all(w in said["t-tmoney"] for w in ("현금", "편의점"))
+    assert all(w in said["t-samgyeopsal"] for w in ("삼겹살", "2인분"))
+    assert all(w in said["u-shrimp-truck"] for w in ("지오반니", "스캠피", "매운", "레몬 버터", "밥 두 스쿱"))
+    assert all(w in said["u-hotel-checkin"] for w in ("여권", "신용카드", "체크아웃", "와이파이"))
+    assert all(w in said["u-sneaker-size"] for w in ("270", "9 사이즈"))
+
+
+def test_tmoney_korean_says_cash_only_of_the_machine():
+    # the English test above, in Korean: the store is only another place to top up, not one that takes cards
+    ko = pick("tourist", "t-tmoney").ko
+    assert [i for i, k in enumerate(ko) if "현금" in k] == [3]
+    assert "카드" not in ko[5]

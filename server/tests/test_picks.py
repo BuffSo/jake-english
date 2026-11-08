@@ -113,7 +113,9 @@ async def test_note_without_reading_is_kept(engine):
     assert second.lines[0].three == engine.store.load(first.id).lines[0].three
 
 
-async def test_ko_comes_with_its_sound(engine):
+async def test_ko_comes_with_its_sound(engine, monkeypatch):
+    # a line without Korean in the repository lends what an earlier run had Claude make
+    with_korean(monkeypatch, ko=())
     first = await engine.create_pick(*SNEAKER)
     await ready(engine, first)
     await engine.ko(first.id, 1)
