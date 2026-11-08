@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SerializerFunctionWrapHandler, model_serializer
 
 Mark = Literal["s", "w", "n"]  # s: strong (bold dark orange on screen), w: small gray (weak), n: as is
 
@@ -91,6 +91,17 @@ class ScriptLine(BaseModel):
     heard_upto: int | None = None
     fix: Fix | None = None
     hint: Hint | None = None  # free talk only, on Ryan's reply: Sohee chance (spec free-talk-design 9)
+    # free talk only, on my English turn said from the full sentence of Sohee chance on Ryan's reply right before it
+    # (spec free-talk-design 9 「그 문장을 말하면」): that sentence. Left out of the line's JSON when None, so the
+    # contract's line keys (and the app's, which never reads it) stay as they were
+    given: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _leave_out_no_given(self, handler: SerializerFunctionWrapHandler) -> dict:
+        out = handler(self)
+        if self.given is None:
+            out.pop("given", None)
+        return out
 
 
 class Issue(BaseModel):

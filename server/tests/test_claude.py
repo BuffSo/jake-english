@@ -885,3 +885,27 @@ def test_hint_prompt_and_schema_ask_for_the_three_parts():
     assert prompts.HINT_SCHEMA["properties"]["starters"] == {"type": "array", "items": {"type": "string"}}
     for key in ("meaning_ko", "starters", "full", "소희 찬스"):
         assert key in prompts.HINT_SYSTEM
+
+
+async def test_fixes_sends_the_helped_turns_with_the_talk():
+    fake = FakeAnthropic([json.dumps({"items": FIX_ITEMS})])
+    conversation = [{"차례": 0, "말한 사람": "라이언", "말": "Hi!"}, {"차례": 1, "말한 사람": "학습자", "말": "I want."}]
+    helped = [{"차례": 1, "알려 준 문장": "I went.", "들린 말": "I want.",
+               "짚을 것": [{"대사 낱말": "went", "들린 낱말": "want", "소리 내는 법": ""}]}]
+    await Claude(fake).fixes(conversation, helped)
+    assert json.loads(fake.requests[0]["messages"][0]["content"]) == {"대화": conversation, "도움 받은 차례": helped}
+    # none helped: the talk only, as before
+    fake = FakeAnthropic([json.dumps({"items": []})])
+    await Claude(fake).fixes(conversation, [])
+    assert json.loads(fake.requests[0]["messages"][0]["content"]) == {"대화": conversation}
+
+
+def test_fix_prompt_words_helped_turns_by_the_macs_points_only():
+    rules = prompts.FIX_SYSTEM
+    assert "도움 받은 차례" in rules and "문법" in rules
+    assert "처럼 들렸어요" in rules and "들리지 않았어요" in rules and "말했어요" in rules
+
+
+def test_talk_prompt_carries_on_after_a_helped_turn():
+    assert prompts.TALK_HELPED == "(said with help: a sentence Sohee showed)"
+    assert prompts.TALK_HELPED in prompts.TALK_SYSTEM

@@ -171,6 +171,7 @@ class FakeClaude:
         self.talk_pieces = ["Sounds fun! ", "I walk there too. ", "Was it busy?"]
         self.talk_fail_after: int | None = None  # pieces given before talk() fails
         self.fix_calls: list[list[dict]] = []  # the conversation each fixes() was given
+        self.fix_helped: list[list[dict]] = []  # the helped turns each fixes() was given
         self.fix_items: list[dict] = []  # what fixes() picks
         self.fix_gate = None  # an asyncio.Event to hold fixes until set
         self.hint_calls: list[list[dict]] = []  # the conversation each hint() was given
@@ -246,8 +247,9 @@ FakeClaude.talk = _talk_method()
 
 
 def _fixes_method():
-    async def fixes(self, conversation):
+    async def fixes(self, conversation, helped=None):
         self.fix_calls.append(conversation)
+        self.fix_helped.append(helped)
         self._maybe_fail()
         if self.fix_gate is not None:
             await self.fix_gate.wait()

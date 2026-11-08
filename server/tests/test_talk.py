@@ -111,8 +111,8 @@ def test_fix_input_still_skips_old_help_lines_and_korean_turns():
     from je_server.talk import fix_input
     rp = _talk(("ryan", "reply", "Hi!"), ("user", "ask", "안녕"), ("ryan", "help", "Try English."),
                ("user", "turn", "I walked."))
-    conversation, turns = fix_input(rp)
-    assert [c["말"] for c in conversation] == ["Hi!", "I walked."] and turns == {3: "I walked."}
+    conversation, turns, helped = fix_input(rp)
+    assert [c["말"] for c in conversation] == ["Hi!", "I walked."] and turns == {3: "I walked."} and helped == {}
 
 
 def test_korean_turns_do_not_count_for_the_echo_and_carry_none():
@@ -812,3 +812,203 @@ async def test_two_hint_notes_at_once_ask_claude_once(talks, speech_bytes, fake_
     a, b = await both
     assert a == b and len([c for c in fake_claude.calls if c[0] == "annotate" and c[1][0] == hint.full]) == 1
     await until(lambda: not talks.hint_threes)
+
+
+# --- a turn after Sohee's full sentence (spec free-talk-design 7 「고르는 차례」, 9 「그 문장을 말하면」) -----------------
+
+async def shown_full(talks, speech_bytes) -> tuple[str, str]:
+    """A talk whose last line is Ryan's reply (2) with Sohee's full sentence shown; the talk and that sentence."""
+    rp_id = await replied(talks, speech_bytes)
+    hint = await talks.hint(rp_id, 2)
+    await talks.show_full(rp_id, 2)
+    return rp_id, hint.full
+
+
+@pytest.mark.parametrize("heard", [
+    "I want to the park with my dog.",  # followed (0.88), one word heard wrong
+    "We went to a big park.",  # near (0.43): a try at it that came out wrong
+    "I went to the park with my dog.",  # the sentence itself, nothing heard wrong
+])
+async def test_turn_after_the_full_sentence_is_compared_with_it(talks, engine, speech_bytes, fake_whisper,
+                                                                fake_claude, heard):
+    from je_server.compare import FOLLOW_MIN, find_issues, similarity
+    from je_server.engine import NEAR_MIN
+    from je_server.prompts import TALK_HELPED
+
+    rp_id, full = await shown_full(talks, speech_bytes)
+    assert similarity(full, heard) >= NEAR_MIN
+    fake_whisper.text = heard
+    ev = await run(talks, rp_id, speech_bytes)
+    # no evaluation now: Ryan just answers, as after any turn
+    assert ev[0] == {"type": "heard", "text": heard, "n": 1, "idx": 3, "korean": False}
+    assert ev[-1] == {"type": "done", "idx": 4} and fake_claude.feedback_calls == []
+    saved = engine.load(rp_id)
+    line, [attempt] = saved.lines[3], saved.attempts[3]
+    assert (line.kind, line.text, line.given) == ("turn", heard, full)
+    assert attempt.issues == find_issues(full, heard, 2)
+    assert attempt.followed == (similarity(full, heard) >= FOLLOW_MIN)
+    # Claude is told the turn was helped; it is still my 2nd English turn for the echo
+    assert fake_claude.talk_calls[-1][-1]["content"] == heard + "\n" + TALK_HELPED + "\n" + TALK_ECHO
+
+
+async def test_far_from_the_given_sentence_is_a_plain_turn(talks, engine, speech_bytes, fake_whisper, fake_claude):
+    from je_server.compare import similarity
+    from je_server.engine import NEAR_MIN
+    from je_server.prompts import TALK_HELPED
+
+    rp_id, full = await shown_full(talks, speech_bytes)
+    heard = "I stayed home and watched TV."  # my own words, not Sohee's sentence
+    assert similarity(full, heard) < NEAR_MIN
+    fake_whisper.text = heard
+    await run(talks, rp_id, speech_bytes)
+    saved = engine.load(rp_id)
+    [attempt] = saved.attempts[3]
+    assert saved.lines[3].given is None and attempt.issues == [] and not attempt.followed
+    assert TALK_HELPED not in repr(fake_claude.talk_calls[-1])
+
+
+async def test_a_hint_without_the_full_sentence_gives_no_given(talks, engine, speech_bytes, fake_whisper):
+    rp_id = await replied(talks, speech_bytes)
+    hint = await talks.hint(rp_id, 2)  # the first step only
+    fake_whisper.text = hint.full
+    await run(talks, rp_id, speech_bytes)
+    saved = engine.load(rp_id)
+    assert saved.lines[3].given is None and saved.attempts[3][0].issues == []
+
+
+async def test_only_ryans_reply_right_before_my_turn_counts(talks, engine, speech_bytes, fake_whisper):
+    rp = await talks.create()
+    hint = await talks.hint(rp.id, 0)
+    await talks.show_full(rp.id, 0)  # on the opener (0), the last line when my first turn starts
+    fake_whisper.text = hint.full
+    await run(talks, rp.id, speech_bytes)  # my turn (1), Ryan (2)
+    await run(talks, rp.id, speech_bytes)  # the same sentence again (3), after Ryan's reply without a hint
+    saved = engine.load(rp.id)
+    assert saved.lines[1].given == hint.full and saved.lines[3].given is None
+
+
+async def test_a_korean_turn_after_the_full_sentence_is_never_helped(talks, engine, speech_bytes, fake_whisper):
+    rp_id, full = await shown_full(talks, speech_bytes)
+    fake_whisper.by_lang = {"en": f"{full} 맞아요?", "ko": "공원에 갔어요 맞아요?"}
+    await run(talks, rp_id, speech_bytes)
+    saved = engine.load(rp_id)
+    assert saved.lines[3].kind == "ask" and saved.lines[3].given is None and saved.attempts[3][0].issues == []
+
+
+def _helped(rp, idx: int, given: str, issues=()):
+    """Marks my turn at `idx` as said from Sohee's `given` sentence, its try with the Mac's `issues`."""
+    from je_server.models import Attempt
+
+    line = rp.lines[idx]
+    rp.lines[idx] = line.model_copy(update={"given": given})
+    rp.attempts[idx] = [Attempt(n=1, mode="turn", heard=line.text, followed=True, issues=list(issues), say_ko="",
+                                audio=[], timings={})]
+
+
+def test_messages_tell_claude_the_turn_was_helped():
+    from je_server.prompts import TALK_HELPED
+
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I want to the park."))
+    _helped(rp, 1, "I went to the park.")
+    assert messages(rp)[-1] == {"role": "user", "content": "I want to the park.\n" + TALK_HELPED}
+    # a helped turn is still kind "turn": it counts for the echo, and the echo comes after the note
+    two = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "a b"), ("ryan", "reply", "x"),
+                ("user", "turn", "I want to the park."))
+    _helped(two, 3, "I went to the park.")
+    msgs = messages(two)
+    assert msgs[-1]["content"] == "I want to the park.\n" + TALK_HELPED + "\n" + TALK_ECHO
+    assert msgs[2]["content"] == "a b"
+
+
+def test_fix_input_keeps_helped_turns_apart():
+    from je_server.fixes import Helped
+    from je_server.models import Issue
+    from je_server.talk import fix_input
+
+    given = "I went to the park."
+    issues = [Issue(target="went", heard="want")]
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I walked."), ("ryan", "reply", "Where?"),
+               ("user", "turn", "I want to the park."), ("ryan", "reply", "Nice!"), ("user", "turn", given))
+    _helped(rp, 3, given, issues)
+    _helped(rp, 5, given)  # said from the sentence with nothing heard wrong: nothing to fix
+    conversation, turns, helped = fix_input(rp)
+    # Claude still reads the whole talk as it went, with what was heard
+    assert [(c["차례"], c["말"]) for c in conversation] == [(l.idx, l.text) for l in rp.lines]
+    assert turns == {1: "I walked."}
+    assert helped == {3: Helped(given=given, heard="I want to the park.", issues=issues)}
+
+
+def test_helped_input_is_what_claude_is_given_for_the_helped_turns():
+    from je_server.fixes import Helped
+    from je_server.models import Issue
+    from je_server.talk import helped_input
+
+    issue = Issue(target="right", heard="light", sound=("R", "L"), explain="R 설명이에요.")
+    helped = {7: Helped("I turned right.", "I turned light.", [issue]), 3: Helped("I went home.", "I want home.", [])}
+    assert helped_input(helped) == [
+        {"차례": 3, "알려 준 문장": "I went home.", "들린 말": "I want home.", "짚을 것": []},
+        {"차례": 7, "알려 준 문장": "I turned right.", "들린 말": "I turned light.",
+         "짚을 것": [{"대사 낱말": "right", "들린 낱말": "light", "소리 내는 법": "R 설명이에요."}]},
+    ]
+
+
+async def helped_talk(talks, fake_claude, fake_whisper, speech_bytes, own: bool) -> tuple[str, str, str]:
+    """A talk with, when `own`, my own English turn (1, SAID[0]) and then a turn said from Sohee's full sentence (3 with
+    `own`, else 1) with R heard as L. The talk, the sentence and what was heard."""
+    from je_server.models import Hint
+
+    full, heard = "I turned right at the bank.", "I turned light at the bank."
+    fake_claude.hint_value = Hint(meaning_ko="어디서 돌았는지 물어요.", starters=["I turned…", "I went…"], full=full)
+    rp = await talks.create()
+    if own:
+        fake_whisper.text = SAID[0]
+        await run(talks, rp.id, speech_bytes)
+    ryan = len(talks.engine.load(rp.id).lines) - 1  # his last reply: the opener, or his answer to my turn
+    await talks.hint(rp.id, ryan)
+    await talks.show_full(rp.id, ryan)
+    fake_whisper.text = heard
+    await run(talks, rp.id, speech_bytes)
+    return rp.id, full, heard
+
+
+async def test_end_fixes_a_helped_turn_last_with_the_macs_points(talks, engine, speech_bytes, fake_whisper,
+                                                                  fake_claude):
+    from je_server.sounds import find
+
+    rp_id, full, heard = await helped_talk(talks, fake_claude, fake_whisper, speech_bytes, own=True)
+    why = "right가 light처럼 들렸어요."
+    fake_claude.fix_items = [{"idx": 3, "said": heard, "fixed": "I turned right at the big bank.", "why_ko": why,
+                              "sound": dict(NO_SOUND)}, fix_item(0, 1)]
+    body = await talks.end(rp_id)
+    [sent] = fake_claude.fix_helped
+    assert sent == [{"차례": 3, "알려 준 문장": full, "들린 말": heard,
+                     "짚을 것": [{"대사 낱말": "right", "들린 낱말": "light", "소리 내는 법": find("R", "L").explain}]}]
+    assert [c["차례"] for c in fake_claude.fix_calls[0]] == [0, 1, 2, 3, 4]  # the helped turn is in the talk
+    added = engine.load(rp_id).lines[5:]
+    # my own pick first, then the helped turn: its sentence is Sohee's, its words what was heard, its why the Mac's
+    assert [(l.text, l.fix.of, l.fix.said, l.fix.why_ko) for l in added] == [
+        (FIXED[0], 1, SAID[0], WHY[0]), (full, 3, heard, why + " " + find("R", "L").explain)]
+    assert [it["rec"] for it in body["items"]] == [{"rp_id": rp_id, "idx": i, "n": 1} for i in (1, 3)]
+
+
+async def test_end_with_only_a_helped_turn_still_asks_claude(talks, engine, speech_bytes, fake_whisper, fake_claude):
+    from je_server.sounds import find
+
+    rp_id, full, heard = await helped_talk(talks, fake_claude, fake_whisper, speech_bytes, own=False)
+    fake_claude.fix_items = [{"idx": 1, "said": heard, "fixed": full, "why_ko": "right가 light처럼 들렸어요.",
+                              "sound": dict(NO_SOUND)}]
+    body = await talks.end(rp_id)
+    assert len(fake_claude.fix_calls) == 1 and [h["차례"] for h in fake_claude.fix_helped[0]] == [1]
+    [line] = [it["line"] for it in body["items"]]
+    assert line["text"] == full and line["fix"]["why_ko"].endswith(find("R", "L").explain)
+
+
+async def test_end_with_only_a_helped_turn_heard_right_has_nothing_to_fix(talks, engine, speech_bytes, fake_whisper,
+                                                                         fake_claude):
+    rp = await talks.create()
+    hint = await talks.hint(rp.id, 0)
+    await talks.show_full(rp.id, 0)
+    fake_whisper.text = hint.full  # my only English turn, Sohee's sentence heard as it is
+    await run(talks, rp.id, speech_bytes)
+    assert engine.load(rp.id).lines[1].given == hint.full
+    assert await talks.end(rp.id) == no_fixes(engine, 2) and fake_claude.fix_calls == []

@@ -331,10 +331,15 @@ class Claude:
 
     # --- free talk's corrections ----------------------------------------------------------------
 
-    async def fixes(self, conversation: list[dict]) -> list[dict]:
+    async def fixes(self, conversation: list[dict], helped: list[dict] | None = None) -> list[dict]:
         """Up to a few fixes Claude picks from the whole free talk (spec free-talk-design 7). The Mac checks them
-        (`fixes.check`), so these are only candidates."""
-        body = json.dumps({"대화": conversation}, ensure_ascii=False)
+        (`fixes.check`), so these are only candidates. `helped`: my turns said from Sohee's full sentence, with the
+        Mac's points (`talk.helped_input`), which Claude only words; left out of the message when there are none, so a
+        talk without them is asked as before."""
+        found: dict = {"대화": conversation}
+        if helped:
+            found["도움 받은 차례"] = helped
+        body = json.dumps(found, ensure_ascii=False)
         data = await self._json(self.writer, prompts.FIX_SYSTEM, body, prompts.FIX_SCHEMA, 1500)
         items = data.get("items") if isinstance(data, dict) else None
         if not isinstance(items, list):

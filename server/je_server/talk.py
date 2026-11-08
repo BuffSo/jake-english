@@ -8,7 +8,9 @@ fixed `help` lines are skipped.
 
 A turn (`Talks.turn`) is my line with its try and recording, then Ryan's line: his English reply streamed sentence by
 sentence (spec 4), also when I spoke Korean (spec 3). Its fixed error lines are English (`TALK_PHRASES`). The learner may
-cut Ryan's sounds off and speak again once his line is saved (spec 2).
+cut Ryan's sounds off and speak again once his line is saved (spec 2). An English turn after Sohee's full sentence on
+Ryan's reply right before it, and close to that sentence, is kept as said from it (`ScriptLine.given`, spec 9 「그 문장을
+말하면」): with the words the Mac heard differently, no evaluation then, and fixed last after the talk (spec 7).
 
 Ending a talk (`Talks.end`, spec 6, 7) asks Claude for the fixes, keeps those `fixes.check` lets through as my `fix`
 lines after the talk, and makes the first one's sounds before answering. Those lines mark the talk as ended.
@@ -29,12 +31,12 @@ from pathlib import Path
 
 from . import audio, fixes, hints, sentences
 from .asr import WhisperError
-from .claude import ClaudeUnavailable
-from .compare import words
-from .engine import HANGUL, MAX_SECONDS, Engine, NotFound, _keep
-from .models import Attempt, Fix, Frame, Hint, Roleplay, Said, ScriptLine, ThreeLine
+from .claude import ClaudeUnavailable, _points
+from .compare import FOLLOW_MIN, find_issues, similarity, words
+from .engine import HANGUL, MAX_SECONDS, NEAR_MIN, Engine, NotFound, _keep
+from .models import Attempt, Fix, Frame, Hint, Issue, Roleplay, Said, ScriptLine, ThreeLine
 from .phrases import SOHEE_PHRASES, TALK_OPENERS
-from .prompts import TALK_CUT, TALK_CUT_SILENT, TALK_ECHO, TALK_KOREAN, TALK_START
+from .prompts import TALK_CUT, TALK_CUT_SILENT, TALK_ECHO, TALK_HELPED, TALK_KOREAN, TALK_START
 from .tts import VoiceError
 
 log = logging.getLogger("je_server")
@@ -55,16 +57,17 @@ def _ryan_text(line: ScriptLine) -> str:
 
 def messages(rp: Roleplay) -> list[dict]:
     """What Claude is given for Ryan's next answer: the start, Ryan's replies (assistant) and my turns (user). A Korean
-    turn is marked `TALK_KOREAN`. When my last line is an English turn and it is an even-numbered one (the 2nd, 4th ...;
-    Korean turns do not count), the server allows Ryan to echo the right form: `TALK_ECHO` ends that last message only.
-    Old records' `help` lines and the fixes are left out. The same role twice in a row is joined by a line break (when
-    Claude could not answer, my next turn follows my last)."""
+    turn is marked `TALK_KOREAN`; a turn said from Sohee's full sentence is what was heard, then `TALK_HELPED`. When
+    my last line is an English turn and it is an even-numbered one (the 2nd, 4th ...; Korean turns do not count, helped
+    ones do), the server allows Ryan to echo the right form: `TALK_ECHO` ends that last message only. Old records'
+    `help` lines and the fixes are left out. The same role twice in a row is joined by a line break (when Claude could
+    not answer, my next turn follows my last)."""
     out: list[dict] = [{"role": "user", "content": TALK_START}]
     for line in rp.lines:
         if line.kind == "reply" and line.speaker == "ryan":
             role, text = "assistant", _ryan_text(line)
         elif line.kind == "turn":
-            role, text = "user", line.text
+            role, text = "user", line.text if line.given is None else line.text + "\n" + TALK_HELPED
         elif line.kind == "ask":
             role, text = "user", TALK_KOREAN + line.text
         else:
@@ -78,22 +81,52 @@ def messages(rp: Roleplay) -> list[dict]:
     return out
 
 
-def fix_input(rp: Roleplay) -> tuple[list[dict], dict[int, str]]:
+def fix_input(rp: Roleplay) -> tuple[list[dict], dict[int, str], dict[int, fixes.Helped]]:
     """What Claude is given to pick the fixes (spec 7): Ryan's English replies and my English turns with their line
-    numbers, and my English turns by line number for `fixes.check`. My Korean turns and old records' `help` lines are
-    left out (spec 7 「고치지 않는 것」)."""
+    numbers, as heard; my own English turns by line number for `fixes.check`; and my turns said from Sohee's full
+    sentence by line number, apart from those (spec 7 「고르는 차례」), only those with the Mac's points: one heard as
+    the sentence has nothing to fix. My Korean turns and old records' `help` lines are left out (spec 7 「고치지 않는
+    것」)."""
     conversation: list[dict] = []
     turns: dict[int, str] = {}
+    helped: dict[int, fixes.Helped] = {}
     for line in rp.lines:
         if line.kind == "reply" and line.speaker == "ryan":
             who = "라이언"
         elif line.kind == "turn":
             who = "학습자"
-            turns[line.idx] = line.text
+            if line.given is None:
+                turns[line.idx] = line.text
+            else:
+                tries = [a for a in rp.attempts.get(line.idx, []) if a.mode == "turn"]
+                if tries and tries[-1].issues:
+                    helped[line.idx] = fixes.Helped(given=line.given, heard=line.text, issues=tries[-1].issues)
         else:
             continue
         conversation.append({"차례": line.idx, "말한 사람": who, "말": line.text})
-    return conversation, turns
+    return conversation, turns, helped
+
+
+def helped_input(helped: dict[int, fixes.Helped]) -> list[dict]:
+    """The helped turns as Claude is given them, in turn order, with the Mac's points (`claude._points`)."""
+    return [{"차례": idx, "알려 준 문장": h.given, "들린 말": h.heard, "짚을 것": _points(h.issues)}
+            for idx, h in sorted(helped.items())]
+
+
+def _from_full(rp: Roleplay, heard: str) -> tuple[str | None, bool, list[Issue]]:
+    """The sentence my English turn was said from, whether it followed it, and the words heard differently: Sohee's
+    full sentence on Ryan's reply right before the turn (the record's last line as the turn started), once shown, when
+    the turn is near it or follows it, by the bounds of a roleplay's line (`Engine._attempt`). Those words are kept so
+    the fixes do not take a transcription slip for my grammar (spec 9 「그 문장을 말하면」). Else, or far from it (my
+    own words), a plain turn: None, False, []."""
+    last = rp.lines[-1] if rp.lines else None
+    hint = last.hint if last is not None and last.speaker == "ryan" and last.kind == "reply" else None
+    if hint is None or not hint.full_shown:
+        return None, False, []
+    close = similarity(hint.full, heard)
+    if close < NEAR_MIN:
+        return None, False, []
+    return hint.full, close >= FOLLOW_MIN, find_issues(hint.full, heard, limit=2)
 
 
 class TalkEnded(Exception):
@@ -195,9 +228,10 @@ class Talks:
             # the rest of Ryan's last reply, when its sounds are still being made, waits behind the fixes' sounds
             # (the voice leaves out those made)
             voice.demote([p.audio for p in last.parts])
-        conversation, turns = fix_input(rp)
-        # no English turn of mine: nothing to fix, and Claude is not asked (spec 6)
-        found = fixes.check(await engine.claude.fixes(conversation), turns) if turns else []
+        conversation, turns, helped = fix_input(rp)
+        # no English turn of mine to fix (none, or only helped ones heard as the sentence): Claude is not asked (spec 6)
+        found = (fixes.check(await engine.claude.fixes(conversation, helped_input(helped)), turns, helped)
+                 if turns or helped else [])
         lines: list[ScriptLine] = []
         if found:
             async with engine.lock(rp_id):
@@ -288,9 +322,11 @@ class Talks:
                 yield engine.talk_error(e.code)  # no line is kept; the recording stays, as in a roleplay
                 return
             timings["transcribed"] = time.perf_counter() - t0
-            await self._add(rp_id, ScriptLine(idx=idx, speaker="user", text=shown, kind="ask" if korean else "turn"),
-                            Attempt(n=n, mode="turn", heard=shown, followed=False, issues=[], say_ko="", audio=[],
-                                    timings=timings, at=datetime.now().isoformat(timespec="seconds")))
+            given, followed, issues = (None, False, []) if korean else _from_full(rp, shown)
+            await self._add(rp_id, ScriptLine(idx=idx, speaker="user", text=shown, kind="ask" if korean else "turn",
+                                              given=given),
+                            Attempt(n=n, mode="turn", heard=shown, followed=followed, issues=issues, say_ko="",
+                                    audio=[], timings=timings, at=datetime.now().isoformat(timespec="seconds")))
             yield {"type": "heard", "text": shown, "n": n, "idx": idx, "korean": korean}
 
             ryan = idx + 1
@@ -318,9 +354,9 @@ class Talks:
             timings["total"] = time.perf_counter() - t0
             await self._keep_timings(rp_id, idx, n, timings)
             # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
-            log.info("talk %s/%d n=%d korean=%s transcribed=%.2f first_text=%.2f first_audio=%.2f total=%.2f",
-                     rp_id, idx, n, korean, timings["transcribed"], timings.get("first_text", 0),
-                     timings.get("first_audio", 0), timings["total"])
+            log.info("talk %s/%d n=%d korean=%s helped=%s transcribed=%.2f first_text=%.2f first_audio=%.2f "
+                     "total=%.2f", rp_id, idx, n, korean, given is not None, timings["transcribed"],
+                     timings.get("first_text", 0), timings.get("first_audio", 0), timings["total"])
             if not failed:
                 yield {"type": "done", "idx": ryan}
         finally:
