@@ -78,10 +78,16 @@ class Engine:
         ryan-shadowing-tip 2, 4). The Mac's date. Remembered in the data folder, so a restart does not say it again."""
         today = (day or date.today()).isoformat()
         with self.tip_lock:
-            last, nxt = self.store.load_tip()
-            if last == today:
+            try:
+                last, nxt = self.store.load_tip()
+                if last == today:
+                    return None
+                self.store.save_tip(today, nxt + 1)
+            except OSError as e:
+                # the first screen is the way into the app: a tip.json the Mac cannot read or write (a full or
+                # read-only disk) costs the day's tip, never the screen (final review)
+                log.warning("tip.json unusable, no tip today: %s", type(e).__name__)
                 return None
-            self.store.save_tip(today, nxt + 1)
         return self._ryan_said(TIPS[nxt % len(TIPS)])
 
     async def warm(self) -> None:

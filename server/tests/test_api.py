@@ -356,3 +356,11 @@ def test_home_gives_the_tip_once_when_asked(client):
     assert first["tip"]["text"] == TIPS[0] and len(first["tip"]["audio"]) == 64
     assert "tip" not in client.get("/home", params={"tip": 1}).json()
     assert "tip" not in first["lines"]
+
+
+def test_home_still_answers_when_the_tip_file_cannot_be_read(client, tmp_path):
+    # final review: the first screen is the way into the app; a tip.json the Mac cannot read or write (here a
+    # folder in its place, like a full or read-only disk) must not turn /home into a 500
+    (tmp_path / "data" / "tip.json").mkdir()
+    r = client.get("/home", params={"tip": 1})
+    assert r.status_code == 200 and "tip" not in r.json() and "greeting" in r.json()["lines"]
