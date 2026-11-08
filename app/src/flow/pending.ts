@@ -29,5 +29,13 @@ export function createPending() {
   };
 }
 
+// `ask` once what was running has settled, or `maxMs` went by: where to resume is asked after the evaluation the
+// learner left, so the line just said is not offered again
+export function askAfter<T>(p: Pick<Pending, "settled">, ask: () => Promise<T>, maxMs = RESUME_WAIT_MS): Promise<T> {
+  return p.settled(maxMs).then(ask);
+}
+
+type Pending = ReturnType<typeof createPending>;
+
 // one for the app: the roleplay screen tracks, the situation screen waits
 export const pending = createPending();

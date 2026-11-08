@@ -1,4 +1,4 @@
-import { createPending, RESUME_WAIT_MS } from "./pending";
+import { askAfter, createPending, RESUME_WAIT_MS } from "./pending";
 
 // whether a promise has settled, without waiting for it
 async function done(p: Promise<unknown>): Promise<boolean> {
@@ -48,4 +48,17 @@ test("settled gives up after maxMs", async () => {
   expect(await done(waiting)).toBe(false);
   jest.advanceTimersByTime(1);
   expect(await done(waiting)).toBe(true);
+});
+
+test("askAfter asks only once what was tracked has settled", async () => {
+  const pending = createPending();
+  let finish!: () => void;
+  pending.track(new Promise<void>((r) => (finish = r)));
+  const ask = jest.fn(async () => "asked");
+  const answer = askAfter(pending, ask);
+  expect(await done(answer)).toBe(false);
+  expect(ask).not.toHaveBeenCalled();
+  finish();
+  expect(await answer).toBe("asked");
+  expect(ask).toHaveBeenCalledTimes(1);
 });

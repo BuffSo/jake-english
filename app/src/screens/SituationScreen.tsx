@@ -7,7 +7,7 @@ import type { Home, Resume, Roleplay, Said, Topic } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { useRecorder } from "../audio/useRecorder";
 import { createGate, createLatch } from "../flow/gate";
-import { pending, RESUME_WAIT_MS } from "../flow/pending";
+import { askAfter, pending } from "../flow/pending";
 import { resumeLabel } from "../flow/resume";
 import {
   backFrom,
@@ -82,9 +82,7 @@ export function SituationScreen({ sounds, home, start, onCreated, onResume, onBa
   // A failure leaves the screen as it was, without the row.
   useEffect(() => {
     let alive = true;
-    pending
-      .settled(RESUME_WAIT_MS)
-      .then(() => api.resume())
+    askAfter(pending, () => api.resume())
       .then((r) => alive && setResume(r))
       .catch(() => {});
     return () => {

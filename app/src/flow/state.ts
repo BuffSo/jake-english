@@ -172,6 +172,18 @@ export function canSkip(s: State): boolean {
   return s.screen === "roleplay" && toSay && (s.phase === "ready" || (s.phase === "evaluated" && s.aside));
 }
 
+// A 「건너뛰기」 the Mac is told of: one inside the conversation moves its place past the line (spec resume-roleplay 3).
+// A practice has no place, and its line may be another conversation's (saved sentences), which must not move.
+export function notifiesSkip(s: State): boolean {
+  return !s.practice && s.line !== null;
+}
+
+// A recording whose evaluation moves the conversation's place when the Mac has finished it: the roleplay's own turn.
+// The situation screen waits for it before asking where to resume (spec resume-roleplay 4).
+export function movesPlace(s: State): boolean {
+  return s.mode === "turn";
+}
+
 const freshTurn = { heard: null, heardRec: null, feedback: "", aside: false, message: null, errorFrom: null } as const;
 
 // Leaving a practice. From the end screen: back on the end screen, ready for the next one. From the roleplay: the

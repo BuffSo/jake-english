@@ -1,7 +1,7 @@
 import roleplayJson from "../../../contract/roleplay.json";
 import type { Resume, Roleplay, ScriptLine } from "../api/types";
 import { resumeHistory, resumeSeen } from "./resume";
-import { canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, reduce, type State } from "./state";
+import { canReplay, canSkip, initial, leaveAction, leavesScreen, mayListen, modelKey, movesPlace, notifiesSkip, practiceFor, reduce, type State } from "./state";
 
 const rp = roleplayJson as unknown as Roleplay;
 const userLine = rp.lines[1] as ScriptLine;
@@ -879,5 +879,25 @@ describe("resume", () => {
   test("back from a resumed roleplay goes to the topics", () => {
     const s = reduce(resumed(), { type: "back" });
     expect([s.screen, s.situationFrom, s.roleplay]).toEqual(["situation", null, null]);
+  });
+});
+
+// --- what moves the conversation's place on the Mac (spec resume-roleplay 3, 4; final review) --------------------
+
+describe("the place on the Mac", () => {
+  test("a skip inside the conversation tells the Mac", () => {
+    expect(notifiesSkip(at("ready"))).toBe(true);
+  });
+
+  test("a skip inside a practice does not", () => {
+    // a saved sentence or a past line is another conversation's line: its place must not move
+    const fromEnd = reduce(end(), { type: "startPractice", kind: "mine", order: [1] });
+    const midway = reduce({ ...at("ready"), seen: { 0: ryanLine, 1: userLine } }, { type: "practiseLine", kind: "shadow", idx: 0 });
+    expect([notifiesSkip(fromEnd), notifiesSkip(midway)]).toEqual([false, false]);
+  });
+
+  test("only a turn's evaluation moves the place", () => {
+    expect(movesPlace(at("ready"))).toBe(true);
+    for (const mode of ["retry", "practice", "shadow"] as const) expect(movesPlace(at("ready", { mode }))).toBe(false);
   });
 });

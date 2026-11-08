@@ -13,7 +13,7 @@ import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThe
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { pending } from "../flow/pending";
 import { scrollToShow, tapRow } from "../flow/review";
-import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, practiceFor, type Action, type State } from "../flow/state";
+import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, movesPlace, notifiesSkip, practiceFor, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { InRowButton } from "../ui/InRowButton";
@@ -341,7 +341,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // The screen moves on whether or not the Mac got it: resuming would then offer the line again.
   async function doSkip(): Promise<boolean> {
     if (!canSkip(state)) return false;
-    if (!state.practice && state.line) pending.track(api.skipLine(rp.id, state.line.idx)).catch(() => {});
+    if (notifiesSkip(state) && state.line) pending.track(api.skipLine(rp.id, state.line.idx)).catch(() => {});
     dispatch({ type: "skip" });
     return true;
   }
@@ -408,7 +408,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       const sent = api.attempt(rp.id, state.idx, uri, state.mode, onEvent);
       // a turn moves the conversation's place when the Mac has finished it: the situation screen waits for it before
       // asking where to resume, even after the learner has gone back (spec resume-roleplay 4)
-      await (state.mode === "turn" ? pending.track(sent) : sent);
+      await (movesPlace(state) ? pending.track(sent) : sent);
     } catch (e) {
       if (live()) dispatch({ type: "failed", code: codeOf(e), say: e instanceof ApiError ? e.say : undefined });
     } finally {
