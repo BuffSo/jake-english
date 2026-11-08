@@ -1,7 +1,7 @@
 import type { Topic } from "../api/types";
 import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, resumeFrom, startStep, topicsOf, canStart, resumeOnBack } from "./situation";
 
-const usa: Topic = { id: "usa", name_ko: "미국 여행", placeholder_ko: "예", picks: [{ id: "u-hotel-checkin", title_ko: "뉴욕 호텔 체크인" }] };
+const usa: Topic = { id: "usa", name_ko: "미국 여행하기", placeholder_ko: "예", picks: [{ id: "u-hotel-checkin", title_ko: "뉴욕 호텔 체크인" }] };
 const other: Topic = { id: "other", name_ko: "그 밖의 상황", placeholder_ko: "예", picks: [] };
 
 test("the list button shows only when the topic has a list", () => {
