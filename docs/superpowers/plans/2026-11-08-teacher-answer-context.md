@@ -81,7 +81,7 @@
 - Produces: `claude.ASIDE_LEAKS: tuple[str, ...]`, `claude.leaks(sentence: str) -> bool`.
 
 - [x] **Step 1: 실패하는 시험.**
-  - `test_aside_drops_sentences_that_name_its_materials`: 흘려 받은 `["「짚을 것」이 비어 있으니 말하지 ", "않을게요. 한 번 ", "더 해 볼까요?"]` → `aside()`가 낸 것을 이으면 `"한 번 더 해 볼까요?"`, 로그에 `aside sentence dropped`가 있고 문장 글은 없다.
+  - `test_aside_drops_sentences_that_name_its_materials`: 흘려 받은 `["짚을 것이 없으니 말하지 ", "않을게요. 한 번 ", "더 해 볼까요?"]`(지어낸 입력) → `aside()`가 낸 것을 이으면 `"한 번 더 해 볼까요?"`, 로그에 `aside sentence dropped`가 있고 문장 글은 없다.
   - `test_aside_with_every_sentence_dropped_yields_nothing`: `["짚을 곳이 없어요."]` → 빈 목록.
   - `test_aside_cut_keeps_the_clean_piece`: `["괜찮아요. ", "그런데 이", cut]` → `["괜찮아요. ", "그런데 이"]` 뒤 `ClaudeUnavailable`(지금 시험이 그대로 통과해야 한다).
   - `test_aside_keeps_a_sentence_about_an_earlier_point`: 「아까 짚은 곳은 late예요.」는 그대로 간다.
