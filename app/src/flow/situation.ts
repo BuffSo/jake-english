@@ -90,3 +90,16 @@ export function clearsTurnedDown(next: SituationStep): boolean {
 export function canStart(now: SituationStep): boolean {
   return now !== "working";
 }
+
+// One step back while a script may still be being made (todo 20261108_32 1). The Mac finishes a script left behind and
+// makes it the newest conversation, so the topics' row asked when the screen opened is then the wrong one: back on the
+// topics, it is hidden and asked again (after the script, `pending`). `making`: a script is being made now;
+// `madeLeft`: one was left behind on an earlier step back. Leaving the screen (`prev` null) asks nothing.
+export function resumeOnBack(
+  prev: SituationStep | null,
+  left: { making: boolean; madeLeft: boolean },
+): { madeLeft: boolean; askAgain: boolean } {
+  const madeLeft = left.madeLeft || left.making;
+  if (prev === "topic" && madeLeft) return { madeLeft: false, askAgain: true };
+  return { madeLeft, askAgain: false };
+}

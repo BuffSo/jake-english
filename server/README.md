@@ -59,6 +59,8 @@ uv run pytest
 | `compare_quick_models.py` | 짧은 말 세 일(소희 통역, 제이크 추천, 라이언 평가)을 같은 지어낸 입력으로 두 모델에 묻고 시간, 걸림, 값을 견준다(`docs/guide/PROMPT_일마다_모델_견주기_20261108.md`) | 기본 138번에 27센트쯤 |
 | `check_false_flags.py` | 맞게 읽은 녹음과 기록으로 헛짚기 수를 잰다 | 없음(맥 안에서만) |
 | `measure_claude.py` | 대본과 세 줄을 만드는 시간을 잰다 | 몇 센트 |
+| `measure_stress.py` | 아직 재지 않은 영어 녹음을 MFA와 Praat로 재서 앱 데이터 폴더의 `stress/`에 남긴다. 다시 돌리면 새 녹음만 잰다. `server/.env`의 `JE_MFA_ENV`가 필요하다(`docs/guide/PRONUNCIATION_녹음으로_강세평가_시험_20261105.md` 「잰 값 남기기」) | 없음(맥 안에서만) |
+| `stress_report.py` | 남긴 값으로 강세 시험 가이드의 표를 다시 낸다. 개수와 비율만 찍는다 | 없음 |
 
 돈이 드는 스크립트는 몇 번 돌릴지와 비용을 먼저 사용자에게 말한다.
 

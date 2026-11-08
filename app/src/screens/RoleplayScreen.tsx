@@ -14,10 +14,12 @@ import { useRecorder } from "../audio/useRecorder";
 import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { pending } from "../flow/pending";
-import { scrollToShow, tapRow } from "../flow/review";
-import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, modelKey, movesPlace, notifiesSkip, practiceFor, showMicHint, type Action, type State } from "../flow/state";
+import { scrollToShow, tapRow, toggleRow } from "../flow/review";
+import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, messageIsError, modelKey, movesPlace, notifiesSkip, practiceFor, showMicHint, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
+import { HeardLine } from "../ui/HeardLine";
+import { heardKey } from "../ui/heardView";
 import { InRowButton } from "../ui/InRowButton";
 import { KoButton, KoLine } from "../ui/Interpret";
 import { LineToSay } from "../ui/LineToSay";
@@ -77,6 +79,9 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   // past bubbles show only what was said; one opens its buttons at a time (spec review-practice 8). The key is
   // "<place>:<line>", so two bubbles of one line (「다시 해 보기」) open apart.
   const [openRow, setOpenRow] = useState<string | null>(null);
+  // what was just heard, opened by a tap on it; kept by its try (`heardKey`), so the next try comes folded (spec
+  // heard-line-collapsed 2)
+  const [heardOpen, setHeardOpen] = useState<string | null>(null);
   const view = useRef({ offset: 0, height: 0 }); // the conversation's scroll, to bring an opened bubble into view
   const toShow = useRef<string | null>(null);
   const saved = useSaved();
@@ -364,7 +369,10 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   const skipLine = () => runThenHold(gate, tapHold, doSkip);
   // no speech for a while after the mic came on: thrown away the way 「취소」 does, through the same gate and hold, so a
   // 「말하기 끝」 at the same moment either sends first or finds nothing, and a tap on the 「🎤 말하기」 drawn in its
-  // place starts nothing (spec record-feedback 4, 5)
+  // place starts nothing (spec record-feedback 4, 5).
+  // `levelPoll` calls this once and never again, and `runThenHold` does nothing while taps are held: a recording
+  // without speech would then go on to 55 s. Nothing holds taps while the mic is on today; a new hold that can start
+  // during a recording must not drop this cancel (todo 20261108_34 3).
   const silentCancel = () => void runThenHold(gate, tapHold, doSilentCancel);
 
   // 「취소」: the recording is stopped and deleted on the phone, never sent; back to before speaking, in the same mode
@@ -407,14 +415,19 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       () => rec.start(stopRecording, { onNoSpeech: silentCancel, onSpeechEnd: stopRecording }),
       () => !mounted.current || epoch.current !== my,
     );
-    if (how === "failed") dispatch({ type: "recordCancel" });
+    // no permission or the mic did not start: back to before speaking, saying so (todo 20261108_34 1)
+    if (how === "failed") dispatch({ type: "micFailed" });
     // left while the mic was starting (permission prompt)
     else if (how === "left") await rec.discard();
-    // 「취소」 tapped while the mic was starting: thrown away now that it is on, as `doCancel` does (todo 26 1)
-    else if (how === "cancelled") {
-      await rec.cancel();
-      dispatch({ type: "recordCancel" });
-      tapHold.start();
+    else {
+      // the mic came on: the first-turn hint goes for good (spec record-feedback 3, todo 20261108_34 5)
+      dispatch({ type: "micOn" });
+      // 「취소」 tapped while the mic was starting: thrown away now that it is on, as `doCancel` does (todo 26 1)
+      if (how === "cancelled") {
+        await rec.cancel();
+        dispatch({ type: "recordCancel" });
+        tapHold.start();
+      }
     }
   }
 
@@ -535,7 +548,8 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
     );
   }
 
-  // A past bubble of mine: the script line, what was heard under it, and its buttons once tapped (review-practice 8)
+  // A past bubble of mine: the script line, what was heard under it (one line until the bubble opens, spec
+  // heard-line-collapsed 2), and its buttons once tapped (review-practice 8)
   function myBubble(at: number, b: (typeof state.history)[number]) {
     const idx = b.idx;
     const row = idx !== undefined ? `${at}:${idx}` : undefined;
@@ -552,7 +566,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
           {/* a line skipped without a recording has its script only (spec record-cancel-skip 3) */}
           {!b.skipped && (
             <View style={styles.heardRow}>
-              <Text style={[styles.heardLine, styles.shrink]}>{keepWords(`들린 말: ${b.text}`)}</Text>
+              <HeardLine text={b.text} open={opened} style={[styles.heardLine, styles.shrink]} />
               {opened && b.rec && (
                 <InRowButton
                   label="내 녹음"
@@ -717,10 +731,20 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             </View>
           </Named>
         )}
-        {/* what was heard, and the recording just sent next to it (spec three-line-listen 4) */}
+        {/* what was heard, and the recording just sent next to it (spec three-line-listen 4); one line until tapped,
+            a tap of its own apart from 「🔊 내 녹음」 (spec heard-line-collapsed 2) */}
         {state.heard && (
           <View style={styles.heardNow}>
-            <Text style={[styles.heard, styles.shrink]}>{keepWords(`들린 말: ${state.heard}`)}</Text>
+            <HeardLine
+              text={state.heard}
+              open={heardOpen === heardKey(state.heard, state.heardRec)}
+              onPress={() => {
+                const key = state.heard ? heardKey(state.heard, state.heardRec) : null;
+                if (key) setHeardOpen((o) => toggleRow(o, key));
+              }}
+              style={styles.heard}
+              wrapStyle={styles.shrink}
+            />
             {state.heardRec && (
               <InRowButton
                 label="내 녹음"
@@ -741,7 +765,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         )}
         {busy && !state.feedback && <Waiting who="ryan" text="라이언이 듣고 있어요" onShow={toEnd} />}
         {state.message &&
-          (state.phase === "error" ? <ErrorText text={state.message} /> : <Text style={styles.notice}>{keepWords(state.message)}</Text>)}
+          (messageIsError(state) ? <ErrorText text={state.message} /> : <Text style={styles.notice}>{keepWords(state.message)}</Text>)}
       </ScrollView>
 
       {/* No 「처음으로」 at the bottom: back does nearly the same, one screen at a time (2026-11-06 user). Without it

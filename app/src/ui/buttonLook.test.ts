@@ -35,3 +35,21 @@ test("pressing only dims the button, unlike a disabled one", () => {
 test("both kinds have a border of the same width", () => {
   expect(BUTTON_BORDER).toBe(2);
 });
+
+// WCAG relative luminance and contrast ratio
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+const contrast = (a: string, b: string) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+// todo 20261108_30 2: `#868E96` was 2.8:1 on the gray, read on the emulator but faint for a 15px small button's words
+// in bright light. Darker, but still lighter than the app's gray text, so the button still reads as off.
+test("a disabled button's words read on its gray and stay lighter than gray text", () => {
+  expect(contrast(colors.offText, colors.off)).toBeGreaterThanOrEqual(3.5);
+  expect(contrast(colors.offText, colors.off)).toBeLessThan(contrast(colors.sub, colors.off));
+});

@@ -1,5 +1,5 @@
 import type { Topic } from "../api/types";
-import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, resumeFrom, startStep, topicsOf, canStart } from "./situation";
+import { backFrom, clearsTurnedDown, HOW_LABEL, howChoices, lineFor, resumeFrom, startStep, topicsOf, canStart, resumeOnBack } from "./situation";
 
 const usa: Topic = { id: "usa", name_ko: "미국 여행", placeholder_ko: "예", picks: [{ id: "u-hotel-checkin", title_ko: "뉴욕 호텔 체크인" }] };
 const other: Topic = { id: "other", name_ko: "그 밖의 상황", placeholder_ko: "예", picks: [] };
@@ -80,5 +80,32 @@ describe("resumeFrom", () => {
   test("starts at the topics for a topic the server no longer has, or nothing to resume", () => {
     expect(resumeFrom({ topic: "gone", step: "list" }, [usa])).toBeNull();
     expect(resumeFrom(null, [usa])).toBeNull();
+  });
+});
+
+// todo 20261108_32 1: going back while a script was being made, the Mac still makes it the newest conversation; the
+// topics' row asked when the screen opened is then the wrong one and must be asked again once the topics are back
+describe("asking where to resume again on the way back (resumeOnBack)", () => {
+  test("back from the wait remembers the script left being made, and asks nothing yet", () => {
+    expect(resumeOnBack("describe", { making: true, madeLeft: false })).toEqual({ madeLeft: true, askAgain: false });
+  });
+
+  test("back on the topics after it asks again, once", () => {
+    const back = resumeOnBack("topic", { making: false, madeLeft: true });
+    expect(back).toEqual({ madeLeft: false, askAgain: true });
+    expect(resumeOnBack("topic", { making: false, madeLeft: back.madeLeft })).toEqual({ madeLeft: false, askAgain: false });
+  });
+
+  test("a script still being made when the topics come back asks again too", () => {
+    expect(resumeOnBack("topic", { making: true, madeLeft: false })).toEqual({ madeLeft: false, askAgain: true });
+  });
+
+  test("nothing left behind: the row stays as it was", () => {
+    expect(resumeOnBack("topic", { making: false, madeLeft: false })).toEqual({ madeLeft: false, askAgain: false });
+    expect(resumeOnBack("how", { making: false, madeLeft: false })).toEqual({ madeLeft: false, askAgain: false });
+  });
+
+  test("leaving the screen asks nothing", () => {
+    expect(resumeOnBack(null, { making: true, madeLeft: true })).toEqual({ madeLeft: true, askAgain: false });
   });
 });

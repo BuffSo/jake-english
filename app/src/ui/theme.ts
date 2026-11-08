@@ -27,7 +27,8 @@ export const colors = {
   // a button that cannot be pressed now, whatever its kind: a fixed gray, not a see-through blue or gray, which read
   // like a secondary button (spec button-colors 1). The words stay readable: 「평가하고 있어요」 says what is going on.
   off: "#E9ECEF",
-  offText: "#868E96",
+  // 3.95:1 on `off`; `#868E96` (2.8:1) was faint for a small button's words (todo 20261108_30 2)
+  offText: "#6C757D",
 };
 
 // The gap above each screen's content. The frame in App.tsx already keeps clear of the status bar; this used to
