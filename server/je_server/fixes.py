@@ -67,7 +67,12 @@ def check(items: list[dict], turns: dict[int, str]) -> list[Found]:
 
 
 def line_before(rp: Roleplay, idx: int) -> ScriptLine | None:
-    """The line to play before practising line `idx`: for a fix line, Ryan's line before the turn it fixes."""
+    """The line to play before practising line `idx`: for a fix line, Ryan's last English line before the turn it
+    fixes (Ryan's Korean `help` lines are not part of the talk, so they are walked past, like the app's `savedBefore`)."""
     line = rp.lines[idx] if 0 <= idx < len(rp.lines) else None
-    at = line.fix.of if line is not None and line.fix is not None else idx
-    return rp.lines[at - 1] if 1 <= at <= len(rp.lines) else None
+    if line is None or line.fix is None:
+        return rp.lines[idx - 1] if 1 <= idx <= len(rp.lines) else None
+    at = line.fix.of - 1
+    while 0 <= at < len(rp.lines) and not (rp.lines[at].speaker == "ryan" and rp.lines[at].kind != "help"):
+        at -= 1
+    return rp.lines[at] if 0 <= at < len(rp.lines) else None

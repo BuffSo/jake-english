@@ -14,6 +14,7 @@ import { useRecorder } from "../audio/useRecorder";
 import { createGate, createStartCancel, runThenHold, startKeepingCancel, stopThenSend, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView, mayAutoPlay, mayReplay } from "../flow/interpret";
 import { pending } from "../flow/pending";
+import { lineSounds, replaysSituation, savedBefore as beforeOfSaved } from "../flow/talk";
 import { scrollToShow, tapRow, toggleRow } from "../flow/review";
 import { canReplay, canSkip, leaveAction, leavesScreen, mayListen, messageIsError, modelKey, movesPlace, notifiesSkip, practiceFor, showMicHint, type Action, type State } from "../flow/state";
 import { BackButton, useBackKey } from "../ui/BackButton";
@@ -356,8 +357,13 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
   }
 
   // the Ryan line before a practised line of mine, to know what it answers (spec 4)
-  function playBefore(audio: string | null, tag: string) {
-    if (audio) playFromBubble(api.audioSource(audio), tag);
+  // (a free talk's Ryan line has no `audio`, its sounds are in `parts`, so a list is played)
+  function playBefore(keys: string[], tag: string) {
+    if (keys.length === 0 || !mayListen(now.current.phase, answeringNow.current)) return;
+    tapPlay(sounds, tag, () => {
+      sounds.clear();
+      for (const k of keys) sounds.enqueue(api.audioSource(k), tag);
+    });
   }
 
   // a start right after 「취소」 or 「건너뛰기」 is the second tap of a double tap, on the button the redraw put there
@@ -621,7 +627,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
       : null;
   const before = practice?.kind === "mine" && line && !fromSaved ? state.seen[line.idx - 1] : undefined;
   // in saved practice the line before is hidden until asked (「앞 대화 보기」), whoever said it
-  const savedBefore = fromSaved && line ? rp.lines[line.idx - 1] : undefined;
+  const savedBefore = fromSaved && line ? beforeOfSaved(rp, line) : undefined;
   const canCopy = fromSaved && canReplay(state.phase) && !playing && !copying;
 
   return (
@@ -637,7 +643,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
             practice ? rp.frame.title_ko : `나: ${rp.frame.user_role_ko} · 라이언: ${rp.frame.ryan_role_ko} · ${rp.frame.place_ko}`,
           )}
         </Text>
-        {fromSaved && (
+        {fromSaved && replaysSituation(rp) && (
           <Pressable onPress={replaySituation} hitSlop={8} style={styles.replay}>
             <Text style={[styles.link, !canCopy && styles.off]}>{copying ? "준비하고 있어요" : "이 상황 다시 하기 ›"}</Text>
           </Pressable>
@@ -682,7 +688,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {state.phase === "ryan" && line && ryanBubble({ idx: line.idx, text: line.text })}
         {myTurn && before?.speaker === "ryan" && (
           <Named part="ryan">
-            <Pressable onPress={() => playBefore(before.audio, "before")} style={[styles.bubble, styles.ryan]}>
+            <Pressable onPress={() => playBefore(before.audio ? [before.audio] : [], "before")} style={[styles.bubble, styles.ryan]}>
               <Text style={styles.beforeText}>{before.text}</Text>
               {koLine(before.idx)}
               <View style={styles.linkGroup}>
@@ -702,7 +708,7 @@ export function RoleplayScreen({ state, dispatch, sounds }: Props) {
         {myTurn && savedBefore && state.beforeOpen && (
           <Named part={savedBefore.speaker === "ryan" ? "ryan" : "mine"}>
             <Pressable
-              onPress={() => playBefore(savedBefore.audio, "savedBefore")}
+              onPress={() => playBefore(lineSounds(savedBefore), "savedBefore")}
               style={[styles.bubble, savedBefore.speaker === "ryan" ? styles.ryan : styles.user]}
             >
               <Text style={styles.beforeText}>{savedBefore.text}</Text>
