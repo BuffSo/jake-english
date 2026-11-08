@@ -52,6 +52,14 @@ class Counting:
         return resp
 
 
+def label(raw: str, said: str, ending: str) -> str:
+    """How the suggestion came out: the model kept the ending, the server swapped one in, or neither. An ending the
+    server does not know is said as the model wrote it, so `raw == said` alone is not a kept ending."""
+    if not said.endswith(ending):
+        return "MISSED"
+    return "model kept" if raw == said else "swapped"
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--presses", type=int, default=7, help="suggestions per topic")
@@ -67,7 +75,7 @@ async def main() -> None:
         for _ in range(args.presses):
             ending = pick_ending(turned_down)
             text = await claude.recommend([], turned_down, topic, ending)
-            kept = "model kept" if counting.raw[-1] == text else ("swapped" if text.endswith(ending) else "MISSED")
+            kept = label(counting.raw[-1], text, ending)
             given[ending] += 1
             how[kept] += 1
             heard_before = next((e for e, _ in JAKE_ENDINGS if turned_down and turned_down[-1].endswith(e)), None)

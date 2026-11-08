@@ -88,7 +88,7 @@ async def test_recommend_does_not_repeat_the_last_turned_down_ending(engine, fak
     # 「다른 걸로요」: the next suggestion ends another way (spec situation-topics 4)
     for _ in range(20):
         await engine.recommend(["카페에서 주문하는 상황을 추천해요."])
-    assert "상황을 추천해요." not in fake_claude.endings and len(set(fake_claude.endings)) == 2
+    assert "상황을 추천해요." not in fake_claude.endings  # the weights: test_claude.py, with a seeded random
 
 
 async def test_recommend_passes_turned_down(engine, fake_claude):
