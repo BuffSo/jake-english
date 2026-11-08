@@ -193,9 +193,12 @@ class Engine:
         old = self.load(rp_id)
         if old.pick is not None and old.topic is not None:
             try:
-                return await self.create_pick(old.topic, old.pick)
+                topics.pick(old.topic, old.pick)
             except KeyError:
-                pass
+                pass  # taken off the list: copied below
+            else:
+                # outside the try: a KeyError from inside is a bug, not a pick taken off the list (todo 08 1)
+                return await self.create_pick(old.topic, old.pick)
         rp = Roleplay(id=self.store.new_id(), created=datetime.now().isoformat(timespec="seconds"),
                       situation=old.situation, frame=old.frame, lines=[l.model_copy(deep=True) for l in old.lines],
                       origin=old.origin or old.id,  # a copy of a copy still points at the first (ADR-0011)

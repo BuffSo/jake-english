@@ -343,3 +343,18 @@ async def test_a_cancelled_answer_lets_sohee_go_on(engine, fake_whisper, monkeyp
     with pytest.raises(asyncio.CancelledError):
         await task
     assert engine.answers_running == 0 and engine.quiet.is_set()
+
+
+async def test_copy_of_a_list_run_lets_an_error_inside_create_pick_show(engine, monkeypatch):
+    # todo fixed-list-scripts minors 1: only a pick taken off the list is copied as it is. A KeyError from inside
+    # create_pick is a bug: it must show, not be taken for 「off the list」 and leave a copy behind as well.
+    rp = await engine.create_pick(*SNEAKER)
+
+    async def broken(topic_id, pick_id):
+        raise KeyError("inside create_pick")
+
+    monkeypatch.setattr(engine, "create_pick", broken)
+    before = len(engine.store.all())
+    with pytest.raises(KeyError, match="inside create_pick"):
+        await engine.copy(rp.id)
+    assert len(engine.store.all()) == before
