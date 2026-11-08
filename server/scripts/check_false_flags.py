@@ -7,7 +7,8 @@ Prints counts and the differing word pairs, not the transcript.
     JE_WHISPER_PORT=<free port> uv run python scripts/check_false_flags.py <recording> <script, one line per sentence>
 (use a whisper port the running Mac server is not using)
 
-Records mode: the followed turns saved by the app, with the old rule (stored issues) and the current one.
+Records mode: the followed turns saved by the app, with the points stored at the time (by whatever rule was
+current then) and the ones the current rule gives.
 Prints numbers only, no words.
     uv run python scripts/check_false_flags.py --records
 """
@@ -54,7 +55,7 @@ async def recording(path: Path, script: Path) -> None:
 
 def records() -> None:
     root = load_settings().data_dir / "roleplays"
-    followed = old = new = 0
+    followed = stored = new = 0
     per_turn: Counter[str] = Counter()
     for f in sorted(root.glob("*/roleplay.json")):
         rp = Roleplay.model_validate_json(f.read_text(encoding="utf-8"))
@@ -64,12 +65,14 @@ def records() -> None:
                 if not a.followed or idx not in text:
                     continue
                 followed += 1
-                old += bool(a.issues)
+                stored += bool(a.issues)
                 n = len(compare(text[idx], a.heard).diffs)
                 new += bool(n)
                 if n:
                     per_turn["3+" if n >= 3 else str(n)] += 1
-    print(f"followed turns {followed}, old rule flagged {old}, new rule flagged {new}")
+    # stored: what each turn got when it was made, under the rule of that day, not one older rule (todo
+    # follow-feedback leftovers 4)
+    print(f"followed turns {followed}, stored flagged {stored}, current rule flagged {new}")
     print("differences per flagged turn: " + ", ".join(f"{k}: {per_turn[k]}" for k in ("1", "2", "3+")))
 
 
