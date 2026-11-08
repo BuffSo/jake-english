@@ -78,6 +78,9 @@ export type State = {
   // there (spec situation-topics 2); null starts it at the topics. Back from the roleplay mid-way always starts at
   // the topics, whose last row resumes it (spec resume-roleplay 5)
   situationFrom: SituationStart | null;
+  // the mic was started in this conversation or practice: until then the turn shows 「🎤를 누르고 말하세요」 (spec
+  // record-feedback 3)
+  micUsed: boolean;
 };
 
 export type Action =
@@ -92,6 +95,7 @@ export type Action =
   | { type: "recordStart" }
   | { type: "recordStop" }
   | { type: "recordCancel" }
+  | { type: "noSpeech" }
   | { type: "skip" }
   | { type: "event"; e: AttemptEvent }
   | { type: "failed"; code: ErrorCode; say?: { text: string } }
@@ -141,7 +145,11 @@ export const initial: State = {
   returnTo: null,
   beforeOpen: false,
   situationFrom: null,
+  micUsed: false,
 };
+
+// after the recording was thrown away for having no speech in it (spec record-feedback 4)
+export const NO_SPEECH = "말소리가 없어 녹음을 멈췄어요.";
 
 export const OFFLINE = "맥에 연결할 수 없어요. 맥과 인터넷 연결을 확인해 주세요.";
 
@@ -169,8 +177,19 @@ export function mayListen(p: Phase, answering: boolean): boolean {
 // 「건너뛰기」: my turn waits for a recording, before recording or after teacher Ryan's answer, which offers only
 // 「다시 해 보기」. Not after a try that offers 「다음」, which moves on already (spec record-cancel-skip 2).
 export function canSkip(s: State): boolean {
-  const toSay = s.line !== null && (s.line.speaker === "user" || s.mode === "shadow");
-  return s.screen === "roleplay" && toSay && (s.phase === "ready" || (s.phase === "evaluated" && s.aside));
+  return s.screen === "roleplay" && toSay(s) && (s.phase === "ready" || (s.phase === "evaluated" && s.aside));
+}
+
+// the line on screen is the learner's to say: theirs, or Ryan's to follow in shadow practice
+function toSay(s: State): boolean {
+  return s.line !== null && (s.line.speaker === "user" || s.mode === "shadow");
+}
+
+// 「🎤를 누르고 말하세요」 above the buttons: my turn, before the mic was ever started in this conversation or practice
+// (spec record-feedback 3). Not every turn: the screen would get noisy, and the cue and the red dot already tell at the
+// tap whether the mic came on.
+export function showMicHint(s: State): boolean {
+  return s.screen === "roleplay" && s.phase === "ready" && toSay(s) && !s.micUsed;
 }
 
 // A 「건너뛰기」 the Mac is told of: one inside the conversation moves its place past the line (spec resume-roleplay 3).
@@ -321,9 +340,12 @@ export function reduce(s: State, a: Action): State {
       return { ...s, history: [...s.history, { kind: "ryan", text: s.line.text, idx: s.line.idx }], idx: s.idx + 1, phase: "loading" };
     case "recordStart":
       if (s.phase !== "ready" && s.phase !== "evaluated") return s;
-      return { ...s, phase: "recording", message: null };
+      return { ...s, phase: "recording", message: null, micUsed: true };
     case "recordCancel":
       return s.phase === "recording" ? { ...s, phase: "ready" } : s;
+    case "noSpeech":
+      // thrown away like 「취소」, with a line saying why (spec record-feedback 4)
+      return s.phase === "recording" ? { ...s, phase: "ready", message: NO_SPEECH } : s;
     case "recordStop":
       if (s.phase !== "recording") return s;
       return { ...s, ...freshTurn, phase: "evaluating" };
@@ -407,6 +429,7 @@ export function reduce(s: State, a: Action): State {
         mode: a.kind === "shadow" ? "shadow" : "practice",
         practice: { kind: a.kind, order: a.order, at: 0, from: "end" },
         practiceNo: s.practiceNo + 1,
+        micUsed: false,
         idx: a.order[0],
         history: [],
         line: null,
@@ -427,6 +450,7 @@ export function reduce(s: State, a: Action): State {
         mode: a.kind === "shadow" ? "shadow" : "practice",
         practice: { kind: a.kind, order: [a.idx], at: 0, from: "roleplay" },
         practiceNo: s.practiceNo + 1,
+        micUsed: false,
         resume: s,
         idx: a.idx,
         line,

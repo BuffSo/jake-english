@@ -18,7 +18,8 @@
       "predictiveBackGestureEnabled": false,
       "package": "dev.jakeso.english",
       "permissions": [
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "VIBRATE"
       ]
     },
     "web": {

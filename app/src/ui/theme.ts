@@ -19,6 +19,10 @@ export const colors = {
   sohee: "#2F9E44", // Sohee's tag on her interpretation (spec korean-translation 2)
   soheeText: "#1F6F34", // her Korean: darker, to read on the gray and blue bubbles
   danger: "#C92A2A",
+  // while recording, in the blue 「● 말하기 끝」: the blinking red dot (white ring) and the thin voice line (spec
+  // record-feedback 2). A red band and a red button read as too loud (2026-11-08 user).
+  recDot: "#FA5252",
+  voiceLine: "#A5D8FF",
   // a button that cannot be pressed now, whatever its kind: a fixed gray, not a see-through blue or gray, which read
   // like a secondary button (spec button-colors 1). The words stay readable: 「평가하고 있어요」 says what is going on.
   off: "#E9ECEF",

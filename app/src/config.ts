@@ -7,3 +7,5 @@ export const CONFIGURED = SERVER_URL !== "" && SERVER_TOKEN.length >= 32;
 // review), so the phone stops a few seconds earlier.
 export const SERVER_RECORD_LIMIT_MS = 60_000;
 export const RECORD_LIMIT_MS = 55_000;
+// 「녹음이 곧 끝나요」 from here until the phone stops (spec record-feedback 2)
+export const SOON_ENDS_MS = 50_000;

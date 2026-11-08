@@ -210,3 +210,30 @@ describe("a cancel while the mic is starting", () => {
     expect(sc.ask()).toBe(false);
   });
 });
+
+// spec record-feedback 4, 5: the cancel for no speech goes the way 「취소」 does
+test("a silent cancel while a stop runs does nothing, and the stop sends", async () => {
+  const gate = createGate();
+  const hold = createHold(() => 0);
+  const send = jest.fn(async () => {});
+  let finish!: (v: string) => void;
+  const stop = stopThenSend(gate, () => new Promise<string>((r) => (finish = r)), send);
+  const silentCancel = jest.fn(async () => true);
+  expect(await runThenHold(gate, hold, silentCancel)).toBe(false);
+  expect(silentCancel).not.toHaveBeenCalled();
+  expect(hold.on).toBe(false);
+  finish("file:///rec.m4a");
+  await stop;
+  expect(send).toHaveBeenCalledWith("file:///rec.m4a");
+});
+
+test("a tap right after a silent cancel starts nothing", async () => {
+  // the redraw puts 「🎤 말하기」 where 「말하기 끝」 was; a tap on it at the same moment must not start the mic
+  let now = 1000;
+  const gate = createGate();
+  const hold = createHold(() => now);
+  expect(await runThenHold(gate, hold, async () => true)).toBe(true);
+  expect(hold.on).toBe(true);
+  now += TAP_HOLD_MS;
+  expect(hold.on).toBe(false);
+});

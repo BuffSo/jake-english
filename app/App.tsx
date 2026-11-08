@@ -5,6 +5,7 @@ import { StyleSheet, Text } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import type { Home } from "./src/api/types";
+import { prepareCues } from "./src/audio/cues";
 import { SoundQueue } from "./src/audio/player";
 import { CONFIGURED } from "./src/config";
 import { initial, reduce } from "./src/flow/state";
@@ -26,6 +27,8 @@ export default function App() {
 
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true }).catch(() => {});
+    // the start, end and cancel cues, made once so a tap does not wait for them (spec record-feedback 1)
+    prepareCues();
   }, []);
 
   let screen;

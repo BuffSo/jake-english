@@ -4,7 +4,7 @@
 > 앞선 스펙: `docs/superpowers/specs/2026-11-05-roleplay-practice-design.md`(이하 「역할극 뒤 연습 스펙」), `docs/superpowers/specs/2026-11-07-offscript-aside-design.md`(이하 「선생님 답 스펙」), `docs/superpowers/specs/2026-11-07-review-practice-design.md`, `docs/superpowers/specs/2026-11-07-review-screens-design.md`, `docs/superpowers/specs/2026-11-08-three-line-listen-design.md`. 이 문서는 그 스펙들을 함께 읽는다는 전제로 쓰고, 거기 있는 것은 되풀이하지 않는다.
 > 작성: 2026-11-08 (superpowers brainstorming, record-cancel-skip 카드)
 > 결정: 사용자는 main 세션을 거쳐 아래 2의 「라이언」, 3, 4를 추천대로 정했다(2026-11-08 「ㅇㅋ」). 같은 질문에 함께 적은 AI 판단(연습에서도 같은 두 버튼, 맥에 건너뛰기를 기록하지 않음, 선생님 라이언의 말 고치기, 「취소」 두 번 누름 막기)도 그대로 가기로 했다.
-> 바뀜: 4의 「회색 버튼」은 2026-11-08 흰 바탕에 파란 테두리가 되었다(`docs/superpowers/specs/2026-11-08-button-colors-design.md`).
+> 바뀜: 4의 「회색 버튼」은 2026-11-08 흰 바탕에 파란 테두리가 되었다(`docs/superpowers/specs/2026-11-08-button-colors-design.md`). 4의 「녹음하는 동안」 큰 버튼은 같은 날 「● 말하기 끝」(깜빡이는 빨간 동그라미와 목소리 줄)이 되었다(`docs/superpowers/specs/2026-11-08-record-feedback-design.md`).
 > 표시: 「(AI 판단)」은 사용자가 말한 것이 아니라 AI가 정한 것이다. 「(AI 추천을 사용자가 받아들임)」은 AI가 추천하고 사용자가 받아들인 것이다. 표시가 없는 결정은 사용자가 정했거나 PRD, 앞선 스펙에 있는 것이다.
 
 ## 왜 만드나
