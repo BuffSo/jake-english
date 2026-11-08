@@ -200,5 +200,15 @@ def test_start_passes_a_recorded_line_after_pos():
     assert resume_start(seven(pos=2, said=[1, 3])) == (4, False)  # U3's try stayed under pos (Ryan's voice cut)
 
 
+def test_i_speak_first_from_my_first_line():
+    # U0 R1 U2 R3: a skipped first line of mine has no Ryan line before it (spec resume-unrecorded 3)
+    rp = seven(pos=4, said=[1])
+    rp.lines = [ScriptLine(idx=i, speaker="user" if i % 2 == 0 else "ryan", text=f"Line number {i}.") for i in range(4)]
+    rp.attempts = {2: rp.attempts[1]}
+    assert resume_start(rp) == (0, True)
+    rp.pos, rp.attempts = 1, {}  # U0 skipped, left before U2
+    assert resume_start(rp) == (1, False)
+
+
 def test_said_on_takes_every_recorded_line():
     assert [s["idx"] for s in said_on(seven(pos=6, said=[1, 5]))] == [1, 5]
