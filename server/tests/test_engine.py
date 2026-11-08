@@ -237,6 +237,25 @@ async def test_notes_asked_while_made_in_the_background_share_one_call(engine, f
         ("annotate", (rp.lines[1].text, engine.context(rp, 1)))]
 
 
+@pytest.mark.parametrize("kind", ["three", "ko"])
+async def test_a_finished_task_forgets_only_itself(engine, fake_claude, kind):
+    # todo line-notes minors 1: a task's done callbacks run on a later turn of the loop. A new ask that comes in
+    # between starts its own task; the old callback must not remove it, or the next ask calls Claude once more.
+    rp = await engine.create("길 묻기")
+    await asyncio.gather(*list(engine.threes.values()), return_exceptions=True)  # the learner's notes made at start
+    tasks, start = (engine.threes, engine._three_task) if kind == "three" else (engine.kos, engine._ko_task)
+    key = (rp.id, 0)
+    fake_claude.fail_next = True
+    first = start(*key)
+    await asyncio.sleep(0)  # `first` runs and fails at once; its callbacks queue behind this test's next step
+    assert first.done() and tasks.get(key) is first
+    second = start(*key)
+    assert second is not first
+    await asyncio.sleep(0)  # `first`'s callbacks run
+    assert tasks.get(key) is second
+    await second
+
+
 # --- Sohee's interpretation (spec korean-translation 4, 5) ------------------------------------------------------
 
 async def test_ko_made_once_and_kept_on_the_line(engine, fake_claude):

@@ -281,13 +281,9 @@ class Engine:
 
     def _three_task(self, rp_id: str, idx: int) -> asyncio.Task:
         """The one task making this line's notes, started if none is running."""
-        key = (rp_id, idx)
-        task = self.threes.get(key)
+        task = self.threes.get((rp_id, idx))
         if task is None or task.done():
-            task = asyncio.create_task(self._make_three(rp_id, idx))
-            task.add_done_callback(_quiet)
-            task.add_done_callback(lambda _: self.threes.pop(key, None))
-            self.threes[key] = task
+            task = _keep(self.threes, (rp_id, idx), asyncio.create_task(self._make_three(rp_id, idx)))
         return task
 
     async def _make_three(self, rp_id: str, idx: int) -> ThreeLine:
@@ -307,14 +303,14 @@ class Engine:
         _, line = self.get_line(rp_id, idx)
         if line.ko is not None:
             return line.ko
-        key = (rp_id, idx)
-        task = self.kos.get(key)
+        return await asyncio.shield(self._ko_task(rp_id, idx))
+
+    def _ko_task(self, rp_id: str, idx: int) -> asyncio.Task:
+        """The one task making this line's Korean, started if none is running."""
+        task = self.kos.get((rp_id, idx))
         if task is None or task.done():
-            task = asyncio.create_task(self._make_ko(rp_id, idx))
-            task.add_done_callback(_quiet)
-            task.add_done_callback(lambda _: self.kos.pop(key, None))
-            self.kos[key] = task
-        return await asyncio.shield(task)
+            task = _keep(self.kos, (rp_id, idx), asyncio.create_task(self._make_ko(rp_id, idx)))
+        return task
 
     async def _make_ko(self, rp_id: str, idx: int) -> str:
         rp, line = self.get_line(rp_id, idx)
@@ -684,6 +680,15 @@ class Engine:
             if pos is not None:
                 rp.pos = max(rp.pos, pos)
             self.store.save(rp)
+
+
+def _keep(tasks: dict, key, task: asyncio.Task) -> asyncio.Task:
+    """Keeps `task` under `key` while it runs. Its done callback runs on a later turn of the loop, and a new ask may
+    have put its own task under the key in between: the callback removes only its own (todo line-notes minors 1)."""
+    tasks[key] = task
+    task.add_done_callback(_quiet)
+    task.add_done_callback(lambda t: tasks.pop(key) if tasks.get(key) is t else None)
+    return task
 
 
 def _quiet(task: asyncio.Task) -> None:
