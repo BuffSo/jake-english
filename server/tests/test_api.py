@@ -42,7 +42,9 @@ def test_home_lists_fixed_lines(client):
         "thinking": {
             "jake": ["/assets/jake-thinking-1.png", "/assets/jake-thinking-2.png"],
             "ryan": ["/assets/ryan-thinking-1.png", "/assets/ryan-thinking-2.png"],
+            "sohee": ["/assets/sohee-thinking-1.png", "/assets/sohee-thinking-2.png"],
         },
+        "sohee": {"face": "/assets/sohee-face.png", "whisper": "/assets/sohee-whisper-face.png"},
     }
 
 
@@ -55,6 +57,25 @@ def test_thinking_faces_served(client, settings):
         r = client.get(f"/assets/{n}")
         assert r.status_code == 200 and r.content == b"png"
     assert client.get("/assets/ryan-face-v3.png").status_code == 404  # on disk but not listed
+
+
+def test_home_lists_sohees_pictures(client):
+    # Sohee's faces for the free talk (spec free-talk 2, 3): thinking pair plus the face and whisper face
+    images = client.get("/home").json()["images"]
+    assert images["thinking"]["sohee"] == ["/assets/sohee-thinking-1.png", "/assets/sohee-thinking-2.png"]
+    assert images["sohee"] == {"face": "/assets/sohee-face.png", "whisper": "/assets/sohee-whisper-face.png"}
+
+
+def test_sohee_pictures_are_served(client, settings):
+    # made-up bytes in the test assets folder; the real pictures never go into the repo
+    settings.assets_dir.mkdir(parents=True)
+    names = ["sohee-thinking-1.png", "sohee-thinking-2.png", "sohee-face.png", "sohee-whisper-face.png"]
+    for n in names + ["sohee-front.png"]:
+        (settings.assets_dir / n).write_bytes(b"png")
+    for n in names:
+        r = client.get(f"/assets/{n}")
+        assert r.status_code == 200 and r.content == b"png"
+    assert client.get("/assets/sohee-front.png").status_code == 404  # on disk but not listed
 
 
 def test_jake_front_served(client, settings):
