@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { api } from "../api";
 import type { Home, Said } from "../api/types";
 import type { SoundQueue } from "../audio/player";
+import { createHomeLoad, leaveHome } from "../flow/homeActions";
 import { homeLines, homeSounds } from "../flow/homeLines";
 import { Button } from "../ui/Button";
 import { ChoiceCard } from "../ui/ChoiceCard";
@@ -37,16 +38,23 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
     [sounds],
   );
 
-  const load = useCallback(async () => {
+  // one `/home?tip=1` at a time: a double tap on 「다시 시도」 must not use up the day's tip (`createHomeLoad`)
+  const ask = useMemo(
+    () =>
+      createHomeLoad(
+        () => api.getHome(),
+        (h) => {
+          setHome(h);
+          say(homeSounds(h, false));
+        },
+        (e) => setError(messageOf(e)),
+      ),
+    [say, setHome],
+  );
+  const load = useCallback(() => {
     setError(null);
-    try {
-      const h = await api.getHome();
-      setHome(h);
-      say(homeSounds(h, false));
-    } catch (e) {
-      setError(messageOf(e));
-    }
-  }, [say, setHome]);
+    return ask();
+  }, [ask]);
 
   useEffect(() => {
     if (opened) say(homeSounds(opened, true));
@@ -76,7 +84,7 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
               title="대화 연습하기"
               line="상황을 정하면 라이언과 영어로 주고받아요"
               color={colors.primary}
-              onPress={onRoleplay}
+              onPress={() => leaveHome(sounds, onRoleplay)}
             />
             <View style={styles.gap} />
             <ChoiceCard
@@ -85,7 +93,7 @@ export function HomeScreen({ sounds, home, setHome, onRoleplay, onReview }: Prop
               title="복습하기"
               line="지난 상황과 모아 둔 문장을 다시 말해 봐요"
               color={colors.review}
-              onPress={onReview}
+              onPress={() => leaveHome(sounds, onReview)}
             />
           </View>
         </>
