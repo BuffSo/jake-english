@@ -41,7 +41,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   // one copy at a time: `copying` is the render's value, so two taps before the next render would both pass it
   // (PR #15 review); the gate is checked at the tap itself, like the recording buttons (PR #13)
   const gate = useRef(createGate()).current;
-  // no turn here: Sohee plays whenever asked and stops what played, like ▶ (spec korean-translation 2)
+  // no turn here: Sohee plays whenever asked and stops what played, like 🔊 (spec korean-translation 2)
   const interp = useInterpret(id, sounds, () => mounted.current);
   const [koOpen, setKoOpen] = useState<Record<number, boolean>>({});
   const koOpenNow = useRef(koOpen); // set at the tap: a sound made before plays at once
@@ -98,7 +98,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
     sounds.enqueue(src);
   }
 
-  // 「▶ 처음 녹음」: the first recording, a short pause, then this run's (review-practice 4). Many recordings end right
+  // 「🔊 처음 녹음」: the first recording, a short pause, then this run's (review-practice 4). Many recordings end right
   // on the last word, so back to back the two ran together (todo 01).
   function playPair(pair: { first: TryRef; then: TryRef | null }) {
     sounds.clear();
@@ -271,7 +271,7 @@ function RyanLine(props: LineProps & { onFollow: () => void }) {
         <View style={styles.actions}>
           {audio && (
             <Pressable onPress={() => onPlay(api.audioSource(audio))} hitSlop={8}>
-              <Text style={styles.play}>▶ 듣기</Text>
+              <Text style={styles.play}>🔊 듣기</Text>
             </Pressable>
           )}
           <KoButton view={ko.view} onPress={ko.onToggle} />
@@ -285,9 +285,11 @@ function RyanLine(props: LineProps & { onFollow: () => void }) {
   );
 }
 
+// 「🔊 듣기」 plays my line's model here too, like Ryan's lines (spec three-line-listen 6); no rate on this screen
 function MyLine(props: LineProps & { id: string; onPair: (p: { first: TryRef; then: TryRef | null }) => void; onAgain: () => void }) {
   const { id, l, open, onToggle, onLayout, ko, star, onPlay, onPair, onAgain } = props;
   const pair = comparePair(id, l);
+  const audio = l.line.audio;
   return (
     <Pressable onPress={onToggle} onLayout={onLayout} style={[styles.line, open && styles.open]}>
       <View style={styles.who}>
@@ -301,9 +303,14 @@ function MyLine(props: LineProps & { id: string; onPair: (p: { first: TryRef; th
       ))}
       {open && (
         <View style={styles.actions}>
+          {audio && (
+            <Pressable onPress={() => onPlay(api.audioSource(audio))} hitSlop={8}>
+              <Text style={styles.play}>🔊 듣기</Text>
+            </Pressable>
+          )}
           {pair && (
             <Pressable onPress={() => onPair(pair)} hitSlop={8}>
-              <Text style={styles.play}>▶ 처음 녹음</Text>
+              <Text style={styles.play}>🔊 처음 녹음</Text>
             </Pressable>
           )}
           <KoButton view={ko.view} onPress={ko.onToggle} />
@@ -327,7 +334,7 @@ function TryView({ t, open, onPlay }: { t: Try; open: boolean; onPlay: () => voi
         <Text style={styles.heard}>{keepWords(`들린 말: ${t.heard}`)}</Text>
         {open && (
           <Pressable onPress={onPlay} hitSlop={8}>
-            <Text style={styles.play}>▶ 내 녹음</Text>
+            <Text style={styles.play}>🔊 내 녹음</Text>
           </Pressable>
         )}
       </View>

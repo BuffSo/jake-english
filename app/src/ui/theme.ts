@@ -5,6 +5,9 @@ export const colors = {
   weak: "#8A8A8A",
   strong: "#FFE066",
   stress: "#D9480F", // stressed syllables in the three-line notes: bold dark orange text, no fill (2026-11-06 user)
+  // the Korean pronunciation line, its 「발음」 tag and the sounds in the reading line: set apart from the English line
+  // (spec three-line-listen 1, 2026-11-08 user)
+  pron: "#4A6585",
   ryan: "#F1F3F5",
   user: "#E7F5FF",
   feedback: "#FFF9DB",

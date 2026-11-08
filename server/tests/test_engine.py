@@ -304,6 +304,17 @@ async def test_attempt_records_when(engine_with_rp, speech_bytes, fake_whisper):
     assert at is not None and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d", at)
 
 
+async def test_heard_carries_the_recording_number(engine_with_rp, speech_bytes, fake_whisper):
+    """The app plays the try just sent by its number (spec three-line-listen 7); the file is saved before `heard`."""
+    engine, rp_id, user_idx = engine_with_rp
+    fake_whisper.text = "It's right over there."
+    for n in (1, 2):
+        events = [e async for e in engine.attempt(rp_id, user_idx, speech_bytes, "retry")]
+        heard = next(e for e in events if e["type"] == "heard")
+        assert heard["n"] == n
+        assert engine.recording(rp_id, user_idx, n).read_bytes() == speech_bytes
+
+
 # --- situation topics (spec situation-topics 4, 7) ---------------------------------------------------------------
 
 async def test_create_keeps_the_topic(engine, fake_claude):

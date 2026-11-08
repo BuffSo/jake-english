@@ -18,7 +18,7 @@ async def test_aside_answers_in_korean_and_keeps_the_line(engine_with_rp, speech
     fake_whisper.text = "Wait, let me try that again."
     before = [l.text for l in engine.store.load(rp_id).lines]
     ev = await run(engine, rp_id, user_idx, speech_bytes)
-    assert ev[0] == {"type": "heard", "text": "Wait, let me try that again.", "followed": False}
+    assert ev[0] == {"type": "heard", "text": "Wait, let me try that again.", "followed": False, "n": 1}
     assert said(ev) == "괜찮아요, 말이 꼬일 수 있어요. 다시 해 볼까요?"
     assert not any(e["type"] == "reply" for e in ev) and ev[-1]["type"] == "done" and ev[-1]["next"] == user_idx
     rp = engine.store.load(rp_id)
@@ -226,7 +226,7 @@ async def test_first_turn_after_a_korean_aside_moves_on(engine_with_rp, speech_b
     fake_whisper.text = ""
     fake_whisper.auto_text, fake_whisper.auto_lang = "잠깐만요, 다시 할게요", "korean"
     ev = await run(engine, rp_id, user_idx, speech_bytes)
-    assert ev[0] == {"type": "heard", "text": "잠깐만요, 다시 할게요", "followed": False}
+    assert ev[0] == {"type": "heard", "text": "잠깐만요, 다시 할게요", "followed": False, "n": 1}
     assert ev[-1] == {"type": "done", "next": user_idx, "issues": 0}
     rp = engine.store.load(rp_id)
     assert rp.pos == pos and rp.attempts[user_idx][-1].aside is True
@@ -243,7 +243,7 @@ async def test_auto_transcription_failing_goes_on_in_english(engine_with_rp, spe
     fake_whisper.text = "Wait, let me try that again."
     fake_whisper.auto_fail = True
     ev = await run(engine, rp_id, user_idx, speech_bytes)
-    assert ev[0] == {"type": "heard", "text": "Wait, let me try that again.", "followed": False}
+    assert ev[0] == {"type": "heard", "text": "Wait, let me try that again.", "followed": False, "n": 1}
     assert fake_claude.aside_calls[-1]["heard_ko"] is None and said(ev) and ev[-1]["type"] == "done"
 
 

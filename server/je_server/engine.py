@@ -447,7 +447,8 @@ class Engine:
         if not (words(shown) or HANGUL.search(shown)):
             yield self.error("no_speech")
             return
-        yield {"type": "heard", "text": shown, "followed": followed}
+        # n: the recording just saved, so the app can play it back at once (spec three-line-listen 7)
+        yield {"type": "heard", "text": shown, "followed": followed, "n": n}
 
         issues: list[Issue] = []
         said: list[str] = []
@@ -686,6 +687,7 @@ class Engine:
 
 
 def _quiet(task: asyncio.Task) -> None:
-    """Background prep may fail (no internet); the next request retries. Do not warn about it."""
+    """Background work may fail (no internet): a line's sound and notes, Sohee's Korean. The next request retries, so
+    do not warn about it."""
     if not task.cancelled() and task.exception() is not None:
-        log.info("line prep failed: %s", type(task.exception()).__name__)
+        log.info("background prep failed: %s", type(task.exception()).__name__)

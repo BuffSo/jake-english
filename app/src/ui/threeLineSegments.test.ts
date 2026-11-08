@@ -40,7 +40,17 @@ test("linked words share one korean group", () => {
   ]);
 });
 
-test("reading refs show as corner brackets", () => {
-  expect(readingSegments("앞을 세게, [[카-피]].")).toEqual([{ text: "앞을 세게, 「카-피」.", style: "plain" }]);
+test("reading refs show as corner brackets in the pronunciation color (spec three-line-listen 1)", () => {
+  expect(readingSegments("앞을 세게, [[카-피]].")).toEqual([
+    { text: "앞을 세게, ", style: "plain" },
+    { text: "「카-피」", style: "sound" },
+    { text: ".", style: "plain" },
+  ]);
+  expect(readingSegments("[[터]]는 짧게. [[리-턴]]")).toEqual([
+    { text: "「터」", style: "sound" },
+    { text: "는 짧게. ", style: "plain" },
+    { text: "「리-턴」", style: "sound" },
+  ]);
+  expect(readingSegments("  강세 없음  ")).toEqual([{ text: "강세 없음", style: "plain" }]);
   expect(readingSegments("")).toEqual([]);
 });

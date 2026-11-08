@@ -1,16 +1,16 @@
 // Screen flow as a reducer, so taps that arrive at the wrong moment (double taps, taps while Ryan is
 // still talking) are ignored in one place.
 import type { ErrorCode } from "../api/client";
-import type { AttemptEvent, AttemptMode, Progress, Roleplay, Said, ScriptLine } from "../api/types";
+import type { AttemptEvent, AttemptMode, Progress, Roleplay, Said, ScriptLine, TryRef } from "../api/types";
 import type { SituationStart } from "./situation";
 
 // past and saved: the two tabs of 「복습하기」 (spec review-screens 2; it was a menu of two buttons before). The last
 // conversation of a past situation is the end screen with `past` set (spec review-practice 3).
 export type Screen = "home" | "situation" | "roleplay" | "end" | "past" | "saved";
 export type Phase = "loading" | "ryan" | "ready" | "recording" | "evaluating" | "evaluated" | "error";
-// a learner bubble keeps the script line next to what was heard (spec roleplay-practice 2), and its line number
-// for 「이 줄 다시」 (9)
-export type Bubble = { kind: "ryan" | "user" | "feedback"; text: string; idx?: number; script?: string };
+// a learner bubble keeps the script line next to what was heard (spec roleplay-practice 2), its line number for
+// 「이 줄 다시」 (9), and the recording of that turn for 「🔊 내 녹음」 (spec three-line-listen 3)
+export type Bubble = { kind: "ryan" | "user" | "feedback"; text: string; idx?: number; script?: string; rec?: TryRef };
 // Practice: the learner's lines again (mine) or Ryan's lines to follow (shadow), in order. From the end screen it
 // goes back to the end; from a past bubble in the roleplay (one line) it goes back to the roleplay (spec 9).
 // 「이 줄 다시」 is mine with one line. From the saved list (spec review-practice 7) each line may belong to another
@@ -39,6 +39,8 @@ export type State = {
   interpreting: boolean;
   seen: Record<number, ScriptLine>;
   heard: string | null;
+  // the recording of this turn, from `heard` (spec three-line-listen 4); null before it and from an older server
+  heardRec: TryRef | null;
   feedback: string;
   // the line was not followed and teacher Ryan answered: only 「다시 해 보기」, which leaves nothing in the
   // conversation and keeps the mode, so a first turn stays a turn (spec offscript-aside 5, 6). Set by `heard`;
@@ -108,6 +110,7 @@ export const initial: State = {
   interpreting: false,
   seen: {},
   heard: null,
+  heardRec: null,
   feedback: "",
   aside: false,
   nextIdx: null,
@@ -139,7 +142,15 @@ export function canReplay(p: Phase): boolean {
   return p === "ready" || p === "evaluated";
 }
 
-const freshTurn = { heard: null, feedback: "", aside: false, message: null, errorFrom: null } as const;
+// A sound asked for from a bubble in the roleplay (🔊, a tap on a bubble or Sohee's line): while my turn waits, also
+// after an evaluation failed (its recording is saved, spec three-line-listen 4), and not over Ryan's answer or his
+// error sound, which it would cut off (5). Not while recording, evaluating or in Ryan's turn, whose idle callback
+// moves the roleplay on. 「🔊 다시 듣기」 at the bottom is not held back.
+export function mayListen(p: Phase, answering: boolean): boolean {
+  return (canReplay(p) || p === "error") && !answering;
+}
+
+const freshTurn = { heard: null, heardRec: null, feedback: "", aside: false, message: null, errorFrom: null } as const;
 
 // Leaving a practice. From the end screen: back on the end screen, ready for the next one. From the roleplay: the
 // roleplay exactly as it was, so nothing is said again and the evaluation on screen stays (spec 9).
@@ -210,7 +221,9 @@ export function modelKey(s: State): string | null {
 // What was said in this turn, as conversation bubbles (what the learner said, Ryan's feedback).
 function exchange(s: State): Bubble[] {
   return [
-    ...(s.heard ? [{ kind: "user" as const, text: s.heard, script: s.line?.text, idx: s.line?.idx }] : []),
+    ...(s.heard
+      ? [{ kind: "user" as const, text: s.heard, script: s.line?.text, idx: s.line?.idx, rec: s.heardRec ?? undefined }]
+      : []),
     ...(s.feedback ? [{ kind: "feedback" as const, text: s.feedback }] : []),
   ];
 }
@@ -274,7 +287,10 @@ export function reduce(s: State, a: Action): State {
     case "event": {
       if (s.phase !== "evaluating") return s;
       const e = a.e;
-      if (e.type === "heard") return { ...s, heard: e.text, aside: !e.followed };
+      if (e.type === "heard") {
+        const rec = e.n && s.roleplay && s.line ? { rp_id: s.roleplay.id, idx: s.line.idx, n: e.n } : null;
+        return { ...s, heard: e.text, heardRec: rec, aside: !e.followed };
+      }
       if (e.type === "text") return { ...s, feedback: s.feedback + e.delta };
       // an aside is not a turn: where 「다음」 goes stays as it was. A line not followed but with points from the Mac
       // was a try at it, and moves on like a followed one (offscript-aside 6).

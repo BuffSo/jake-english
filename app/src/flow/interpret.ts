@@ -2,10 +2,11 @@
 // how it shows and when her voice may play. Her sound comes a moment after the text, so whether it may play is
 // asked again when it arrives, not when the line was opened.
 import type { ScriptLine } from "../api/types";
-import { canReplay, type Phase } from "./state";
+import { canReplay, mayListen, type Phase } from "./state";
 
 export type Ko = { text: string; audio: string | null };
-export type KoEntry = Ko | "loading" | "failed";
+// folded: a failure that was shown a moment and folded away (todo 20261106_10 1); the next tap tries again
+export type KoEntry = Ko | "loading" | "failed" | "folded";
 export type KoView = "closed" | "loading" | "failed" | "open";
 export type Where = "roleplay" | "end";
 
@@ -14,10 +15,10 @@ export function koOf(line: ScriptLine | undefined): Ko | undefined {
   return line?.ko ? { text: line.ko, audio: line.ko_audio } : undefined;
 }
 
-// A failure shows 「지금은 통역할 수 없어요」 until the next tap, which tries again
+// A failure shows 「지금은 통역할 수 없어요」 a moment, then the line folds (`FAIL_SHOW_MS`); a tap tries again
 export function koView(entry: KoEntry | undefined, open: boolean): KoView {
   if (entry === "failed") return "failed";
-  if (!open) return "closed";
+  if (!open || entry === "folded") return "closed";
   return entry === undefined || entry === "loading" ? "loading" : "open";
 }
 
@@ -28,12 +29,13 @@ export function koOpensOnTap(view: KoView): boolean {
 }
 
 // Played by herself when the line opens: in the roleplay only while my turn waits and nothing plays, so she never
-// lands in a recording or over Ryan, his feedback or the model. The end screen has no turn and plays like its ▶.
+// lands in a recording or over Ryan, his feedback or the model. The end screen has no turn and plays like its 🔊.
 export function mayAutoPlay(where: Where, phase: Phase, playing: boolean): boolean {
   return where === "end" || (canReplay(phase) && !playing);
 }
 
-// A tap on her line: in the roleplay while my turn waits, stopping what plays, like 「다시 듣기」
-export function mayReplay(where: Where, phase: Phase): boolean {
-  return where === "end" || canReplay(phase);
+// A tap on her line: in the roleplay while my turn waits, stopping what plays, but not Ryan's answer (spec
+// three-line-listen 5); on the end screen always
+export function mayReplay(where: Where, phase: Phase, answering: boolean): boolean {
+  return where === "end" || mayListen(phase, answering);
 }

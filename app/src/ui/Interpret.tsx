@@ -1,10 +1,12 @@
-// Sohee's interpretation under a script line: the 「통역」 button and her line, a 「소희」 tag with the Korean, which
-// is told apart from the Korean pronunciation line by the tag (spec korean-translation 2). A tap on her line replays
-// her voice.
-import { Pressable, StyleSheet, Text, View } from "react-native";
+// Sohee's interpretation under a script line: the 「통역」 button and her line, a 「통역」 tag with the Korean. The tag
+// has the 「발음」 tag's shape in her green, so the two Korean lines are told apart at a glance; it said 「소희」
+// until the user found the name out of place on a subtitle (spec three-line-listen 2). A tap on her line replays her
+// voice.
+import { Pressable, StyleSheet, Text } from "react-native";
 
 import type { KoEntry, KoView } from "../flow/interpret";
 import { keepWords } from "./keepWords";
+import { Tag } from "./Tag";
 import { colors } from "./theme";
 
 // What a line hands to its 「통역」 button and Sohee's line
@@ -21,16 +23,15 @@ export function KoButton({ view, onPress }: { view: KoView; onPress: () => void 
 
 export function KoLine({ view, entry, onReplay }: { view: KoView; entry: KoEntry | undefined; onReplay: () => void }) {
   if (view === "closed") return null;
-  if (view === "loading") return <Text style={styles.note}>소희가 통역하고 있어요…</Text>;
+  if (view === "loading") return <Text style={styles.note}>{keepWords("통역하고 있어요…")}</Text>;
   if (view === "failed" || typeof entry !== "object") return <Text style={styles.note}>지금은 통역할 수 없어요</Text>;
   return (
     <Pressable onPress={onReplay} style={styles.line}>
-      <View style={styles.tag}>
-        <Text style={styles.tagText}>소희</Text>
-      </View>
+      <Tag label="통역" color={colors.sohee} />
       <Text style={styles.text}>
         {keepWords(entry.text)}
-        <Text style={styles.play}> ▶</Text>
+        {/* a no-break space keeps 🔊 with the last word: alone on the next line it looked like a stray sign */}
+        <Text style={styles.play}>{"\u00A0🔊"}</Text>
       </Text>
     </Pressable>
   );
@@ -40,8 +41,6 @@ const styles = StyleSheet.create({
   button: { fontSize: 15, color: colors.primary, fontWeight: "600" },
   note: { fontSize: 15, color: colors.sub, marginTop: 6 },
   line: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 6 },
-  tag: { backgroundColor: colors.sohee, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, marginTop: 2 },
-  tagText: { fontSize: 12, fontWeight: "700", color: "#FFFFFF" },
   // her own color too, not the pronunciation line's (spec korean-translation 2, final review)
   text: { flexShrink: 1, fontSize: 16, color: colors.soheeText, lineHeight: 23 },
   play: { fontSize: 13, color: colors.sohee },

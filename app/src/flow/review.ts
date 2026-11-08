@@ -18,7 +18,7 @@ export function toggleRow(open: string | null, key: string): string | null {
   return open === key ? null : key;
 }
 
-// 「▶ 처음 녹음」: the first recording, then this run's last try that followed the line (spec review-practice 4)
+// 「🔊 처음 녹음」: the first recording, then this run's last try that followed the line (spec review-practice 4)
 export function comparePair(rpId: string, l: TranscriptLine): { first: TryRef; then: TryRef | null } | null {
   if (!l.first) return null;
   const last = [...l.tries].reverse().find((t) => t.followed);

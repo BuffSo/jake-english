@@ -122,7 +122,7 @@ async def test_shadow_on_ryan_line_is_evaluated_like_a_followed_line(engine_with
     ryan = engine.store.load(rp_id).lines[0]
     fake_whisper.text = ryan.text
     ev = await run(engine, rp_id, 0, speech_bytes, "shadow")
-    assert ev[0] == {"type": "heard", "text": ryan.text, "followed": True}
+    assert ev[0] == {"type": "heard", "text": ryan.text, "followed": True, "n": 1}
     assert ev[-1] == {"type": "done", "next": 0, "issues": 0}
     assert fake_claude.feedback_calls[0]["line"] == ryan.text
     saved = engine.store.load(rp_id)

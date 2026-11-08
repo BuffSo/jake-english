@@ -7,7 +7,7 @@ voice-likeness check with retries, optional pitch matching, even pauses, then WA
 Unlike the render script it makes one sentence at a time and cuts Korean pauses inside a sentence short.
 Protocol, one JSON object per line:
     -> {"ready": true}
-    <- {"id": 1, "text": "...", "voice": "ryan" | "jake", "lang": "english" | "korean", "rate": 1.3,
+    <- {"id": 1, "text": "...", "voice": "ryan" | "jake" | "sohee_clone", "lang": "english" | "korean", "rate": 1.3,
         "out": "/abs/x.m4a"}
     -> {"id": 1, "ok": true, "seconds": 1.8}  or  {"id": 1, "ok": false, "error": "TypeName"}
 Library output goes to stderr so stdout carries only the protocol. Texts are not logged.

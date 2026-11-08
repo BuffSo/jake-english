@@ -1,6 +1,6 @@
 import type { ScriptLine } from "../api/types";
-import { createKoFetch, type KoDeps } from "./koFetch";
-import type { KoEntry } from "./interpret";
+import { createKoFetch, FAIL_SHOW_MS, type KoDeps } from "./koFetch";
+import { koView, type KoEntry } from "./interpret";
 
 type Deferred<T> = { promise: Promise<T>; resolve: (v: T) => void; reject: (e: unknown) => void };
 function deferred<T>(): Deferred<T> {
@@ -142,4 +142,49 @@ test("after the screen goes away nothing plays or changes", async () => {
   t.sounds[0].resolve({ audio: KEY });
   await flush();
   expect([t.played, t.got()[2]]).toEqual([[], undefined]);
+});
+
+describe("a failure note shows a moment, then folds (todo 20261106_10 1)", () => {
+  // the failure note is 「짧게 보이고 접는다」 (spec korean-translation 2): not left until the next tap
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+  const tick = (ms = 0) => jest.advanceTimersByTimeAsync(ms);
+
+  test("a failure folds after FAIL_SHOW_MS and a tap asks again", async () => {
+    const t = setup();
+    t.ko.open(2, plain, () => true);
+    t.texts[0].reject(new Error("503"));
+    await tick();
+    expect(t.got()[2]).toBe("failed");
+    await tick(FAIL_SHOW_MS);
+    expect(t.got()[2]).toBe("folded");
+    expect(koView(t.got()[2], true)).toBe("closed");
+    t.ko.open(2, plain, () => true);
+    await tick();
+    expect([t.texts.length, t.got()[2]]).toEqual([2, "loading"]);
+  });
+
+  test("a new opening before the fold is not folded by the old timer", async () => {
+    const t = setup();
+    t.ko.open(2, plain, () => true);
+    t.texts[0].reject(new Error("503"));
+    await tick(1000);
+    t.ko.open(2, plain, () => true);
+    t.texts[1].resolve({ text: "뭐 드릴까요?" });
+    await tick(FAIL_SHOW_MS);
+    expect(t.got()[2]).toEqual({ text: "뭐 드릴까요?", audio: null });
+  });
+
+  test("a second failure gets its own moment", async () => {
+    const t = setup();
+    t.ko.open(2, plain, () => true);
+    t.texts[0].reject(new Error("503"));
+    await tick(FAIL_SHOW_MS - 1000);
+    t.ko.open(2, plain, () => true);
+    t.texts[1].reject(new Error("503"));
+    await tick(1000); // the first failure's moment is over, the second one's is not
+    expect(t.got()[2]).toBe("failed");
+    await tick(FAIL_SHOW_MS);
+    expect(t.got()[2]).toBe("folded");
+  });
 });

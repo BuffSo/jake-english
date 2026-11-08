@@ -1,10 +1,12 @@
 // Three lines: English, Korean pronunciation, how to read it. Bold dark orange = strong, small gray = weak.
 // Strong used to be a yellow fill; on the light blue card it looked blocky, so the user chose colored bold text
-// (2026-11-06).
+// (2026-11-06). The Korean line is smaller, blue-gray and tagged 「발음」, and the Korean sounds in the reading line
+// share its color: the two big lines read as one block before (spec three-line-listen 1, 2026-11-08 user).
 import { StyleSheet, Text, View } from "react-native";
 
 import type { ThreeLine } from "../api/types";
-import { keepPieces, keepWords } from "./keepWords";
+import { keepPieces } from "./keepWords";
+import { Tag } from "./Tag";
 import { colors } from "./theme";
 import { englishSegments, koreanSegments, readingSegments, type Seg } from "./threeLineSegments";
 
@@ -48,11 +50,22 @@ export function ThreeLineView({ three, bare = false }: { three: ThreeLine; bare?
         <Pieces groups={englishSegments(three)} size={24} />
       </Text>
       {korean.length > 0 && (
-        <Text style={styles.ko}>
-          <Pieces groups={korean} size={20} />
+        <View style={styles.koRow}>
+          <Tag label="발음" color={colors.pron} style={styles.koTag} />
+          <Text style={styles.ko}>
+            <Pieces groups={korean} size={17} />
+          </Text>
+        </View>
+      )}
+      {reading.length > 0 && (
+        <Text style={styles.reading}>
+          {keepPieces(reading.map((s) => s.text)).map((t, i) => (
+            <Text key={i} style={reading[i].style === "sound" ? styles.sound : undefined}>
+              {t}
+            </Text>
+          ))}
         </Text>
       )}
-      {reading.length > 0 && <Text style={styles.reading}>{keepWords(reading[0].text)}</Text>}
     </View>
   );
 }
@@ -61,6 +74,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.user, borderRadius: 14, padding: 14, marginVertical: 6 },
   bare: { marginVertical: 2 },
   en: { fontSize: 24, color: colors.text, lineHeight: 34 },
-  ko: { fontSize: 20, color: colors.text, marginTop: 6, lineHeight: 30 },
+  koRow: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 6 },
+  koTag: { marginTop: 4 },
+  ko: { flexShrink: 1, fontSize: 17, color: colors.pron, lineHeight: 26 },
   reading: { fontSize: 16, color: colors.sub, marginTop: 8, lineHeight: 23 },
+  sound: { color: colors.pron, fontWeight: "700" },
 });

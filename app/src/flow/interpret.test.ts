@@ -27,12 +27,18 @@ test("in the roleplay Sohee plays by herself only while my turn waits in quiet",
   expect(PHASES.filter((p) => mayAutoPlay("roleplay", p, true))).toEqual([]);
 });
 
-test("a tap on Sohee's line replays it while my turn waits, like 다시 듣기", () => {
-  expect(PHASES.filter((p) => mayReplay("roleplay", p))).toEqual(["ready", "evaluated"]);
+test("a tap on Sohee's line replays it while my turn waits, but not over Ryan's answer (spec three-line-listen 5)", () => {
+  expect(PHASES.filter((p) => mayReplay("roleplay", p, false))).toEqual(["ready", "evaluated", "error"]);
+  expect(PHASES.filter((p) => mayReplay("roleplay", p, true))).toEqual([]);
 });
 
 test("on the end screen she always plays, stopping what played before", () => {
-  expect(PHASES.every((p) => mayAutoPlay("end", p, true) && mayReplay("end", p))).toBe(true);
+  expect(PHASES.every((p) => mayAutoPlay("end", p, true) && mayReplay("end", p, true))).toBe(true);
+});
+
+test("a folded failure shows as closed, and a tap on it opens the line again", () => {
+  expect([koView("folded", true), koView("folded", false)]).toEqual(["closed", "closed"]);
+  expect(koOpensOnTap(koView("folded", true))).toBe(true);
 });
 
 test("a tap opens a closed or failed line (a failure is tried again) and closes an open or loading one", () => {
