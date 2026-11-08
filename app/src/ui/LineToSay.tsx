@@ -25,7 +25,7 @@ export function LineToSay({ text, three, open, onToggle, ko, star }: Props) {
         <Text style={styles.text}>{text}</Text>
       )}
       {view === "loading" && <Text style={styles.sub}>세 줄을 만들고 있어요…</Text>}
-      <KoLine view={ko.view} entry={ko.entry} onReplay={ko.onReplay} />
+      <KoLine view={ko.view} entry={ko.entry} onReplay={ko.onReplay} playing={ko.playing} />
       <View style={styles.toggles}>
         {view !== "plain" && (
           <Pressable onPress={onToggle} hitSlop={8}>

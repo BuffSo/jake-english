@@ -7,7 +7,7 @@ import { koOf, type Ko, type KoEntry } from "./interpret";
 export type KoDeps = {
   getKo: (idx: number) => Promise<{ text: string }>;
   getKoAudio: (idx: number) => Promise<{ audio: string }>;
-  play: (audio: string) => void; // stops what plays and plays this
+  play: (audio: string, idx: number) => void; // stops what plays and plays this line's voice
   allow: (auto: boolean) => boolean; // auto: playing by herself when the line opens; else a tap on her line
   onChange: (got: Record<number, KoEntry>) => void;
 };
@@ -95,7 +95,7 @@ export function createKoFetch(deps: KoDeps): KoFetch {
         // would wait ahead of his sentences in the voice worker's queue and hold him up (final review).
         if (!(isKo(ko) && ko.audio) && !go()) return;
         const audio = await sound(idx, line);
-        if (audio && go()) deps.play(audio);
+        if (audio && go()) deps.play(audio, idx);
       })();
     },
     replay(idx, line, stillHere) {
@@ -103,7 +103,7 @@ export function createKoFetch(deps: KoDeps): KoFetch {
       if (!go()) return;
       void (async () => {
         const audio = await sound(idx, line);
-        if (audio && go()) deps.play(audio);
+        if (audio && go()) deps.play(audio, idx);
       })();
     },
     start() {

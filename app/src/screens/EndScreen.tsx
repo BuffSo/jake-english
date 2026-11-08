@@ -8,6 +8,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent }
 import { api } from "../api";
 import type { ScriptLine, Summary, TranscriptLine, Try, TryRef } from "../api/types";
 import type { SoundQueue } from "../audio/player";
+import { tapPlay } from "../audio/tapPlay";
+import { usePlayingTag } from "../audio/usePlayingTag";
 import { createGate } from "../flow/gate";
 import { koOpensOnTap, koView } from "../flow/interpret";
 import { comparePair, dayKo, scrollToShow, tapRow } from "../flow/review";
@@ -16,9 +18,10 @@ import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { KoButton, KoLine, type KoProps } from "../ui/Interpret";
 import { keepWords } from "../ui/keepWords";
+import { PlayLabel } from "../ui/PlayIcon";
 import { StarButton, StarMark } from "../ui/Star";
 import { colors, top } from "../ui/theme";
-import { useInterpret } from "../ui/useInterpret";
+import { koTag, useInterpret } from "../ui/useInterpret";
 import { useSaved } from "../ui/useSaved";
 import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 
@@ -43,6 +46,8 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   const gate = useRef(createGate()).current;
   // no turn here: Sohee plays whenever asked and stops what played, like 🔊 (spec korean-translation 2)
   const interp = useInterpret(id, sounds, () => mounted.current);
+  // which play button's 🔊 bounces: the one whose tag is on the sound playing (spec play-button-feedback 1)
+  const playingTag = usePlayingTag(sounds);
   const [koOpen, setKoOpen] = useState<Record<number, boolean>>({});
   const koOpenNow = useRef(koOpen); // set at the tap: a sound made before plays at once
   const [openRow, setOpenRow] = useState<string | null>(null);
@@ -93,19 +98,25 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
   }
   useBackKey(back);
 
-  function play(src: Source) {
-    sounds.clear();
-    sounds.enqueue(src);
+  // `tag`: the button asking, whose 🔊 bounces while it plays; a tap on it then stops it (spec play-button-feedback 3)
+  function play(src: Source, tag: string) {
+    tapPlay(sounds, tag, () => {
+      sounds.clear();
+      sounds.enqueue(src, tag);
+    });
   }
 
   // 「🔊 처음 녹음」: the first recording, a short pause, then this run's (review-practice 4). Many recordings end right
   // on the last word, so back to back the two ran together (todo 01).
-  function playPair(pair: { first: TryRef; then: TryRef | null }) {
-    sounds.clear();
-    sounds.enqueue(api.recordingSource(pair.first.rp_id, pair.first.idx, pair.first.n));
-    if (!pair.then) return;
-    sounds.enqueuePause(PAIR_GAP_MS);
-    sounds.enqueue(api.recordingSource(pair.then.rp_id, pair.then.idx, pair.then.n));
+  // one tag for both and the pause, so its 🔊 bounces until the second has played (spec play-button-feedback 1)
+  function playPair(pair: { first: TryRef; then: TryRef | null }, tag: string) {
+    tapPlay(sounds, tag, () => {
+      sounds.clear();
+      sounds.enqueue(api.recordingSource(pair.first.rp_id, pair.first.idx, pair.first.n), tag);
+      if (!pair.then) return;
+      sounds.enqueuePause(PAIR_GAP_MS, tag);
+      sounds.enqueue(api.recordingSource(pair.then.rp_id, pair.then.idx, pair.then.n), tag);
+    });
   }
 
   function practise(kind: "mine" | "shadow", order: number[]) {
@@ -143,7 +154,9 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
         setKoOpen(koOpenNow.current);
         if (open) interp.open(idx, line, () => koOpenNow.current[idx] === true);
       },
-      onReplay: () => interp.replay(idx, line, () => true), // the hook drops it once this screen goes away
+      // the hook drops it once this screen goes away; a tap while she speaks stops her (spec play-button-feedback 3)
+      onReplay: () => tapPlay(sounds, koTag(idx), () => interp.replay(idx, line, () => true)),
+      playing: playingTag === koTag(idx),
     };
   }
 
@@ -202,6 +215,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
               ko={ko(l.line)}
               star={star(l.line)}
               onPlay={play}
+              playing={playingTag}
               onFollow={() => practise("shadow", [l.line.idx])}
             />
           ) : (
@@ -215,6 +229,7 @@ export function EndScreen({ state, dispatch, sounds }: Props) {
               ko={ko(l.line)}
               star={star(l.line)}
               onPlay={play}
+              playing={playingTag}
               onPair={playPair}
               onAgain={() => practise("mine", [l.line.idx])}
             />
@@ -252,13 +267,15 @@ type LineProps = {
   onLayout: (e: LayoutChangeEvent) => void;
   ko: KoProps;
   star: Star;
-  onPlay: (src: Source) => void;
+  onPlay: (src: Source, tag: string) => void;
+  playing: string | null; // the tag playing now: the button with it bounces (spec play-button-feedback 1)
 };
 
 // 「따라 말하기 ›」 follows this one line and comes back here, like 「이 줄 다시」 on my lines (spec 3, 2026-11-06)
 function RyanLine(props: LineProps & { onFollow: () => void }) {
-  const { l, open, onToggle, onLayout, ko, star, onPlay, onFollow } = props;
+  const { l, open, onToggle, onLayout, ko, star, onPlay, playing, onFollow } = props;
   const audio = l.line.audio;
+  const tag = `line:${l.line.idx}`;
   return (
     <Pressable onPress={onToggle} onLayout={onLayout} style={[styles.line, open && styles.open]}>
       <View style={styles.who}>
@@ -266,12 +283,12 @@ function RyanLine(props: LineProps & { onFollow: () => void }) {
         {star.saved && !open && <StarMark />}
       </View>
       <Text style={styles.text}>{l.line.text}</Text>
-      <KoLine view={ko.view} entry={ko.entry} onReplay={ko.onReplay} />
+      <KoLine view={ko.view} entry={ko.entry} onReplay={ko.onReplay} playing={ko.playing} />
       {open && (
         <View style={styles.actions}>
           {audio && (
-            <Pressable onPress={() => onPlay(api.audioSource(audio))} hitSlop={8}>
-              <Text style={styles.play}>🔊 듣기</Text>
+            <Pressable onPress={() => onPlay(api.audioSource(audio), tag)} hitSlop={8}>
+              <PlayLabel on={playing === tag} label="듣기" style={styles.play} />
             </Pressable>
           )}
           <KoButton view={ko.view} onPress={ko.onToggle} />
@@ -286,10 +303,13 @@ function RyanLine(props: LineProps & { onFollow: () => void }) {
 }
 
 // 「🔊 듣기」 plays my line's model here too, like Ryan's lines (spec three-line-listen 6); no rate on this screen
-function MyLine(props: LineProps & { id: string; onPair: (p: { first: TryRef; then: TryRef | null }) => void; onAgain: () => void }) {
-  const { id, l, open, onToggle, onLayout, ko, star, onPlay, onPair, onAgain } = props;
+function MyLine(
+  props: LineProps & { id: string; onPair: (p: { first: TryRef; then: TryRef | null }, tag: string) => void; onAgain: () => void },
+) {
+  const { id, l, open, onToggle, onLayout, ko, star, onPlay, playing, onPair, onAgain } = props;
   const pair = comparePair(id, l);
   const audio = l.line.audio;
+  const idx = l.line.idx;
   return (
     <Pressable onPress={onToggle} onLayout={onLayout} style={[styles.line, open && styles.open]}>
       <View style={styles.who}>
@@ -297,20 +317,26 @@ function MyLine(props: LineProps & { id: string; onPair: (p: { first: TryRef; th
         {star.saved && !open && <StarMark />}
       </View>
       <Text style={styles.text}>{l.line.text}</Text>
-      <KoLine view={ko.view} entry={ko.entry} onReplay={ko.onReplay} />
+      <KoLine view={ko.view} entry={ko.entry} onReplay={ko.onReplay} playing={ko.playing} />
       {l.tries.map((t) => (
-        <TryView key={t.n} t={t} open={open} onPlay={() => onPlay(api.recordingSource(id, l.line.idx, t.n))} />
+        <TryView
+          key={t.n}
+          t={t}
+          open={open}
+          playing={playing === `try:${idx}:${t.n}`}
+          onPlay={() => onPlay(api.recordingSource(id, idx, t.n), `try:${idx}:${t.n}`)}
+        />
       ))}
       {open && (
         <View style={styles.actions}>
           {audio && (
-            <Pressable onPress={() => onPlay(api.audioSource(audio))} hitSlop={8}>
-              <Text style={styles.play}>🔊 듣기</Text>
+            <Pressable onPress={() => onPlay(api.audioSource(audio), `line:${idx}`)} hitSlop={8}>
+              <PlayLabel on={playing === `line:${idx}`} label="듣기" style={styles.play} />
             </Pressable>
           )}
           {pair && (
-            <Pressable onPress={() => onPair(pair)} hitSlop={8}>
-              <Text style={styles.play}>🔊 처음 녹음</Text>
+            <Pressable onPress={() => onPair(pair, `first:${idx}`)} hitSlop={8}>
+              <PlayLabel on={playing === `first:${idx}`} label="처음 녹음" style={styles.play} />
             </Pressable>
           )}
           <KoButton view={ko.view} onPress={ko.onToggle} />
@@ -326,7 +352,7 @@ function MyLine(props: LineProps & { id: string; onPair: (p: { first: TryRef; th
 
 // One try inside the roleplay: what was heard, the recording, and what Ryan pointed out (only that, so the
 // screen never says more than he did). The recording's button shows on an open line only.
-function TryView({ t, open, onPlay }: { t: Try; open: boolean; onPlay: () => void }) {
+function TryView({ t, open, playing, onPlay }: { t: Try; open: boolean; playing: boolean; onPlay: () => void }) {
   const points = [...t.issues.map((i) => i.say_ko), ...(t.point_ko ? [t.point_ko] : [])];
   return (
     <View style={styles.try}>
@@ -334,7 +360,7 @@ function TryView({ t, open, onPlay }: { t: Try; open: boolean; onPlay: () => voi
         <Text style={styles.heard}>{keepWords(`들린 말: ${t.heard}`)}</Text>
         {open && (
           <Pressable onPress={onPlay} hitSlop={8}>
-            <Text style={styles.play}>🔊 내 녹음</Text>
+            <PlayLabel on={playing} label="내 녹음" style={styles.play} />
           </Pressable>
         )}
       </View>

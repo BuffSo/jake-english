@@ -21,6 +21,7 @@ function setup(allowed = true) {
   const texts: Deferred<{ text: string }>[] = [];
   const sounds: Deferred<{ audio: string }>[] = [];
   const played: string[] = [];
+  const lines: number[] = [];
   let got: Record<number, KoEntry> = {};
   const state = { allowed };
   const deps: KoDeps = {
@@ -34,13 +35,16 @@ function setup(allowed = true) {
       sounds.push(d);
       return d.promise;
     },
-    play: (a) => played.push(a),
+    play: (a, idx) => {
+      played.push(a);
+      lines.push(idx);
+    },
     allow: () => state.allowed,
     onChange: (g) => {
       got = g;
     },
   };
-  return { ko: createKoFetch(deps), texts, sounds, played, state, got: () => got };
+  return { ko: createKoFetch(deps), texts, sounds, played, lines, state, got: () => got };
 }
 
 test("open: the text shows first, then her voice plays when it comes", async () => {
@@ -54,6 +58,7 @@ test("open: the text shows first, then her voice plays when it comes", async () 
   t.sounds[0].resolve({ audio: KEY });
   await flush();
   expect(t.played).toEqual([KEY]);
+  expect(t.lines).toEqual([2]); // her line's 🔊 bounces (spec play-button-feedback 2)
   expect(t.got()[2]).toEqual({ text: "뭐 드릴까요?", audio: KEY });
 });
 
