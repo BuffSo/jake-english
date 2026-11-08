@@ -166,6 +166,10 @@ class FakeClaude:
         # pieces given before aside() fails; 0 fails at once. Not fail_next: background notes may take that first.
         self.aside_fail_after: int | None = None
         self.endings: list[str] = []  # the ending recommend() was given, in order
+        self.talk_calls: list[list[dict]] = []  # the messages each talk() was given
+        self.talk_gate = None  # an asyncio.Event to hold talk before its first piece until set
+        self.talk_pieces = ["Sounds fun! ", "I walk there too. ", "Was it busy?"]
+        self.talk_fail_after: int | None = None  # pieces given before talk() fails
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -215,6 +219,23 @@ class FakeClaude:
             if self.aside_fail_after is not None and n >= self.aside_fail_after:
                 raise ClaudeUnavailable("fake")
             yield piece
+
+
+def _talk_method():
+    async def talk(self, messages):
+        self.talk_calls.append(messages)
+        self._maybe_fail()
+        if self.talk_gate is not None:
+            await self.talk_gate.wait()
+        for n, piece in enumerate(self.talk_pieces):
+            if self.talk_fail_after is not None and n >= self.talk_fail_after:
+                raise ClaudeUnavailable("fake")
+            yield piece
+
+    return talk
+
+
+FakeClaude.talk = _talk_method()
 
 
 class FakeVoice:
@@ -274,6 +295,8 @@ class FakeWhisper:
         self.langs: list[str] = []
         self.auto_text: str | None = None  # what auto-detection hears; None: the same as `text`
         self.auto_lang = "english"
+        self.by_lang: dict[str, str] = {}  # what transcribe hears by language; `text` for the rest
+        self.fail_lang: str | None = None  # transcribe in this language raises WhisperError
         self.auto_fail = False  # transcribe_auto raises WhisperError, as when whisper-server cannot answer
 
     async def start(self):
@@ -285,7 +308,9 @@ class FakeWhisper:
     async def transcribe(self, wav, lang):
         self.calls += 1
         self.langs.append(lang)
-        return self.text
+        if lang == self.fail_lang:
+            raise WhisperError("fake")
+        return self.by_lang.get(lang, self.text)
 
     async def transcribe_auto(self, wav):
         self.calls += 1

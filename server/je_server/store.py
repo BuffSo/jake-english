@@ -110,6 +110,25 @@ class Store:
     def save_tip(self, day: str, next_: int) -> None:
         self._write(self.root / "tip.json", json.dumps({"day": day, "next": next_}))
 
+    # --- free talk: the turn of Ryan's next first question (spec free-talk-design 2) ---------------------------------
+
+    def load_talk(self) -> int:
+        """The turn of the next first question. A missing or unreadable file reads as the first one."""
+        path = self.root / "talk.json"
+        if not path.exists():
+            return 0
+        try:
+            nxt = json.loads(path.read_text(encoding="utf-8"))["next"]
+            if not isinstance(nxt, int) or isinstance(nxt, bool) or nxt < 0:
+                raise ValueError
+        except (ValueError, TypeError, KeyError):
+            log.warning("unreadable talk.json: starting the first questions over")
+            return 0
+        return nxt
+
+    def save_talk(self, next_: int) -> None:
+        self._write(self.root / "talk.json", json.dumps({"next": next_}))
+
     def load(self, rp_id: str) -> Roleplay:
         path = self._dir(rp_id) / "roleplay.json"
         if not path.exists():

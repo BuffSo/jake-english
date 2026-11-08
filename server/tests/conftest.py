@@ -64,6 +64,13 @@ def engine(engine_factory):
 
 
 @pytest.fixture
+def talks(engine):
+    from je_server.talk import Talks
+
+    return Talks(engine)
+
+
+@pytest.fixture
 def client(settings, auth, engine, fake_voice, fake_whisper):
     from fastapi.testclient import TestClient
 

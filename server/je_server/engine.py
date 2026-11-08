@@ -21,7 +21,7 @@ from .models import Attempt, Draft, Issue, Mode, Roleplay, Said, Saved, ScriptLi
 from .sentences import NewSentence, SentenceBuffer
 from .threeline import settled
 from .tts import VoiceError
-from .phrases import PHRASES, TIPS
+from .phrases import PHRASES, TALK_OPENERS, TIPS
 from .review import (first_try, group_of, kept_tries, latest_run, past_items, resume_start, said_on, sentence_key,
                      to_resume)
 from .store import Store
@@ -97,6 +97,8 @@ class Engine:
         # made once and played many times, so heard back (check); the tips too, said once a day
         for text in [*PHRASES.values(), *TIPS]:
             await self.voice.say(text, "ryan", "korean", urgent=False, check=True)
+        for text in TALK_OPENERS:  # Ryan's first questions of a free talk, in English
+            await self.voice.say(text, "ryan", "english", urgent=False, check=True)
 
     # --- helpers ------------------------------------------------------------------------------
 

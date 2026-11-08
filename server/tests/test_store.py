@@ -110,3 +110,16 @@ def test_recent_situations_leave_talks_out(tmp_path):
     s = Store(tmp_path)
     s.save(talk_example())
     assert "자유 대화" not in s.recent_situations()
+
+
+def test_talk_turn_is_kept(tmp_path):
+    s = Store(tmp_path)
+    assert s.load_talk() == 0
+    s.save_talk(3)
+    assert Store(tmp_path).load_talk() == 3
+
+
+def test_unreadable_talk_file_starts_over(tmp_path):
+    s = Store(tmp_path)
+    (tmp_path / "talk.json").write_text("{not json", encoding="utf-8")
+    assert s.load_talk() == 0
