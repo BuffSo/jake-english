@@ -40,9 +40,20 @@ def connection_error() -> anthropic.APIConnectionError:
     return anthropic.APIConnectionError(request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
 
 
+class Ended(list):
+    """A stream's pieces and why it ended (`stop_reason`), as `get_final_message` gives it."""
+
+    def __init__(self, pieces, stop_reason):
+        super().__init__(pieces)
+        self.stop_reason = stop_reason
+
+
 class _Stream:
     def __init__(self, item):
         self.item = item
+
+    async def get_final_message(self):
+        return SimpleNamespace(stop_reason=getattr(self.item, "stop_reason", "end_turn"))
 
     async def __aenter__(self):
         if isinstance(self.item, Exception):

@@ -422,6 +422,29 @@ async def test_stream_cut_by_the_network_is_unavailable(error):
         [d async for d in Claude(FakeAnthropic([["좋아요. ", cut]])).feedback("a", "b", [], [])]
 
 
+@pytest.mark.parametrize("why", ["max_tokens", "refusal"])
+async def test_an_aside_cut_without_an_error_is_unavailable(why):
+    # todo teacher-answer-cut 1: a stream that ends at the token limit or refuses after some text ends without an
+    # error, mid-sentence; reported as unavailable, `Engine._aside` ends it with the fixed phrase
+    from fakes import FRAME, Ended
+    from je_server.models import Frame
+
+    got = []
+    with pytest.raises(ClaudeUnavailable):
+        async for d in Claude(FakeAnthropic([Ended(["괜찮아요. ", "그런데 이"], why)])).aside(
+                Frame(**FRAME), [], "a", "b", None, [], []):
+            got.append(d)
+    assert got == ["괜찮아요. ", "그런데 이"]
+
+
+async def test_feedback_keeps_its_text_whatever_ended_it():
+    # only the aside reads why the stream ended; feedback is short and keeps what came
+    from fakes import Ended
+
+    out = [d async for d in Claude(FakeAnthropic([Ended(["좋아요. ", "다음"], "max_tokens")])).feedback("a", "b", [], [])]
+    assert out == ["좋아요. ", "다음"]
+
+
 # --- Jake's endings (2026-11-08 the user heard five in Jake's voice and chose three to mix) ---------
 
 
