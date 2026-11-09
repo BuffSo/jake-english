@@ -122,6 +122,8 @@ def line_before(rp: Roleplay, idx: int) -> ScriptLine | None:
     if line is None or line.fix is None:
         return rp.lines[idx - 1] if 1 <= idx <= len(rp.lines) else None
     at = line.fix.of - 1
-    while 0 <= at < len(rp.lines) and not (rp.lines[at].speaker == "ryan" and rp.lines[at].kind != "help"):
+    # a dropped reply is walked past too (read directly: `talk` imports this module)
+    while 0 <= at < len(rp.lines) and not (rp.lines[at].speaker == "ryan" and rp.lines[at].kind != "help"
+                                           and not rp.lines[at].dropped):
         at -= 1
     return rp.lines[at] if 0 <= at < len(rp.lines) else None

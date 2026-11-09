@@ -101,6 +101,8 @@ def conversation(rp: Roleplay, upto: int) -> list[dict]:
     out. Never the recordings (ADR-0004)."""
     out: list[dict] = []
     for line in rp.lines[: upto + 1]:
+        if line.dropped:
+            continue
         if line.kind == "reply" and line.speaker == "ryan":
             who, said = "라이언", _heard(line)
         elif line.kind in ("turn", "ask"):

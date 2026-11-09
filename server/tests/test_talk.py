@@ -1126,3 +1126,92 @@ async def test_end_with_only_a_helped_turn_heard_right_has_nothing_to_fix(talks,
     await run(talks, rp.id, speech_bytes)
     assert engine.load(rp.id).lines[1].given == hint.full
     assert await talks.end(rp.id) == no_fixes(engine, 2) and fake_claude.fix_calls == []
+
+
+# --- lines dropped by saying a turn again (spec talk-resay 3) ----------------------------------------------------
+
+def _gone(rp, *idxs):
+    for i in idxs:
+        rp.lines[i] = rp.lines[i].model_copy(update={"dropped": True})
+    return rp
+
+
+def test_messages_leave_dropped_lines_out():
+    rp = _gone(_talk(("ryan", "reply", "R0"), ("user", "turn", "T1"), ("ryan", "reply", "R2"), ("user", "turn", "T3")),
+               1, 2)
+    assert [m["content"] for m in messages(rp)] == [TALK_START, "R0", "T3"]
+
+
+def test_dropped_turns_do_not_count_for_the_echo():
+    rp = _turns(3)
+    assert TALK_ECHO in messages(rp)[-1]["content"]
+    turn_idxs = [l.idx for l in rp.lines if l.kind == "turn"]
+    # one of the three dropped (with its reply): two left, no echo
+    assert TALK_ECHO not in repr(messages(_gone(_turns(3), turn_idxs[0], turn_idxs[0] + 1)))
+    # four turns, one dropped: three live, so the echo is on the last one
+    four = _gone(_turns(4), 1, 2)
+    assert messages(four)[-1]["content"].endswith(TALK_ECHO)
+
+
+def test_fix_input_leaves_dropped_lines_out():
+    from je_server.talk import fix_input
+    rp = _gone(_talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go park."), ("ryan", "reply", "Fun!"),
+                     ("user", "turn", "I went to the park.")), 1, 2)
+    conversation, turns, helped = fix_input(rp)
+    assert [c["말"] for c in conversation] == ["Hi!", "I went to the park."] and turns == {3: "I went to the park."}
+
+
+def _helped_talk(*, drop_helped: bool):
+    """Ryan's reply 0 with Sohee's full sentence shown, my turn 1 said from it, Ryan's reply 2, and then my turn."""
+    from je_server.models import Hint
+    rp = _talk(("ryan", "reply", "Where?"), ("user", "turn", "I turned light at the bank."), ("ryan", "reply", "Ok."))
+    rp.lines[0] = rp.lines[0].model_copy(update={
+        "hint": Hint(meaning_ko="어디서 돌았는지 물어요.", starters=["I turned…", "I went…"],
+                     full="I turned right at the bank.", full_shown=True)})
+    rp.lines[1] = rp.lines[1].model_copy(update={"given": "I turned right at the bank."})
+    return _gone(rp, 1, 2) if drop_helped else rp
+
+
+def test_a_dropped_helped_turn_lets_the_next_turn_be_helped():
+    from je_server.talk import _from_full
+    heard = "I turned light at the bank."
+    assert _from_full(_helped_talk(drop_helped=False), heard) == (None, False, [])  # that turn was already helped
+    # dropped: the reply 0 is his latest live reply and the turn said again is compared to its sentence too
+    full, followed, issues = _from_full(_helped_talk(drop_helped=True), heard)
+    assert full == "I turned right at the bank." and followed and issues
+    # his latest reply is found past a dropped reply
+    rp = _helped_talk(drop_helped=True)
+    rp.lines[0] = rp.lines[0].model_copy(update={"hint": None})
+    assert _from_full(rp, heard) == (None, False, [])
+
+
+async def _stored(talks, *lines):
+    rp = _talk(*lines)
+    talks.engine.store.save(rp)
+    return rp
+
+
+async def test_cut_mark_goes_on_the_last_live_reply(talks, engine):
+    from je_server.models import Said
+    parts = [Said(text="Oh, nice!", audio="a" * 64), Said(text="Who went?", audio="b" * 64)]
+    for how in ("turn", "end"):
+        rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go."), ("ryan", "reply", "Nice! Who?"),
+                   ("user", "turn", "Me."), ("ryan", "reply", "Fun."))
+        rp.lines[2] = rp.lines[2].model_copy(update={"parts": parts})
+        engine.store.save(_gone(rp, 3, 4))
+        if how == "turn":
+            await talks._mark_heard(engine.load(rp.id), 1)
+        else:
+            await talks.end(rp.id, heard=1)
+        assert engine.load(rp.id).lines[2].heard_upto == 1
+        assert engine.load(rp.id).lines[4].heard_upto is None
+
+
+async def test_end_counts_no_sohee_chance_on_a_dropped_reply(talks, engine):
+    from je_server.models import Hint
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go."), ("ryan", "reply", "Nice!"))
+    hint = Hint(meaning_ko="좋다고 해요.", starters=["Yes, I…", "Not really,…"], full="Yes, I do.", full_shown=True)
+    rp.lines[0] = rp.lines[0].model_copy(update={"hint": hint})
+    rp.lines[2] = rp.lines[2].model_copy(update={"hint": hint})
+    assert talks._end_body(rp, [])["sohee"] == 4
+    assert talks._end_body(_gone(rp, 1, 2), [])["sohee"] == 2

@@ -95,12 +95,18 @@ class ScriptLine(BaseModel):
     # (spec free-talk-design 9 「그 문장을 말하면」): that sentence. Left out of the line's JSON when None, so the
     # contract's line keys (and the app's, which never reads it) stay as they were
     given: str | None = None
+    # a turn of mine I said again, and Ryan's reply after it, are marked instead of deleted so line numbers are never
+    # reused (docs/superpowers/specs/2026-11-09-talk-resay-design.md 3 「기록」). Left out of the JSON when False, so
+    # the contract's line keys stay as they were
+    dropped: bool = False
 
     @model_serializer(mode="wrap")
     def _leave_out_no_given(self, handler: SerializerFunctionWrapHandler) -> dict:
         out = handler(self)
         if self.given is None:
             out.pop("given", None)
+        if not self.dropped:
+            out.pop("dropped", None)
         return out
 
 

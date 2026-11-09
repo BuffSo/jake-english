@@ -589,3 +589,27 @@ async def test_practising_a_fix_line_aside_sees_the_conversation_up_to_the_turn(
     # my English turns and Ryan's English replies before the turn it fixes: no Korean turn (1), help (2) or fix (7)
     assert call["history"] == [("ryan", rp.lines[0].text), ("user", rp.lines[3].text), ("ryan", rp.lines[4].text)]
     assert call["history"][-1] == ("ryan", rp.lines[rp.lines[7].fix.of - 1].text)
+
+
+async def test_practice_after_the_talk_leaves_dropped_lines_out(engine, speech_bytes, fake_whisper, fake_claude):
+    # a turn said again and Ryan's reply to it are not in the talk teacher Ryan is given (spec talk-resay 3)
+    rp = _saved_talk(engine)
+    rp.lines[3] = rp.lines[3].model_copy(update={"dropped": True})
+    rp.lines[4] = rp.lines[4].model_copy(update={"dropped": True})
+    engine.store.save(rp)
+    fake_whisper.text = "I have no idea at all."
+    [e async for e in engine.attempt(rp.id, 7, speech_bytes, "practice")]
+    [call] = fake_claude.aside_calls
+    assert call["history"] == [("ryan", rp.lines[0].text)]
+
+
+def test_context_skips_dropped_lines():
+    from fakes import talk_example
+    from je_server.engine import Engine
+
+    rp = talk_example()
+    rp.lines[3] = rp.lines[3].model_copy(update={"dropped": True})
+    rp.lines[4] = rp.lines[4].model_copy(update={"dropped": True})
+    # the line at 5 is shown with the nearest lines not dropped: before it Ryan's opener's help line (2), not the dropped 4
+    assert Engine.context(rp, 5) == f"장소: {rp.frame.place_ko}. ryan: {rp.lines[2].text} / ryan: {rp.lines[6].text}"
+    assert Engine.context(rp, 1) == f"장소: {rp.frame.place_ko}. ryan: {rp.lines[0].text} / ryan: {rp.lines[2].text}"

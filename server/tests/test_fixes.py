@@ -155,3 +155,12 @@ def test_claudes_grammar_pick_on_a_helped_turn_is_dropped():
     assert check([grammar], TURNS, HELPED) == []
     # a helped turn with nothing heard wrong is not one to fix at all (`fix_input` leaves it out of both)
     assert check([item(15, "I like it.", "I really like it.", why="더 자연스러워요.")], TURNS, HELPED) == []
+
+
+def test_line_before_skips_dropped_lines():
+    rp = talk_example()
+    # the turn at 5 is fixed; Ryan's line right before it (4) was dropped, so the one before that is taken
+    assert line_before(rp, 7).idx == 4
+    rp.lines[4] = rp.lines[4].model_copy(update={"dropped": True})
+    rp.lines[3] = rp.lines[3].model_copy(update={"dropped": True})
+    assert line_before(rp, 7).idx == 0

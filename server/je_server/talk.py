@@ -56,6 +56,18 @@ def _ryan_text(line: ScriptLine) -> str:
     return f"{heard} {TALK_CUT}"
 
 
+def live(rp: Roleplay) -> list[ScriptLine]:
+    """The lines not dropped, in order (a turn said again and Ryan's reply to it are left out of everything that reads
+    the talk, spec talk-resay 3 「빠지는 곳」). Line numbers stay those of `rp.lines`."""
+    return [line for line in rp.lines if not line.dropped]
+
+
+def last_live(rp: Roleplay) -> ScriptLine | None:
+    """The last line not dropped."""
+    lines = live(rp)
+    return lines[-1] if lines else None
+
+
 def messages(rp: Roleplay) -> list[dict]:
     """What Claude is given for Ryan's next answer: the start, Ryan's replies (assistant) and my turns (user). A Korean
     turn is marked `TALK_KOREAN`; a turn said from Sohee's full sentence is what was heard, then `TALK_HELPED`. When
@@ -65,7 +77,8 @@ def messages(rp: Roleplay) -> list[dict]:
     `help` lines and the fixes are left out. The same role twice in a row is joined by a line break (when Claude could
     not answer, my next turn follows my last)."""
     out: list[dict] = [{"role": "user", "content": TALK_START}]
-    for line in rp.lines:
+    lines = live(rp)
+    for line in lines:
         if line.kind == "reply" and line.speaker == "ryan":
             role, text = "assistant", _ryan_text(line)
         elif line.kind == "turn":
@@ -78,7 +91,7 @@ def messages(rp: Roleplay) -> list[dict]:
             out[-1]["content"] += "\n" + text
         else:
             out.append({"role": role, "content": text})
-    if rp.lines and rp.lines[-1].kind == "turn" and sum(l.kind == "turn" for l in rp.lines) % 3 == 0:
+    if lines and lines[-1].kind == "turn" and sum(l.kind == "turn" for l in lines) % 3 == 0:
         out[-1]["content"] += "\n" + TALK_ECHO
     return out
 
@@ -93,7 +106,7 @@ def fix_input(rp: Roleplay) -> tuple[list[dict], dict[int, str], dict[int, fixes
     conversation: list[dict] = []
     turns: dict[int, str] = {}
     helped: dict[int, fixes.Helped] = {}
-    for line in rp.lines:
+    for line in live(rp):
         if line.kind == "reply" and line.speaker == "ryan":
             who = "라이언"
         elif line.kind == "turn":
@@ -128,12 +141,13 @@ def _from_full(rp: Roleplay, heard: str) -> tuple[str | None, bool, list[Issue]]
     (spec 9 「그 문장을 말하면」), but only those that sound close (`compare.sounds_close`): Sohee says I may swap words
     (「낱말을 바꿔 말해도 돼요」), so a word swapped, added or left out is mine, not a mishearing to fix as 「X가 Y처럼
     들렸어요」 (final review). Else, or far from it (my own words), a plain turn: None, False, []."""
-    at = next((i for i in range(len(rp.lines) - 1, -1, -1)
-               if rp.lines[i].speaker == "ryan" and rp.lines[i].kind == "reply"), None)
-    hint = rp.lines[at].hint if at is not None else None
+    lines = live(rp)  # a dropped turn said from the sentence does not count: the turn said again is compared to it too
+    at = next((i for i in range(len(lines) - 1, -1, -1)
+               if lines[i].speaker == "ryan" and lines[i].kind == "reply"), None)
+    hint = lines[at].hint if at is not None else None
     if hint is None or not hint.full_shown:
         return None, False, []
-    if any(line.kind == "turn" and line.given is not None for line in rp.lines[at + 1:]):
+    if any(line.kind == "turn" and line.given is not None for line in lines[at + 1:]):
         return None, False, []
     close = similarity(hint.full, heard)
     if close < NEAR_MIN:
@@ -235,8 +249,8 @@ class Talks:
         first_sound = 0.0
         rp = engine.load(rp_id)
         await self._mark_heard(rp, heard)
-        last = rp.lines[-1]
-        if last.speaker == "ryan" and last.kind == "reply" and last.parts:
+        last = last_live(rp)
+        if last is not None and last.speaker == "ryan" and last.kind == "reply" and last.parts:
             # the rest of Ryan's last reply, when its sounds are still being made, waits behind the fixes' sounds
             # (the voice leaves out those made)
             voice.demote([p.audio for p in last.parts])
@@ -283,7 +297,7 @@ class Talks:
         """The answer to `end`: each fix line with the recording of my last try at the turn it fixes (for 「🔊 내 녹음
         들어 보기」), or no lines and Ryan's 「고칠 곳을 찾지 못했어요」 (spec 7). `sohee`: how many Sohee chances I used,
         the hint and the full sentence each counted once on each of Ryan's replies (spec 9 「대화 끝」)."""
-        sohee = sum(1 + line.hint.full_shown for line in rp.lines
+        sohee = sum(1 + line.hint.full_shown for line in live(rp)
                     if line.speaker == "ryan" and line.kind == "reply" and line.hint is not None)
         if not lines:
             return {"items": [], "say": self.engine.said("talk_no_fixes").model_dump(), "sohee": sohee}
@@ -379,7 +393,7 @@ class Talks:
         """Marks how much of Ryan's last reply was heard when I cut it off, so his next reply knows (`messages`). The
         rest of its sounds are put behind the new reply's and still made, for 「🔊 듣기」 (spec 2). Heard to the end
         (or the count not known) marks nothing."""
-        last = rp.lines[-1] if rp.lines else None
+        last = last_live(rp)
         if (heard is None or last is None or last.speaker != "ryan" or last.kind != "reply" or not last.parts
                 or heard >= len(last.parts)):
             return

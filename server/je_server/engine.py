@@ -135,7 +135,11 @@ class Engine:
             before = line_before(rp, idx)
             near = [before] if before is not None else []
         else:
-            near = [l for l in rp.lines[max(idx - 1, 0): idx + 2] if l.idx != idx]
+            # the nearest lines not dropped (a talk's turn said again, spec talk-resay 3); read directly, `talk`
+            # imports this module
+            prev = next((l for l in reversed(rp.lines[:idx]) if not l.dropped), None)
+            nxt = next((l for l in rp.lines[idx + 1:] if not l.dropped), None)
+            near = [l for l in (prev, nxt) if l is not None]
         return f"장소: {rp.frame.place_ko}. " + " / ".join(f"{l.speaker}: {l.text}" for l in near)
 
     async def update_line(self, rp_id: str, idx: int, text: str, **changes) -> None:
@@ -422,8 +426,11 @@ class Engine:
             # the lines around it as the conversation went: in a record from before 2026-11-07, Ryan's in-role reply
             # answers what the learner actually said (spec 3)
             went = self.history(rp, len(rp.lines))
-            before = went[idx - 1] if idx > 0 else None
-            after = went[idx + 1] if idx + 1 < len(went) else None
+            # not the lines dropped in a talk (spec talk-resay 3)
+            b = next((i for i in range(idx - 1, -1, -1) if not rp.lines[i].dropped), None)
+            a = next((i for i in range(idx + 1, len(went)) if not rp.lines[i].dropped), None)
+            before = went[b] if b is not None else None
+            after = went[a] if a is not None else None
         ko = await self.claude.interpret(rp.frame, (line.speaker, line.text), before, after)
         await self.update_line(rp_id, idx, line.text, ko=ko)
         return ko
@@ -587,7 +594,8 @@ class Engine:
             # 8 「앞 대사」); a free talk is Ryan's English replies and my English turns, as Claude was given them
             went = self.history(rp, line.fix.of if line.fix is not None else idx)
             if rp.kind == "talk":
-                went = [(who, said_as) for (who, said_as), l in zip(went, rp.lines) if l.kind in ("reply", "turn")]
+                went = [(who, said_as) for (who, said_as), l in zip(went, rp.lines)
+                        if l.kind in ("reply", "turn") and not l.dropped]
             text = self._aside(self.claude.aside(rp.frame, went, line.text, heard, heard_ko, issues,
                                                  [(a.heard, a.issues, a.say_ko) for a in kept]))
             # a try at the line with points moves on like a followed one, so a line whisper keeps mishearing never
