@@ -1,5 +1,5 @@
-// Turns a three-line note into styled pieces: strong (bold dark orange), small gray (weak), plain, and in the reading
-// line the Korean sounds (`sound`, the pronunciation line's color, spec three-line-listen 1).
+// Turns a three-line note into styled pieces: strong, weak, plain, and in the reading line the Korean sounds (`sound`,
+// the pronunciation line's color, spec three-line-listen 1). How each is drawn: `syllableLook`.
 // Rules: docs/guide/PRONUNCIATION_한글발음_세줄표시_20261105.md
 import type { Syllable, ThreeLine } from "../api/types";
 
