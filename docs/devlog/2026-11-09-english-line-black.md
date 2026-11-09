@@ -1,6 +1,6 @@
 # 2026-11-09 세 줄의 영어 줄은 굵기로만 강세 표시
 
-- PR: #N
+- PR: #73
 - 문서: PRD 「첫 판: 말하기」의 「사용자 차례(역할극)」(세 줄 표시). 스펙 `docs/superpowers/specs/2026-11-08-three-line-listen-design.md` 1에 바뀐 것을 한 줄 더했다. 기준은 가이드 `docs/guide/PRONUNCIATION_한글발음_세줄표시_20261105.md` 1, 2. 작은 고침이라 새 스펙과 계획은 없고, ADR도 없다.
 
 ## 한 일
