@@ -1,6 +1,6 @@
 # 2026-11-09 공개 전 점검과 README
 
-- PR: (열면 적는다)
+- PR: #71
 - 문서: PRD, 스펙, 계획, ADR 없음. 할 일 `docs/todo/20261104_02_todo_before_going_public.md`(원래 폴더, 공개 전환은 사용자가 하므로 이 PR로 닫지 않는다).
 
 ## 한 일
