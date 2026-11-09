@@ -2,7 +2,9 @@
 
 Each request names its language: turn recordings are English first (no script hint, spec 「평가」), then
 auto-detected when they do not follow the line, so Korean is heard too (spec offscript-aside 2); when that second
-one fails, the English one stands. Situation input is auto-detected. Transcripts are never logged.
+one fails, the English one stands. Free-talk turns are English too, with the probability whisper gives Korean, so a
+Korean question it translated is heard again in Korean (spec free-talk-design 3). Situation input is auto-detected.
+Transcripts are never logged.
 """
 from __future__ import annotations
 
@@ -64,6 +66,16 @@ class Whisper:
         English, whisper translates Korean speech or leaves it in Hangul (2026-11-07)."""
         j = await self._infer(wav, "auto", "verbose_json")
         return _clean(j.get("text", "")), str(j.get("language") or "").lower()
+
+    async def transcribe_english(self, wav: Path) -> tuple[str, float]:
+        """The text forced to English and the probability whisper gives Korean, from one request: `verbose_json`
+        carries the language probabilities even with the language forced, same text, 0.23 s more (2026-11-09). 0.0
+        when they are missing (an older whisper-server, or one started with -nlp) or Korean is not among them."""
+        j = await self._infer(wav, "en", "verbose_json")
+        probs = j.get("language_probabilities")
+        p = probs.get("ko") if isinstance(probs, dict) else None
+        korean = float(p) if isinstance(p, (int, float)) and not isinstance(p, bool) else 0.0
+        return _clean(j.get("text", "")), korean
 
     async def _infer(self, wav: Path, lang: str, fmt: str) -> dict:
         try:

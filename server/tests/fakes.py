@@ -343,6 +343,7 @@ class FakeWhisper:
         self.by_lang: dict[str, str] = {}  # what transcribe hears by language; `text` for the rest
         self.fail_lang: str | None = None  # transcribe in this language raises WhisperError
         self.auto_fail = False  # transcribe_auto raises WhisperError, as when whisper-server cannot answer
+        self.korean_p = 0.0  # the probability of Korean transcribe_english gives
 
     async def start(self):
         pass
@@ -356,6 +357,9 @@ class FakeWhisper:
         if lang == self.fail_lang:
             raise WhisperError("fake")
         return self.by_lang.get(lang, self.text)
+
+    async def transcribe_english(self, wav):
+        return await self.transcribe(wav, "en"), self.korean_p
 
     async def transcribe_auto(self, wav):
         self.calls += 1

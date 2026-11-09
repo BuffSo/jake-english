@@ -3,7 +3,8 @@
 A free talk is a record of `kind "talk"`: it has no script, but it is kept like a roleplay and its lines go by number
 along the same routes. Ryan opens with the next of `TALK_OPENERS` in turn. The recordings stay on the Mac and Claude is
 given text only (ADR-0004). Ryan's replies and the fixes are asked with my turns (`messages`, `fix_input`): my Korean
-turns go to Claude marked `TALK_KOREAN` and Ryan answers them in English; only the fixes leave them out. Old records'
+turns (Hangul in the English transcript, or Korean by whisper's probability, `_hear`) go to Claude marked
+`TALK_KOREAN` and Ryan answers them in English; only the fixes leave them out. Old records'
 fixed `help` lines are skipped.
 
 A turn (`Talks.turn`) is my line with its try and recording, then Ryan's line: his English reply streamed sentence by
@@ -46,6 +47,11 @@ from .prompts import TALK_CUT, TALK_CUT_SILENT, TALK_ECHO, TALK_HELPED, TALK_KOR
 from .tts import VoiceError
 
 log = logging.getLogger("je_server")
+
+# Korean by whisper's language probability (spec 3): forced to English, whisper translated Korean questions and changed
+# what they asked. Real English (66) peaked at 0.972, Korean was mostly 0.987 or more (2026-11-09); the numbers are
+# logged per turn to set it again
+KOREAN_P = 0.98
 
 TALK_FRAME = Frame(title_ko="자유 대화", user_role_ko="나", ryan_role_ko="대화 상대", place_ko="자유 대화",
                    goal_ko="대본 없이 영어로 이야기하기")
@@ -404,7 +410,7 @@ class Talks:
             n, rec = engine.store.next_rec(rp_id, idx)
             rec.write_bytes(body)  # kept on the Mac (ADR-0004): Claude is given the text only
             try:
-                shown, korean = await self._hear(rp_id, idx, n, rec)
+                shown, korean, korean_p = await self._hear(rp_id, idx, n, rec)
             except _Unheard as e:
                 yield engine.talk_error(e.code)  # no line is kept; the recording stays, as in a roleplay
                 return
@@ -459,10 +465,10 @@ class Talks:
             timings["total"] = time.perf_counter() - t0
             await self._keep_timings(rp_id, idx, n, timings)
             # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
-            log.info("talk %s/%d n=%d korean=%s helped=%s dropped=%s transcribed=%.2f first_text=%.2f "
-                     "first_audio=%.2f total=%.2f", rp_id, idx, n, korean, given is not None, dropped,
-                     timings["transcribed"], timings.get("first_text", 0), timings.get("first_audio", 0),
-                     timings["total"])
+            log.info("talk %s/%d n=%d korean=%s korean_p=%.3f helped=%s dropped=%s transcribed=%.2f "
+                     "first_text=%.2f first_audio=%.2f total=%.2f", rp_id, idx, n, korean, korean_p,
+                     given is not None, dropped, timings["transcribed"], timings.get("first_text", 0),
+                     timings.get("first_audio", 0), timings["total"])
             if not failed and not dropped:  # the app has left a dropped turn: it reads none of its events
                 yield {"type": "done", "idx": ryan}
         finally:
@@ -496,8 +502,12 @@ class Talks:
             except VoiceError:
                 log.info("cut reply sound failed")  # 「🔊 듣기」 skips it
 
-    async def _hear(self, rp_id: str, idx: int, n: int, rec: Path) -> tuple[str, bool]:
-        """What I said, and whether it was Korean. _Unheard: the recording holds no turn. The WAV is deleted after."""
+    async def _hear(self, rp_id: str, idx: int, n: int, rec: Path) -> tuple[str, bool, float]:
+        """What I said, whether it was Korean, and the probability whisper gave Korean. Korean is Hangul in the English
+        transcript, or that probability at `KOREAN_P` or more (a question whisper translated, spec 3); then it is heard
+        again in Korean. Korean only by the probability needs Hangul from that second pass, else the English turn
+        stands: Claude is not told English text is Korean. _Unheard: the recording holds no turn. The WAV is deleted
+        after."""
         whisper = self.engine.whisper
         wav = self.engine.store.tmp_dir / f"{rp_id}-{idx}-{n}.wav"
         try:
@@ -509,22 +519,30 @@ class Talks:
                 raise _Unheard("too_long")
             if not await audio.has_speech(wav):
                 raise _Unheard("no_speech")
-            # English only, no auto language (spec 3): 0.85 s sooner, and auto took 1 in 4 of my English for Korean
-            heard = await whisper.transcribe(wav, "en")
-            korean = bool(HANGUL.search(heard))
+            # English only, no auto language (spec 3): with the probability still 0.58 s sooner than English then
+            # auto language, and auto took 1 in 4 to 1 in 3 of my English for Korean
+            heard, korean_p = await whisper.transcribe_english(wav)
+            hangul = bool(HANGUL.search(heard))
+            korean = hangul or korean_p >= KOREAN_P
             shown = heard
             if korean:
-                # Korean said with 「말하기」, left in Hangul by the English transcript: heard again in Korean
+                # Korean said with 「말하기」: heard again in Korean
                 try:
-                    shown = await whisper.transcribe(wav, "ko")
+                    again = await whisper.transcribe(wav, "ko")
                 except WhisperError as e:
                     # the English transcript is shown instead; the error carries its type name only
                     log.info("korean transcription failed: %s", e)
+                    korean = hangul
+                else:
+                    if hangul or HANGUL.search(again):
+                        shown = again
+                    else:
+                        korean = False
         finally:
             wav.unlink(missing_ok=True)
         if not (words(shown) or HANGUL.search(shown)):
             raise _Unheard("no_speech")
-        return shown, korean
+        return shown, korean, korean_p
 
     async def _reply_text(self, rp_id: str) -> AsyncIterator[str]:
         """Ryan's reply from Claude, given the talk so far as turns (spec 4). No text at all is Claude not answering."""

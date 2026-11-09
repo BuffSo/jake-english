@@ -234,6 +234,53 @@ async def test_korean_transcription_failing_still_goes_to_claude(talks, engine, 
     assert len(fake_claude.talk_calls) == 1
 
 
+async def test_korean_by_probability_is_heard_again_in_korean(talks, engine, speech_bytes, fake_whisper,
+                                                             fake_claude):
+    # Korean the English transcript translated (no Hangul), but whisper gives it Korean (spec 3)
+    fake_whisper.by_lang = {"en": "How do you say I went to the river?", "ko": "강가에 갔다는 말은 어떻게 해요?"}
+    fake_whisper.korean_p = 0.995
+    rp = await talks.create()
+    ev = await run(talks, rp.id, speech_bytes)
+    assert fake_whisper.langs == ["en", "ko"]
+    assert ev[0] == {"type": "heard", "text": "강가에 갔다는 말은 어떻게 해요?", "n": 1, "idx": 1, "korean": True}
+    assert [l.kind for l in engine.load(rp.id).lines[1:]] == ["ask", "reply"]
+    assert fake_claude.talk_calls[-1][-1]["content"] == TALK_KOREAN + "강가에 갔다는 말은 어떻게 해요?"
+
+
+async def test_korean_probability_at_the_bar(talks, engine, speech_bytes, fake_whisper):
+    fake_whisper.by_lang = {"en": "I like rainy days.", "ko": "비 오는 날이 좋아요."}
+    for p, korean in ((0.98, True), (0.979, False)):
+        fake_whisper.korean_p = p
+        fake_whisper.langs = []
+        rp = await talks.create()
+        ev = await run(talks, rp.id, speech_bytes)
+        assert ev[0]["korean"] is korean
+        assert fake_whisper.langs == (["en", "ko"] if korean else ["en"])
+
+
+async def test_korean_by_probability_falls_back_to_english_when_korean_fails(talks, engine, speech_bytes,
+                                                                            fake_whisper, fake_claude):
+    # no Hangul to show: an English turn, so Claude is not told English text is Korean
+    fake_whisper.by_lang = {"en": "I like rainy days."}
+    fake_whisper.korean_p = 0.99
+    fake_whisper.fail_lang = "ko"
+    rp = await talks.create()
+    ev = await run(talks, rp.id, speech_bytes)
+    assert ev[0] == {"type": "heard", "text": "I like rainy days.", "n": 1, "idx": 1, "korean": False}
+    assert engine.load(rp.id).lines[1].kind == "turn"
+    assert fake_claude.talk_calls[-1][-1]["content"] == "I like rainy days."
+
+
+async def test_korean_by_probability_without_hangul_stays_english(talks, engine, speech_bytes, fake_whisper):
+    # whisper forced to Korean may write English speech as English
+    fake_whisper.by_lang = {"en": "I like rainy days.", "ko": "I like rainy days."}
+    fake_whisper.korean_p = 0.99
+    rp = await talks.create()
+    ev = await run(talks, rp.id, speech_bytes)
+    assert ev[0] == {"type": "heard", "text": "I like rainy days.", "n": 1, "idx": 1, "korean": False}
+    assert engine.load(rp.id).lines[1].kind == "turn"
+
+
 async def test_claude_down_mid_reply_keeps_my_turn_only(talks, engine, speech_bytes, fake_whisper, fake_claude):
     rp = await talks.create()
     fake_claude.talk_fail_after = 1
@@ -417,9 +464,10 @@ async def test_turn_on_a_roleplay_is_not_found(talks, engine):
 
 async def test_turn_log_has_times_and_counts_only(talks, speech_bytes, fake_whisper, caplog):
     caplog.set_level(logging.INFO, logger="je_server")
+    fake_whisper.korean_p = 0.25
     rp = await talks.create()
     await run(talks, rp.id, speech_bytes)
-    assert f"talk {rp.id}/1 n=1 korean=False " in caplog.text
+    assert f"talk {rp.id}/1 n=1 korean=False korean_p=0.250 " in caplog.text
     assert fake_whisper.text not in caplog.text and not [s for s in REPLY if s in caplog.text]
 
 
