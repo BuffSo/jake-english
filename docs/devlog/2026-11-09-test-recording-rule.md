@@ -1,6 +1,6 @@
 # 2026-11-09 폰 시험 녹음은 사용자가 넘어간 뒤 지운다
 
-- PR: 이 브랜치(`docs/test-recording-rule`)의 PR
+- PR: #70
 - 문서: PRD, 스펙, 계획, ADR 없음. 할 일 `docs/todo/20261109_06_todo_ask_before_deleting_test_recordings.md`.
 
 ## 한 일
