@@ -26,7 +26,8 @@ def test_routes_need_token(settings, engine, fake_voice, fake_whisper):
                  "/roleplays/000000000000/lines/0/ko", "/roleplays/000000000000/lines/0/ko/audio"]:
         assert c.get(path).status_code == 401
     assert c.post("/roleplays", json={"situation": "x"}).status_code == 401
-    for path in ["/talks", "/talks/000000000000/turns", "/talks/000000000000/end"]:
+    for path in ["/talks", "/talks/000000000000/turns", "/talks/000000000000/end",
+                 "/talks/000000000000/lines/1/drop"]:
         assert c.post(path).status_code == 401
 
 
@@ -427,7 +428,8 @@ def test_talk_routes_need_token(settings, engine, fake_voice, fake_whisper):
     from je_server.app import Services, create_app
 
     c = TestClient(create_app(settings, Services(engine=engine, voice=fake_voice, whisper=fake_whisper)))
-    for path in ["/talks", "/talks/000000000000/turns", "/talks/000000000000/end"]:
+    for path in ["/talks", "/talks/000000000000/turns", "/talks/000000000000/end",
+                 "/talks/000000000000/lines/1/drop"]:
         assert c.post(path).status_code == 401
 
 
@@ -464,6 +466,36 @@ def test_turn_after_end_is_409(client, fake_claude, fake_whisper, speech_bytes):
     assert client.post(f"/talks/{rp_id}/end").status_code == 200
     r = client.post(f"/talks/{rp_id}/turns", content=speech_bytes)
     assert r.status_code == 409 and r.json()["code"] == "ended"
+
+
+def test_drop_route_answers_and_refuses(client, engine, fake_claude, fake_whisper, speech_bytes):
+    def drop(rp_id: str, idx: int):
+        return client.post(f"/talks/{rp_id}/lines/{idx}/drop")
+
+    def refused(r, status: int, code: str) -> bool:
+        return r.status_code == status and r.json()["code"] == code
+
+    assert refused(drop("000000000000", 1), 404, "not_found")
+    roleplay = client.post("/roleplays", json={"situation": "길 묻기"}).json()
+    assert refused(drop(roleplay["id"], 1), 404, "not_found")
+    assert drop("..%2Fx", 1).status_code in (404, 422) and drop("000000000000", -1).status_code == 422
+    rp_id = talked(client, fake_whisper, speech_bytes)  # Ryan 0, my turn 1, Ryan 2
+    for idx in (0, 2, 3):
+        assert refused(drop(rp_id, idx), 404, "not_found")
+    r = drop(rp_id, 1)
+    assert r.status_code == 200 and r.json() == {"dropped": 1}
+    assert [l.dropped for l in engine.load(rp_id).lines] == [False, True, True]
+    assert drop(rp_id, 1).json() == {"dropped": 1}  # sent again: the same
+    # two turns: the first is not my last; Sohee chance on Ryan's reply to the second keeps it
+    rp_id = talked(client, fake_whisper, speech_bytes)
+    client.post(f"/talks/{rp_id}/turns", content=speech_bytes)
+    assert refused(drop(rp_id, 1), 409, "not_last")
+    assert client.post(f"/talks/{rp_id}/lines/4/hint").status_code == 200
+    assert refused(drop(rp_id, 3), 409, "hinted")
+    fake_claude.fix_items = [fix_item(1)]
+    assert client.post(f"/talks/{rp_id}/end").status_code == 200
+    assert refused(drop(rp_id, 3), 409, "ended")
+    assert not any(l.dropped for l in engine.load(rp_id).lines)
 
 
 def test_heard_must_be_a_small_count(client, speech_bytes):

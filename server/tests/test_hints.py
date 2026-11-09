@@ -162,3 +162,15 @@ def test_hide_unshown_drops_the_full_sentence_until_it_is_shown():
     assert got["roleplay"]["lines"] == [{"idx": 0, "hint": kept}, {"idx": 1, "hint": None}, {"idx": 2, "hint": shown}]
     assert got["summary"]["lines"][0]["line"]["hint"] == kept
     assert answer_["roleplay"]["lines"][0]["hint"]["full"] == FULL  # the dump given is not changed
+
+
+def test_hint_conversation_leaves_dropped_lines_out():
+    rp = _talk(
+        _line("ryan", "reply", "Hi! What did you do today?"),
+        _line("user", "turn", "I go park.", dropped=True),
+        _line("ryan", "reply", "Nice!", dropped=True),
+        _line("user", "turn", "I went to the park."),
+        _line("ryan", "reply", "Great!"),
+    )
+    assert [c["말"] for c in hints.conversation(rp, 4)] == ["Hi! What did you do today?", "I went to the park.",
+                                                            "Great!"]

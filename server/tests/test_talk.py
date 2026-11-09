@@ -1174,3 +1174,364 @@ async def test_end_with_only_a_helped_turn_heard_right_has_nothing_to_fix(talks,
     await run(talks, rp.id, speech_bytes)
     assert engine.load(rp.id).lines[1].given == hint.full
     assert await talks.end(rp.id) == no_fixes(engine, 2) and fake_claude.fix_calls == []
+
+
+# --- lines dropped by saying a turn again (spec talk-resay 3) ----------------------------------------------------
+
+def _gone(rp, *idxs):
+    for i in idxs:
+        rp.lines[i] = rp.lines[i].model_copy(update={"dropped": True})
+    return rp
+
+
+def test_messages_leave_dropped_lines_out():
+    rp = _gone(_talk(("ryan", "reply", "R0"), ("user", "turn", "T1"), ("ryan", "reply", "R2"), ("user", "turn", "T3")),
+               1, 2)
+    assert [m["content"] for m in messages(rp)] == [TALK_START, "R0", "T3"]
+
+
+def test_dropped_turns_do_not_count_for_the_echo():
+    rp = _turns(3)
+    assert TALK_ECHO in messages(rp)[-1]["content"]
+    turn_idxs = [l.idx for l in rp.lines if l.kind == "turn"]
+    # one of the three dropped (with its reply): two left, no echo
+    assert TALK_ECHO not in repr(messages(_gone(_turns(3), turn_idxs[0], turn_idxs[0] + 1)))
+    # four turns, one dropped: three live, so the echo is on the last one
+    four = _gone(_turns(4), 1, 2)
+    assert messages(four)[-1]["content"].endswith(TALK_ECHO)
+
+
+def test_fix_input_leaves_dropped_lines_out():
+    from je_server.talk import fix_input
+    rp = _gone(_talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go park."), ("ryan", "reply", "Fun!"),
+                     ("user", "turn", "I went to the park.")), 1, 2)
+    conversation, turns, helped = fix_input(rp)
+    assert [c["말"] for c in conversation] == ["Hi!", "I went to the park."] and turns == {3: "I went to the park."}
+
+
+def _helped_talk(*, drop_helped: bool):
+    """Ryan's reply 0 with Sohee's full sentence shown, my turn 1 said from it, Ryan's reply 2, and then my turn."""
+    from je_server.models import Hint
+    rp = _talk(("ryan", "reply", "Where?"), ("user", "turn", "I turned light at the bank."), ("ryan", "reply", "Ok."))
+    rp.lines[0] = rp.lines[0].model_copy(update={
+        "hint": Hint(meaning_ko="어디서 돌았는지 물어요.", starters=["I turned…", "I went…"],
+                     full="I turned right at the bank.", full_shown=True)})
+    rp.lines[1] = rp.lines[1].model_copy(update={"given": "I turned right at the bank."})
+    return _gone(rp, 1, 2) if drop_helped else rp
+
+
+def test_a_dropped_helped_turn_lets_the_next_turn_be_helped():
+    from je_server.talk import _from_full
+    heard = "I turned light at the bank."
+    assert _from_full(_helped_talk(drop_helped=False), heard) == (None, False, [])  # that turn was already helped
+    # dropped: the reply 0 is his latest live reply and the turn said again is compared to its sentence too
+    full, followed, issues = _from_full(_helped_talk(drop_helped=True), heard)
+    assert full == "I turned right at the bank." and followed and issues
+    # his latest reply is found past a dropped reply
+    rp = _helped_talk(drop_helped=True)
+    rp.lines[0] = rp.lines[0].model_copy(update={"hint": None})
+    assert _from_full(rp, heard) == (None, False, [])
+
+
+async def _stored(talks, *lines):
+    rp = _talk(*lines)
+    talks.engine.store.save(rp)
+    return rp
+
+
+async def test_cut_mark_goes_on_the_last_live_reply(talks, engine):
+    from je_server.models import Said
+    parts = [Said(text="Oh, nice!", audio="a" * 64), Said(text="Who went?", audio="b" * 64)]
+    for how in ("turn", "end"):
+        rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go."), ("ryan", "reply", "Nice! Who?"),
+                   ("user", "turn", "Me."), ("ryan", "reply", "Fun."))
+        rp.lines[2] = rp.lines[2].model_copy(update={"parts": parts})
+        engine.store.save(_gone(rp, 3, 4))
+        if how == "turn":
+            await talks._mark_heard(engine.load(rp.id), 1)
+        else:
+            await talks.end(rp.id, heard=1)
+        assert engine.load(rp.id).lines[2].heard_upto == 1
+        assert engine.load(rp.id).lines[4].heard_upto is None
+
+
+async def test_end_counts_no_sohee_chance_on_a_dropped_reply(talks, engine):
+    from je_server.models import Hint
+    rp = _talk(("ryan", "reply", "Hi!"), ("user", "turn", "I go."), ("ryan", "reply", "Nice!"))
+    hint = Hint(meaning_ko="좋다고 해요.", starters=["Yes, I…", "Not really,…"], full="Yes, I do.", full_shown=True)
+    rp.lines[0] = rp.lines[0].model_copy(update={"hint": hint})
+    rp.lines[2] = rp.lines[2].model_copy(update={"hint": hint})
+    assert talks._end_body(rp, [])["sohee"] == 4
+    assert talks._end_body(_gone(rp, 1, 2), [])["sohee"] == 2
+
+
+# --- dropping my last turn to say it again (spec talk-resay 3, 4) ------------------------------------------------
+
+def _dropped(engine, rp_id) -> list[bool]:
+    return [l.dropped for l in engine.load(rp_id).lines]
+
+
+def _held_sound(fake_voice, text: str) -> asyncio.Event:
+    """Holds the making of `text`'s sound until the event is set (Ryan's sounds still coming)."""
+    gate = asyncio.Event()
+    say = fake_voice.say
+
+    async def held(t, voice, lang, urgent, rank=0, check=False):
+        if t == text:
+            await gate.wait()
+        return await say(t, voice, lang, urgent, rank, check)
+
+    fake_voice.say = held
+    return gate
+
+
+async def test_drop_marks_my_turn_and_ryans_reply(talks, engine, speech_bytes):
+    rp_id = await replied(talks, speech_bytes)
+    before = engine.load(rp_id).lines
+    await talks.drop(rp_id, 1)
+    after = engine.load(rp_id).lines
+    assert [l.dropped for l in after] == [False, True, True]
+    # kept with their numbers and words (spec 3 「기록」)
+    assert [l.model_copy(update={"dropped": False}) for l in after] == before
+    await talks.drop(rp_id, 1)  # sent again: the same
+    assert engine.load(rp_id).lines == after
+
+
+async def test_drop_a_korean_turn_or_one_ryan_could_not_answer(talks, engine, speech_bytes, fake_whisper,
+                                                                fake_claude):
+    fake_whisper.by_lang = {"en": "I am 피곤해 today", "ko": "오늘 피곤해요"}
+    rp_id = await replied(talks, speech_bytes)
+    assert engine.load(rp_id).lines[1].kind == "ask"
+    await talks.drop(rp_id, 1)
+    assert _dropped(engine, rp_id) == [False, True, True]
+    fake_whisper.by_lang = {}
+    fake_claude.talk_fail_after = 0
+    rp = await talks.create()
+    await run(talks, rp.id, speech_bytes)  # Claude could not answer: my line only
+    await talks.drop(rp.id, 1)
+    assert _dropped(engine, rp.id) == [False, True]
+
+
+async def test_drop_refuses_what_is_not_my_last_turn(talks, engine, speech_bytes):
+    from je_server.talk import CannotDrop
+    roleplay = await engine.create("길 묻기")
+    mine = next(l.idx for l in roleplay.lines if l.speaker == "user")
+    for rp_id, idx in ((roleplay.id, mine), ("000000000000", 1)):
+        with pytest.raises(NotFound):
+            await talks.drop(rp_id, idx)
+    rp_id = await replied(talks, speech_bytes)
+    await run(talks, rp_id, speech_bytes)  # my turns at 1 and 3, Ryan's lines at 0, 2, 4
+    for idx in (0, 2, 4, 5, 99):
+        with pytest.raises(NotFound):
+            await talks.drop(rp_id, idx)
+    with pytest.raises(CannotDrop) as e:
+        await talks.drop(rp_id, 1)
+    assert e.value.code == "not_last"
+    assert not any(_dropped(engine, rp_id))
+    await talks.drop(rp_id, 3)
+    assert _dropped(engine, rp_id) == [False, False, False, True, True]
+
+
+async def test_drop_refuses_after_sohee_chance_on_the_reply(talks, engine, speech_bytes, fake_claude):
+    from je_server.talk import CannotDrop
+    # Sohee chance on Ryan's line before my turn does not count (spec 4)
+    rp_id = await replied(talks, speech_bytes)
+    await talks.hint(rp_id, 0)
+    await talks.drop(rp_id, 1)
+    assert _dropped(engine, rp_id) == [False, True, True]
+    # on his reply to my turn it does, from the press on: while the hint is made and once it is kept
+    rp_id = await replied(talks, speech_bytes)
+    fake_claude.hint_gate = asyncio.Event()
+    making = asyncio.create_task(talks.hint(rp_id, 2))
+    await until(lambda: len(fake_claude.hint_calls) == 2)
+    with pytest.raises(CannotDrop) as e:
+        await talks.drop(rp_id, 1)
+    assert e.value.code == "hinted"
+    fake_claude.hint_gate.set()
+    await making
+    await until(lambda: not talks.hinting)
+    with pytest.raises(CannotDrop) as e:
+        await talks.drop(rp_id, 1)
+    assert e.value.code == "hinted"
+    assert not any(_dropped(engine, rp_id))
+
+
+async def test_no_hint_on_a_dropped_reply(talks, engine, speech_bytes, fake_claude):
+    # a tap on the old bubble of Ryan's reply before the redraw (spec talk-resay 3)
+    rp_id = await replied(talks, speech_bytes)
+    await talks.drop(rp_id, 1)
+    with pytest.raises(NotFound):
+        await talks.hint(rp_id, 2)
+    assert fake_claude.hint_calls == []
+    assert engine.load(rp_id).lines[2].hint is None
+    assert await talks.hint(rp_id, 0) == fake_claude.hint_value  # his line before my turn still takes one
+
+
+async def test_drop_refuses_an_ended_or_ending_talk(talks, engine, speech_bytes, fake_whisper, fake_claude):
+    rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])
+    fake_claude.fix_items = [fix_item(0, 1)]
+    fake_claude.fix_gate = asyncio.Event()
+    ending = asyncio.create_task(talks.end(rp_id))
+    await until(lambda: fake_claude.fix_calls)
+    with pytest.raises(TalkBusy):
+        await talks.drop(rp_id, 1)
+    fake_claude.fix_gate.set()
+    await ending
+    with pytest.raises(TalkEnded):
+        await talks.drop(rp_id, 1)
+    assert not any(_dropped(engine, rp_id))
+
+
+async def test_drop_while_claude_writes_stops_it_and_keeps_no_reply(talks, engine, speech_bytes, fake_claude):
+    rp = await talks.create()
+    fake_claude.talk_gate = asyncio.Event()  # never set: Claude has not written a word
+    turn = asyncio.create_task(run(talks, rp.id, speech_bytes))
+    await until(lambda: fake_claude.talk_calls)
+    assert talks.running[rp.id].idx == 1 and rp.id in talks.turning
+    await talks.drop(rp.id, 1)
+    ev = await asyncio.wait_for(turn, 2)
+    assert [e["type"] for e in ev] == ["heard"]  # no reply, no done
+    await until(lambda: fake_claude.talk_closed)  # Claude's stream was closed, not left to write
+    lines = engine.load(rp.id).lines
+    assert [(l.idx, l.speaker, l.dropped) for l in lines] == [(0, "ryan", False), (1, "user", True)]
+    assert talks.turning == set() and talks.running == {}
+
+
+async def test_drop_after_the_reply_is_saved_demotes_its_sounds(talks, engine, speech_bytes, fake_voice):
+    rp = await talks.create()
+    gate = _held_sound(fake_voice, REPLY[1])
+    events = talks.turn(rp.id, speech_bytes, None)
+    try:
+        kinds = []
+        async for ev in events:
+            kinds.append(ev["type"])
+            if ev["type"] == "audio":
+                break
+        assert "reply" in kinds and kinds.count("audio") == 1  # the second sentence's sound is being made
+        await talks.drop(rp.id, 1)
+        # the sounds not made yet wait behind the next reply's (spec 3 「만들던 답 버리기」)
+        assert {fake_voice.key("ryan", "english", s) for s in REPLY[1:]} <= set(fake_voice.demoted)
+        assert [e async for e in events] == []  # no more sounds, no done
+    finally:
+        gate.set()
+    assert _dropped(engine, rp.id) == [False, True, True]
+    assert talks.turning == set() and talks.running == {}
+
+
+async def test_drop_before_the_reply_is_saved_demotes_the_sentences_written(talks, engine, speech_bytes,
+                                                                             fake_claude, fake_voice):
+    rp = await talks.create()
+    gate = _held_sound(fake_voice, REPLY[0])
+    fake_claude.talk_gate = asyncio.Event()
+    turn = asyncio.create_task(run(talks, rp.id, speech_bytes))
+    await until(lambda: fake_claude.talk_calls)
+    lock = engine.lock(rp.id)
+    await lock.acquire()
+    try:
+        dropping = asyncio.create_task(talks.drop(rp.id, 1))
+        await asyncio.sleep(0.01)  # the drop waits first
+        fake_claude.talk_gate.set()
+        await asyncio.sleep(0.01)  # Claude's whole text is written; its save waits behind the drop
+    finally:
+        lock.release()
+    await dropping
+    try:
+        ev = await asyncio.wait_for(turn, 2)
+    finally:
+        gate.set()
+    assert not {"reply", "audio", "done"} & {e["type"] for e in ev}
+    assert _dropped(engine, rp.id) == [False, True]  # no Ryan line, so only the turn knows the sentences written
+    assert {fake_voice.key("ryan", "english", s) for s in REPLY} <= set(fake_voice.demoted)
+
+
+async def test_drop_and_reply_save_in_either_order_keep_line_numbers(talks, engine, speech_bytes, fake_claude,
+                                                                      fake_voice):
+    for drop_first in (True, False):
+        rp = await talks.create()
+        fake_claude.talk_gate = asyncio.Event()
+        turn = asyncio.create_task(run(talks, rp.id, speech_bytes))
+        await until(lambda: len(fake_claude.talk_calls) == (1 if drop_first else 2))
+        voiced = len(fake_voice.calls)
+        lock = engine.lock(rp.id)
+        await lock.acquire()  # the drop and the reply's save wait for it, in the order they come
+        try:
+            if drop_first:
+                dropping = asyncio.create_task(talks.drop(rp.id, 1))
+                await asyncio.sleep(0.01)
+                fake_claude.talk_gate.set()
+            else:
+                fake_claude.talk_gate.set()
+                # the reply's sentences are being voiced, so its whole text is waiting to be saved
+                await until(lambda: len(fake_voice.calls) > voiced)
+                dropping = asyncio.create_task(talks.drop(rp.id, 1))
+                await asyncio.sleep(0.01)
+        finally:
+            lock.release()
+        await dropping
+        await asyncio.wait_for(turn, 2)
+        lines = engine.load(rp.id).lines
+        assert [l.idx for l in lines] == list(range(len(lines)))
+        assert [l.dropped for l in lines] == ([False, True] if drop_first else [False, True, True]), drop_first
+        assert talks.turning == set() and talks.running == {}
+
+
+async def test_a_turn_right_after_a_drop_is_taken(talks, engine, speech_bytes, fake_whisper, fake_claude,
+                                                  fake_voice):
+    rp = await talks.create()
+    gate = _held_sound(fake_voice, REPLY[1])
+    old = talks.turn(rp.id, speech_bytes, None)
+    try:
+        async for ev in old:
+            if ev["type"] == "audio":
+                break
+        await talks.drop(rp.id, 1)
+        # the turn said again, before the dropped one has ended
+        fake_whisper.text = "I went to the park."
+        fake_claude.talk_pieces = ["Oh, nice! ", "Did you rest?"]
+        ev = await run(talks, rp.id, speech_bytes)
+        assert ev[0]["idx"] == 3 and ev[-1] == {"type": "done", "idx": 4}  # 1 and 2 are not used again
+        assert [m["content"] for m in fake_claude.talk_calls[-1]] == [TALK_START, TALK_OPENERS[0],
+                                                                      "I went to the park."]
+        assert [e async for e in old] == []
+    finally:
+        gate.set()
+    lines = engine.load(rp.id).lines
+    assert [l.idx for l in lines] == [0, 1, 2, 3, 4]
+    assert [l.dropped for l in lines] == [False, True, True, False, False]
+
+
+async def test_a_dropped_turn_ending_late_does_not_free_the_next(talks, engine, speech_bytes, fake_whisper,
+                                                                 fake_claude):
+    rp = await talks.create()
+    old = talks.turn(rp.id, speech_bytes, None)
+    assert (await anext(old))["type"] == "heard"  # it has not ended
+    await talks.drop(rp.id, 1)
+    assert talks.check_open(rp.id).id == rp.id  # free at once
+    fake_claude.talk_gate = asyncio.Event()
+    fake_whisper.text = "I went to the park."
+    new = asyncio.create_task(run(talks, rp.id, speech_bytes))
+    await until(lambda: fake_claude.talk_calls)
+    assert [e async for e in old] == []  # it ends now, without asking Claude: it was dropped before
+    with pytest.raises(TalkBusy):
+        talks.check_open(rp.id)  # still the new turn's
+    assert talks.running[rp.id].idx == 2
+    fake_claude.talk_gate.set()
+    assert (await new)[-1] == {"type": "done", "idx": 3}
+    assert len(fake_claude.talk_calls) == 1
+    assert [l.dropped for l in engine.load(rp.id).lines] == [False, True, False, False]
+    assert talks.turning == set() and talks.running == {}
+
+
+async def test_drop_log_has_counts_only(talks, speech_bytes, fake_whisper, fake_claude, caplog):
+    caplog.set_level(logging.INFO, logger="je_server")
+    rp_id = await replied(talks, speech_bytes)
+    await talks.drop(rp_id, 1)
+    assert f"talk drop {rp_id}/1 lines=2 running=False" in caplog.text
+    rp = await talks.create()
+    fake_claude.talk_gate = asyncio.Event()
+    turn = asyncio.create_task(run(talks, rp.id, speech_bytes))
+    await until(lambda: len(fake_claude.talk_calls) == 2)
+    await talks.drop(rp.id, 1)
+    await turn
+    assert f"talk drop {rp.id}/1 lines=1 running=True" in caplog.text
+    assert fake_whisper.text not in caplog.text and not [s for s in REPLY if s in caplog.text]

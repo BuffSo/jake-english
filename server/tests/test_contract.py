@@ -113,3 +113,12 @@ def test_a_lines_given_is_in_its_json_only_when_set():
     helped = line.model_copy(update={"given": "I went home."})
     assert helped.model_dump(mode="json")["given"] == "I went home."
     assert ScriptLine.model_validate_json(helped.model_dump_json()) == helped
+
+
+def test_a_lines_dropped_is_in_its_json_only_when_set():
+    # only a turn said again and Ryan's reply to it have it (spec talk-resay 3), so the examples' lines stay without it
+    line = ScriptLine(idx=1, speaker="user", text="I want home.", kind="turn")
+    assert "dropped" not in line.model_dump(mode="json") and '"dropped"' not in line.model_dump_json()
+    gone = line.model_copy(update={"dropped": True})
+    assert gone.model_dump(mode="json")["dropped"] is True
+    assert ScriptLine.model_validate_json(gone.model_dump_json()) == gone

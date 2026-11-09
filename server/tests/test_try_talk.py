@@ -48,3 +48,7 @@ def test_summarize_end_counts_fixes_and_sound_guesses():
                       {"line": {"fix": {"why_ko": "light처럼 들렸어요. L은 ..."}}}], "say": None}
     assert tt.summarize_end(body) == {"fixes": 2, "sound_guesses": 1}
     assert tt.summarize_end({"items": [], "say": {"text": "x"}}) == {"fixes": 0, "sound_guesses": 0}
+
+
+def test_drop_path_is_the_turns_line():
+    assert tt.drop_path("abc123def456", 3) == "/talks/abc123def456/lines/3/drop"

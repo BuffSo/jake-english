@@ -22,10 +22,13 @@ import type {
 
 export type ErrorCode = "offline" | "claude_unavailable" | "no_speech" | "too_long" | "not_found" | "unknown";
 
+// `status` is the HTTP status of the Mac's answer; none when no answer came (offline, a timeout, a broken stream).
+// `code` alone cannot tell a refusal (409) from a server error (500), both "unknown".
 export class ApiError extends Error {
   constructor(
     public code: ErrorCode,
     public say?: Said,
+    public status?: number,
   ) {
     super(code);
   }
@@ -67,7 +70,7 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
       } catch {
         // not JSON: keep the status only
       }
-      throw new ApiError(toCode(res.status, body.code), body.say ?? undefined);
+      throw new ApiError(toCode(res.status, body.code), body.say ?? undefined, res.status);
     }
     return res;
   }
@@ -161,6 +164,9 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
     },
     endTalk: (id: string, heard: number | null) =>
       post<TalkEnd>(`/talks/${id}/end${heard === null ? "" : `?heard=${heard}`}`, undefined, LONG),
+
+    // 「다시 말하기」 (spec talk-resay 3): tell the Mac to drop my turn at `idx` and Ryan's reply to it
+    dropTurn: (id: string, idx: number) => post<{ dropped: number }>(`/talks/${id}/lines/${idx}/drop`),
 
     // Sohee chance (spec free-talk-design): the hint and the full sentence come from Claude, so they get LONG
     getHint: (id: string, idx: number) => post<Hint>(`/talks/${id}/lines/${idx}/hint`, undefined, LONG),

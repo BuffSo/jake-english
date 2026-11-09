@@ -10,8 +10,12 @@ terminal: recordings, their transcripts and Ryan's answers do not go into files 
 local test server's (`--port`); the token comes from server/.env as the server reads it and is never printed. Point
 JE_DATA_DIR at the test server's data copy to also read the times the server saved.
 
+With `--drop` the first recording's turn is dropped (POST /talks/{id}/lines/{idx}/drop) as soon as its `heard`
+event arrives, the stream is read to its end, and the seconds from the drop to the end are printed. The other
+recordings are then sent as the turn said again. This times dropping a turn and saying it again.
+
 Run in server/:
-    uv run python scripts/try_talk.py --port 8791 a.m4a b.m4a [--heard 1] [--end] [--show]
+    uv run python scripts/try_talk.py --port 8791 a.m4a b.m4a [--heard 1] [--end] [--show] [--drop]
 """
 from __future__ import annotations
 
@@ -51,8 +55,15 @@ def summarize_end(body: dict) -> dict:
     return {"fixes": len(fixes), "sound_guesses": sum(SOUND_GUESS in f["why_ko"] for f in fixes)}
 
 
-def send_turn(base: str, token: str, rp_id: str, path: Path, heard: int | None, timeout: float = 180):
-    """One turn: (seconds, event) for each line as it arrives. The first line's time is after the request is sent."""
+def drop_path(rp_id: str, idx: int) -> str:
+    """The path that drops my turn at line `idx`."""
+    return f"/talks/{rp_id}/lines/{idx}/drop"
+
+
+def send_turn(base: str, token: str, rp_id: str, path: Path, heard: int | None, timeout: float = 180,
+              on_event=None):
+    """One turn: (seconds, event) for each line as it arrives. The first line's time is after the request is sent.
+    `on_event(event)`, when given, is called with each event as it arrives."""
     q = f"?heard={heard}" if heard is not None else ""
     req = urllib.request.Request(f"{base}/talks/{rp_id}/turns{q}", data=path.read_bytes(), method="POST",
                                  headers={"Authorization": f"Bearer {token}", "Content-Type": "audio/mp4"})
@@ -61,7 +72,10 @@ def send_turn(base: str, token: str, rp_id: str, path: Path, heard: int | None, 
     with urllib.request.urlopen(req, timeout=timeout) as r:
         for line in r:
             if line.strip():
-                events.append((time.perf_counter() - t0, json.loads(line)))
+                ev = json.loads(line)
+                events.append((time.perf_counter() - t0, ev))
+                if on_event:
+                    on_event(ev)
     return events
 
 
@@ -95,6 +109,8 @@ def main() -> int:
     ap.add_argument("--heard", type=int, help="from the second turn on: sentences of Ryan's last reply I heard")
     ap.add_argument("--end", action="store_true", help="end the talk after the turns and count the fixes")
     ap.add_argument("--show", action="store_true", help="print what was heard and Ryan's text (terminal only)")
+    ap.add_argument("--drop", action="store_true",
+                    help="drop the first recording's turn once heard, time to the stream's end, then say the rest again")
     args = ap.parse_args()
     if missing := [str(p) for p in args.recordings if not p.is_file()]:
         ap.error("no such recording: " + ", ".join(missing))
@@ -103,7 +119,17 @@ def main() -> int:
     try:
         _, talk = post_json(base, s.token, "/talks")
         for i, path in enumerate(args.recordings):
-            events = send_turn(base, s.token, talk["id"], path, args.heard if i else None)
+            dropped: list[float] = []  # [perf_counter at the drop] once the first turn is dropped
+
+            def drop_when_heard(ev: dict) -> None:
+                if ev.get("type") == "heard" and not dropped:
+                    post_json(base, s.token, drop_path(talk["id"], ev["idx"]))
+                    dropped.append(time.perf_counter())
+
+            events = send_turn(base, s.token, talk["id"], path, args.heard if i else None,
+                               on_event=drop_when_heard if args.drop and i == 0 else None)
+            if dropped:
+                print(f"[drop] stream ended {fmt(time.perf_counter() - dropped[0])} after the drop")
             r = summarize(events)
             heard_ev = next((e for _, e in events if e.get("type") == "heard"), None)
             errors = [e["code"] for _, e in events if e.get("type") == "error"]

@@ -57,6 +57,7 @@ export type TalkAction =
   | { type: "openFailed"; message: string }
   | { type: "retry" }
   | { type: "ryanDone" }
+  | { type: "redo"; idx: number }
   | { type: "recordStart"; heard: number | null }
   | { type: "recordCancel" }
   | { type: "micFailed" }
@@ -89,6 +90,28 @@ export const englishTurns = (s: TalkState) => s.bubbles.filter((b) => b.kind ===
 // 「N번째」: my turns so far, plus the one being taken until my words come back
 export const turnNo = (s: TalkState) =>
   s.bubbles.filter((b) => b.kind === "me").length + ((s.phase === "waiting" || s.phase === "replying") && s.heardIn ? 0 : 1);
+
+// 「↻ 다시 말하기」 (spec talk-resay 1, 4): the `idx` of my last turn's bubble while it may be taken back, else null.
+// From the moment my words are heard (waiting, replying, Ryan's reply, my turn again) until the next recording or the
+// end. After that bubble there is nothing or only Ryan's one reply. Pressing 「소희 찬스」 on that reply (`asked` says
+// whether it was) makes the button go away: the chance accepts the turn.
+export function redoTarget(s: TalkState, asked: (idx: number) => boolean): number | null {
+  if (s.phase === "waiting" || s.phase === "replying") {
+    if (!s.heardIn) return null;
+  } else if (s.phase !== "ryan" && s.phase !== "ready") return null;
+  let at = -1;
+  s.bubbles.forEach((b, i) => {
+    if (b.kind === "me") at = i;
+  });
+  if (at < 0) return null;
+  const after = s.bubbles.slice(at + 1);
+  if (after.length > 1) return null;
+  if (after.length === 1) {
+    const r = after[0];
+    if (r.kind !== "ryan" || asked(r.idx)) return null;
+  }
+  return s.bubbles[at].idx;
+}
 
 // sentences up to the last one whose sound has started; 0 when none has
 export function heardCount(parts: Said[], started: ReadonlySet<string>): number {
@@ -144,6 +167,24 @@ export function talkReduce(s: TalkState, a: TalkAction): TalkState {
       return { ...s, phase: s.errorFrom, message: null, errorFrom: null };
     case "ryanDone":
       return s.phase === "ryan" && s.done ? { ...s, phase: "ready" } : s;
+    case "redo": {
+      // spec talk-resay 2: the guard is the button's own (no Sohee chance is known here; the screen hides the button
+      // once one is asked). My turn and what follows go, the cut on the Ryan line before stays, and a late event of
+      // the dropped turn is dropped by the turn number as after 「🎤 말하기」.
+      if (redoTarget(s, () => false) !== a.idx) return s;
+      const at = s.bubbles.findIndex((b) => b.kind === "me" && b.idx === a.idx);
+      return {
+        ...s,
+        phase: "recording",
+        bubbles: s.bubbles.slice(0, at),
+        turn: s.turn + 1,
+        pending: "",
+        heardIn: false,
+        micUsed: true,
+        message: null,
+        failure: false,
+      };
+    }
     case "recordStart":
       if (!canSpeak(s)) return s;
       return { ...s, phase: "recording", bubbles: withCut(s, a.heard), turn: s.turn + 1, micUsed: true, message: null };
@@ -211,10 +252,10 @@ export function talkReduce(s: TalkState, a: TalkAction): TalkState {
 // 「모아 둔 문장」의 앞 대사 (spec free-talk-design 8). A fix line plays Ryan's line before the turn it fixes
 // (`fix.of`, like the server's `fixes.line_before`), any other line the one right before it. Ryan's `help` lines (his
 // fixed English after a Korean turn) are not part of the talk, so they are walked past: the fix goes back to Ryan's
-// reply.
+// reply. A dropped line (spec talk-resay 3) is walked past too.
 export function savedBefore(rp: Roleplay, line: ScriptLine): ScriptLine | undefined {
   let at = (line.fix ? line.fix.of : line.idx) - 1;
-  const skip = (l: ScriptLine) => (line.fix ? !(l.speaker === "ryan" && l.kind !== "help") : l.kind === "help");
+  const skip = (l: ScriptLine) => l.dropped === true || (line.fix ? !(l.speaker === "ryan" && l.kind !== "help") : l.kind === "help");
   while (at >= 0 && rp.lines[at] && skip(rp.lines[at])) at -= 1;
   return at >= 0 ? rp.lines[at] : undefined;
 }

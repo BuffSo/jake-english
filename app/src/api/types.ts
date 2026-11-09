@@ -26,6 +26,8 @@ export type ScriptLine = {
   // the Mac's record of Sohee chance on Ryan's reply (spec free-talk-design 9), absent from an older server and sent
   // without its full sentence before 「전체 문장 보기」. The app reads a hint through the hint routes only, never here
   hint?: unknown;
+  // a turn I took back with 「다시 말하기」 (spec talk-resay 3); the key is absent on other lines. Never shown or played.
+  dropped?: boolean;
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };
 export type Issue = { target: string; heard: string; sound: [string, string] | null; explain: string };
@@ -173,7 +175,8 @@ export const HEARD_TRY_KEYS = ["idx", "heard", "n"] as const;
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 export const KEYS_MATCH: [
   Same<keyof Roleplay, (typeof ROLEPLAY_KEYS)[number]>,
-  Same<keyof ScriptLine, (typeof LINE_KEYS)[number]>,
+  // `dropped` is only on a dropped line (spec talk-resay 3), so it is not in the contract's key list
+  Same<keyof Omit<ScriptLine, "dropped">, (typeof LINE_KEYS)[number]>,
   Same<keyof Syllable, (typeof SYLLABLE_KEYS)[number]>,
   Same<AttemptEvent["type"], (typeof EVENT_TYPES)[number]>,
   Same<keyof Summary, (typeof SUMMARY_KEYS)[number]>,
