@@ -7,6 +7,11 @@
 // recording and with 「대화 끝내기」, and the stream's events are checked against it through `now` (`isCurrent`): the
 // answer to an older turn, its sounds and its 「sounds ended」 are dropped before a sound is queued.
 //
+// 「↻ 다시 말하기」 (spec talk-resay 1, 2, 4): under my last bubble, until I record again, end, or ask Sohee for a hint on
+// Ryan's reply to it (`redoTarget`). It shares `mic.start` with 「🎤 말하기」: `redoAt` says which was pressed, and
+// `beforeStart` drops that turn (`dropper`, the `redo` action) and stops Ryan's sound. The next upload and the end wait
+// for the drop request (`dropper.settle`).
+//
 // The bubbles are the roleplay's, copies of `RoleplayScreen`'s parts: its `styles` (bubble,
 // ryan, user, feedback, ryanOpen, userOpen, ryanText, plainText, links, link, hint, micHint, count and the frame) and
 // the bubble handlers `playFromBubble`, `toggleThree` (here `toggleNotes`), `toggleKo`, `toggleBubble`, `ryanBubble` and
@@ -21,6 +26,7 @@ import { tapPlay } from "../audio/tapPlay";
 import { useMic } from "../audio/useMic";
 import { usePlayingTag } from "../audio/usePlayingTag";
 import { createGate, createGates, tapHold, tapThenHold } from "../flow/gate";
+import { createDropper } from "../flow/talkDrop";
 import { koOpensOnTap, koView } from "../flow/interpret";
 import { tapRow } from "../flow/review";
 import {
@@ -43,6 +49,7 @@ import {
   isCurrent,
   lineSounds,
   mayListenTalk,
+  redoTarget,
   ryanSpeaking,
   talkInitial,
   talkMessageIsError,
@@ -116,6 +123,13 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
   );
   // 「소희 찬스」 (spec free-talk-design 9): the requests and when her voice plays are in `flow/soheeChance.ts`
   const [chances, setChances] = useState<Chances>({});
+  // the chances now, set with the state: a tap on 「↻ 다시 말하기」 before the redraw sees a hint just asked for
+  const chancesNow = useRef<Chances>({});
+  const asked = (idx: number) => chancesNow.current[idx] !== undefined;
+  // which button started the recording: the redone turn's idx, or null for 「🎤 말하기」 (read once in `beforeStart`)
+  const redoAt = useRef<number | null>(null);
+  // the drop requests, settled before the next upload and before the end (spec talk-resay 3)
+  const dropper = useRef(createDropper((idx) => api.dropTurn(now.current.roleplay?.id ?? "", idx))).current;
   // older Sohee bubbles a tap opened; the one on Ryan's latest reply is always open
   const [soheeOpen, setSoheeOpen] = useState<Record<number, boolean>>({});
   const [hintThrees, setHintThrees] = useState<Record<number, ThreeLine | "loading">>({});
@@ -139,7 +153,10 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
         sounds.clear();
         sounds.enqueue(api.audioSource(audio), tag);
       },
-      onChange: setChances,
+      onChange: (c) => {
+        chancesNow.current = c;
+        setChances(c);
+      },
     });
   }
   const chance = chanceRef.current;
@@ -149,10 +166,20 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
   }, [chance]);
 
   const mic = useMic({
-    canStart: () => mounted.current && canSpeak(now.current),
-    // 「🎤 말하기」 while Ryan speaks cuts him off: his sound stops at once and how much I heard goes with the turn
+    canStart: () =>
+      mounted.current &&
+      (redoAt.current === null ? canSpeak(now.current) : redoTarget(now.current, asked) === redoAt.current),
+    // 「🎤 말하기」 while Ryan speaks cuts him off: his sound stops at once and how much I heard goes with the turn.
+    // 「↻ 다시 말하기」 drops my last turn (the request goes once, here); Ryan's sound stops with no count, since the
+    // dropped turn's reply needs none and his earlier line keeps its own cut.
     beforeStart: () => {
-      act({ type: "recordStart", heard: cutRyan() });
+      const idx = redoAt.current;
+      redoAt.current = null;
+      if (idx === null) return act({ type: "recordStart", heard: cutRyan() });
+      sounds.clear();
+      started.current = new Set();
+      dropper.drop(idx);
+      act({ type: "redo", idx });
     },
     onCancelled: () => act({ type: "recordCancel" }),
     onNoSpeech: () => act({ type: "noSpeech" }),
@@ -243,6 +270,7 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
       act({ type: "event", turn, e });
     };
     try {
+      await dropper.settle(); // a drop that did not reach the Mac goes once more; if it fails, this turn is not sent
       // a cut made before a cancelled recording is still on Ryan's line (`cutOf`)
       await api.talkTurn(id, uri, cutOf(t), onEvent);
     } catch (e) {
@@ -277,6 +305,7 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
     const id = t.roleplay?.id;
     if (!id) return;
     try {
+      await dropper.settle();
       const end = await api.endTalk(id, cutOf(t));
       if (mounted.current) act({ type: "ended", end });
     } catch (e) {
@@ -517,6 +546,20 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
             </View>
           )}
         </Pressable>
+        {/* right under the words it redoes, where the thumb reaches (spec talk-resay 1); outside the Pressable */}
+        {b.idx === redoTarget(s, asked) && (
+          <View style={styles.redoRow}>
+            <Button
+              small
+              kind="secondary"
+              label="↻ 다시 말하기"
+              onPress={() => {
+                redoAt.current = b.idx;
+                mic.start();
+              }}
+            />
+          </View>
+        )}
       </Named>
     );
   }
@@ -604,7 +647,12 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
             {!s.micUsed && canSpeak(s) && <Text style={styles.micHint}>{keepWords("🎤를 누르고 말하세요")}</Text>}
             <View style={styles.pair}>
               <Button label="대화 끝내기" onPress={endTalk} kind="secondary" disabled={!canEnd(s)} />
-              <Button label="🎤 말하기" onPress={mic.start} disabled={!canSpeak(s)} grow />
+              <Button label="🎤 말하기" onPress={() => {
+                  redoAt.current = null;
+                  mic.start();
+                }}
+                disabled={!canSpeak(s)}
+                grow />
             </View>
           </>
         )}
@@ -646,6 +694,7 @@ const styles = StyleSheet.create({
   links: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", rowGap: 12, columnGap: 16, marginTop: 8 },
   link: { fontSize: 15, color: colors.primary, fontWeight: "600" },
   notice: { fontSize: 16, color: colors.sub, marginTop: 8 },
+  redoRow: { alignSelf: "flex-end", marginBottom: 4 },
   micHint: { textAlign: "center", color: colors.primary, fontSize: 15, fontWeight: "600", marginBottom: 2 },
   controls: { padding: 12, borderTopWidth: 1, borderTopColor: "#E9ECEF" },
   pair: { flexDirection: "row", gap: 8 },
