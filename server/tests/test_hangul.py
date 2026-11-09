@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from je_server.hangul import for_korean_voice, reading
@@ -17,9 +19,20 @@ from je_server.hangul import for_korean_voice, reading
     ("hello", "헐로"), ("really", "릴리"), ("always", "올웨이즈"), ("world", "월드"),  # l
     ("every", "에버리"), ("park", "파크"),  # r
     ("think", "싱크"), ("fish", "피시"), ("TV", "티비"),
-])
+    ("singing", "싱잉"), ("singer", "싱어"), ("longer", "롱거"),  # ng before a vowel (PR #77 review: KeyError)
+    ("there", "데어"), ("here", "히어"), ("sure", "슈어"), ("more", "모어"), ("car", "카"), ("star", "스타"),
+])  # a final r: 어 after most vowels (PR #77 review: there came out 데, another word), none after a (car 카)
 def test_reading(word, hangul):
     assert reading(word) == hangul
+
+
+def test_every_dictionary_word_has_a_hangul_reading():
+    # an error here would come out of `tts.audio_key` and stop the sound of the reply (PR #77 review: 「singing은」)
+    from je_server import cmu
+    from je_server.hangul import hangul
+
+    bad = [w for w, prons in cmu._dict().items() if not re.fullmatch(r"[가-힣]+", hangul(prons[0]))]
+    assert bad == []
 
 
 def test_a_word_not_in_the_dictionary_has_no_reading():
@@ -31,6 +44,7 @@ def test_the_english_word_that_opens_a_korean_sentence_is_written_in_hangul():
     # each Korean sentence is made on its own (`tts_worker.split_parts`), so a later sentence opens the same way
     assert for_korean_voice("어제 일이라 went를 써요. go는 지금 일에 써요.") == "어제 일이라 went를 써요. 고는 지금 일에 써요."
     assert for_korean_voice("좋아요!\ndo는 빼도 돼요.") == "좋아요!\n두는 빼도 돼요."
+    assert for_korean_voice("singing은 노래하는 거예요.") == "싱잉은 노래하는 거예요."  # PR #77 review: KeyError
 
 
 def test_the_whole_english_run_before_the_korean_is_written_in_hangul():

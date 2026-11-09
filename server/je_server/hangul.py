@@ -48,7 +48,10 @@ def _compose(syllables: list[list[str]]) -> str:
 
 def _onset(phone: str, nxt: str | None) -> bool:
     """Whether the consonant starts the next syllable: before a vowel, a y, or (for k, g, h) a w (quick 퀵, but
-    sweet 스위트)."""
+    sweet 스위트). ng never does: it ends its syllable, and the vowel after it starts with ㅇ (singer 싱어; PR #77
+    review, it had no initial and raised KeyError)."""
+    if phone == "NG":
+        return False
     return nxt in VOWELS or nxt == "Y" or (nxt == "W" and phone in ("K", "G", "HH"))
 
 
@@ -83,7 +86,9 @@ def hangul(phones: list[str]) -> str:
         else:
             last = syl[-1] if syl and syl[-1][1] and not syl[-1][2] else None
             if p == "R" and prev in VOWELS:
-                continue  # park 파크
+                if nxt is None and prev != "AA":
+                    syl.append(["ㅇ", "ㅓ", ""])  # there 데어, more 모어 (PR #77 review: there was 데, another word)
+                continue  # park 파크, car 카
             if last and p in NASAL_FINAL:
                 last[2] = NASAL_FINAL[p]
             elif last and p == "L":
@@ -92,7 +97,7 @@ def hangul(phones: list[str]) -> str:
                   and (nxt is None or (nxt not in VOWELS and nxt not in LIQUID_NASAL))):
                 last[2] = STOP_FINAL[p]  # get 겟, next 넥스트, but went 웬트
             elif p == "NG":
-                syl.append(["ㅇ", "ㅡ", ""])
+                syl.append(["ㅇ", "ㅡ", "ㅇ"])
             else:
                 syl.append([ONSET[p], FRONT_VOWEL.get(p, "ㅡ"), ""])
     return _compose(syl)
@@ -103,8 +108,10 @@ def reading(word: str) -> str | None:
     return hangul(prons[0]) if prons else None
 
 
-# an English word run at the start of a sentence, the way the worker splits them (after . ? ! 。 and a space, or a new
-# line), with Hangul after it on the same sentence: an English sentence of its own is left for the English voice
+# an English word run at the start of a sentence (after . ? ! 。 and a space, where the worker makes each Korean sentence
+# on its own; or a new line, where the voice module may start a new piece, by length), with Hangul after it on the
+# same sentence: an English sentence of its own is left for the English voice. After a new line the word may also end up
+# inside a piece; the Hangul is read right there too, so the rule does not try to tell which.
 OPENING = re.compile(r"(^|(?<=[.?!。])\s+|\n\s*)([A-Za-z][A-Za-z']*(?: [A-Za-z][A-Za-z']*)*)(?=\s*[가-힣])")
 
 
