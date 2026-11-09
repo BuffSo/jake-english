@@ -97,8 +97,8 @@ def _heard(line: ScriptLine) -> str:
 
 def conversation(rp: Roleplay, upto: int) -> list[dict]:
     """What Claude is given for a hint on line `upto`: the talk up to it as text only, Ryan's replies and my turns
-    (a Korean turn as it was heard). Old records' `help` lines, the fixes and a reply cut before a word are left
-    out. Never the recordings (ADR-0004)."""
+    (a Korean turn as it was heard). Dropped lines (a turn said again and Ryan's reply to it, spec talk-resay 3), old
+    records' `help` lines, the fixes and a reply cut before a word are left out. Never the recordings (ADR-0004)."""
     out: list[dict] = []
     for line in rp.lines[: upto + 1]:
         if line.dropped:

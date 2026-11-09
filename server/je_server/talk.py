@@ -240,7 +240,9 @@ class _Unheard(Exception):
 class Talks:
     def __init__(self, engine: Engine):
         self.engine = engine
-        self.turning: set[str] = set()  # talks with a turn running whose Ryan line is not saved yet
+        # talks with a turn running whose Ryan line is not saved yet; a drop of that turn's line releases it at once
+        # (`drop`), so the turn said again is taken while the dropped one closes
+        self.turning: set[str] = set()
         # the turn of each talk whose Ryan reply is being made, from my line saved to its last event: a drop of that
         # line stops it (spec talk-resay 3)
         self.running: dict[str, _Running] = {}
@@ -625,12 +627,13 @@ class Talks:
 
     def _reply(self, rp_id: str, idx: int) -> tuple[Roleplay, ScriptLine]:
         """The free talk and Ryan's reply at `idx`. NotFound: no such free talk, or that line is not his reply (my turn,
-        a fix, an old record's fixed `help` line)."""
+        a fix, an old record's fixed `help` line), or it was dropped (spec talk-resay 3): a tap on its old bubble before
+        the redraw makes no hint for it."""
         rp = self.engine.load(rp_id)
         if rp.kind != "talk" or not 0 <= idx < len(rp.lines):
             raise NotFound(f"{rp_id}/{idx}")
         line = rp.lines[idx]
-        if line.speaker != "ryan" or line.kind != "reply":
+        if line.speaker != "ryan" or line.kind != "reply" or line.dropped:
             raise NotFound(f"{rp_id}/{idx}")
         return rp, line
 

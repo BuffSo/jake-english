@@ -1356,6 +1356,17 @@ async def test_drop_refuses_after_sohee_chance_on_the_reply(talks, engine, speec
     assert not any(_dropped(engine, rp_id))
 
 
+async def test_no_hint_on_a_dropped_reply(talks, engine, speech_bytes, fake_claude):
+    # a tap on the old bubble of Ryan's reply before the redraw (spec talk-resay 3)
+    rp_id = await replied(talks, speech_bytes)
+    await talks.drop(rp_id, 1)
+    with pytest.raises(NotFound):
+        await talks.hint(rp_id, 2)
+    assert fake_claude.hint_calls == []
+    assert engine.load(rp_id).lines[2].hint is None
+    assert await talks.hint(rp_id, 0) == fake_claude.hint_value  # his line before my turn still takes one
+
+
 async def test_drop_refuses_an_ended_or_ending_talk(talks, engine, speech_bytes, fake_whisper, fake_claude):
     rp_id = await talked(talks, fake_whisper, speech_bytes, SAID[:1])
     fake_claude.fix_items = [fix_item(0, 1)]
