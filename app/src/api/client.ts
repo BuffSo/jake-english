@@ -162,6 +162,9 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
     endTalk: (id: string, heard: number | null) =>
       post<TalkEnd>(`/talks/${id}/end${heard === null ? "" : `?heard=${heard}`}`, undefined, LONG),
 
+    // 「다시 말하기」 (spec talk-resay 3): tell the Mac to drop my turn at `idx` and Ryan's reply to it
+    dropTurn: (id: string, idx: number) => post<{ dropped: number }>(`/talks/${id}/lines/${idx}/drop`),
+
     // Sohee chance (spec free-talk-design): the hint and the full sentence come from Claude, so they get LONG
     getHint: (id: string, idx: number) => post<Hint>(`/talks/${id}/lines/${idx}/hint`, undefined, LONG),
     getHintAudio: (id: string, idx: number) => get<{ audio: string }>(`/talks/${id}/lines/${idx}/hint/audio`),

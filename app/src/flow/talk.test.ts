@@ -11,6 +11,7 @@ import {
   isCurrent,
   lineSounds,
   mayListenTalk,
+  redoTarget,
   ryanSpeaking,
   talkErrorText,
   talkMessageIsError,
@@ -366,4 +367,108 @@ test("Ryan's current bubble is speaking until his turn ends", () => {
   expect(ryanSpeaking(run(waiting, ev(waiting, heardE)), 0)).toBe(false);
   expect(ryanSpeaking(run(ready(), { type: "recordStart", heard: null }), 0)).toBe(false);
   expect(ryanSpeaking(run(a, { type: "ryanDone" }), 2)).toBe(false);
+});
+
+// 「↻ 다시 말하기」 (spec talk-resay)
+const never = () => false;
+const waitingHeard = () => {
+  const s0 = run(ready(), { type: "recordStart", heard: null }, { type: "recordStop" });
+  return run(s0, ev(s0, heardE));
+};
+
+test("redo target is my last turn from the moment it is heard", () => {
+  const w = waitingHeard();
+  expect(w.phase).toBe("waiting");
+  expect(redoTarget(w, never)).toBe(1);
+  const r = run(w, ev(w, { type: "text", delta: "Nice" }));
+  expect(r.phase).toBe("replying");
+  expect(redoTarget(r, never)).toBe(1);
+  const y = answered();
+  expect(y.phase).toBe("ryan");
+  expect(redoTarget(y, never)).toBe(1);
+  const d = talkReduce(y, { type: "ryanDone" });
+  expect(d.phase).toBe("ready");
+  expect(redoTarget(d, never)).toBe(1);
+});
+
+test("no redo target before my words, while recording, at the end or with Ryan's opener only", () => {
+  expect(redoTarget(opened(), never)).toBeNull();
+  expect(redoTarget(ready(), never)).toBeNull();
+  const rec = run(ready(), { type: "recordStart", heard: null });
+  expect(redoTarget(rec, never)).toBeNull();
+  const w0 = talkReduce(rec, { type: "recordStop" });
+  expect(redoTarget(w0, never)).toBeNull(); // waiting, words not back yet
+  expect(redoTarget(talkReduce(answered(), { type: "ryanDone" }), never)).toBe(1);
+  const ending = talkReduce(talkReduce(answered(), { type: "ryanDone" }), { type: "endStart", heard: null });
+  expect(redoTarget(ending, never)).toBeNull();
+  expect(redoTarget(talkReduce(ending, { type: "ended", end: {} as TalkEnd }), never)).toBeNull();
+  const err = talkReduce(rec, { type: "openFailed", message: "x" });
+  expect(redoTarget(err, never)).toBeNull();
+});
+
+test("no redo target once Sohee chance is asked on Ryan's reply after it", () => {
+  const s = talkReduce(answered(), { type: "ryanDone" });
+  expect(redoTarget(s, (i) => i === 2)).toBeNull();
+  expect(redoTarget(s, (i) => i === 0)).toBe(1);
+});
+
+test("redo drops my turn and Ryan's reply and records", () => {
+  const s0 = talkReduce(answered(), { type: "ryanDone" });
+  const s = talkReduce(s0, { type: "redo", idx: 1 });
+  expect(s.bubbles.map((b) => b.idx)).toEqual([0]);
+  expect(s.phase).toBe("recording");
+  expect(s.turn).toBe(s0.turn + 1);
+  expect(s.micUsed).toBe(true);
+  expect(s.heardIn).toBe(false);
+  expect(s.message).toBeNull();
+  expect(turnNo(s)).toBe(1);
+});
+
+test("redo drops a reply still being written", () => {
+  const w = waitingHeard();
+  const r = run(w, ev(w, { type: "text", delta: "Nice! " }));
+  expect(r.pending).toBe("Nice! ");
+  const s = talkReduce(r, { type: "redo", idx: 1 });
+  expect(s.pending).toBe("");
+  expect(s.phase).toBe("recording");
+  expect(s.bubbles.map((b) => b.idx)).toEqual([0]);
+});
+
+test("late events of a dropped turn are dropped", () => {
+  const w = waitingHeard();
+  const s = talkReduce(w, { type: "redo", idx: 1 });
+  const late: TalkEvent[] = [
+    { type: "text", delta: "Nice" },
+    replyE,
+    { type: "done", idx: 2 },
+    { type: "error", code: "claude_failed" } as TalkEvent,
+  ];
+  for (const e of late) expect(talkReduce(s, { type: "event", turn: w.turn, e })).toBe(s);
+  expect(talkReduce(s, { type: "failed", turn: w.turn, message: "x" })).toBe(s);
+});
+
+test("a second redo does nothing", () => {
+  const s = talkReduce(talkReduce(answered(), { type: "ryanDone" }), { type: "redo", idx: 1 });
+  expect(talkReduce(s, { type: "redo", idx: 1 })).toBe(s);
+  expect(talkReduce(talkReduce(answered(), { type: "ryanDone" }), { type: "redo", idx: 0 }).phase).toBe("ready");
+});
+
+test("cancel after redo leaves the turn dropped and my turn on Ryan's line before", () => {
+  const cut = run(opened(), { type: "recordStart", heard: 1 }, { type: "recordStop" });
+  const heard = talkReduce(cut, ev(cut, heardE));
+  const s = run(heard, { type: "redo", idx: 1 }, { type: "recordCancel" });
+  expect(s.phase).toBe("ready");
+  expect(s.bubbles.map((b) => b.idx)).toEqual([0]);
+  expect(cutOf(s)).toBe(1);
+});
+
+test("savedBefore skips dropped lines", () => {
+  const rp = withLines([L(0, "ryan", "reply"), L(1, "user", "turn"), L(2, "ryan", "reply"), L(3, "user", "turn"), L(4, "ryan", "reply"), L(5, "user", "turn")]);
+  rp.lines[1] = { ...rp.lines[1], dropped: true };
+  rp.lines[2] = { ...rp.lines[2], dropped: true };
+  expect(savedBefore(rp, rp.lines[3])?.idx).toBe(0);
+  const fix = withLines([L(0, "ryan", "reply"), L(1, "user", "turn"), L(2, "ryan", "reply"), L(3, "user", "turn"), L(4, "user", "fix", 3)]);
+  fix.lines[1] = { ...fix.lines[1], dropped: true };
+  fix.lines[2] = { ...fix.lines[2], dropped: true };
+  expect(savedBefore(fix, fix.lines[4])?.idx).toBe(0);
 });
