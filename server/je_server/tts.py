@@ -4,7 +4,7 @@ One worker, one queue: urgent jobs (Ryan's live feedback) go before prepared one
 later lines). Sounds are cached by sha256(voice|lang|rate|text), with Korean keys also carrying how they were
 made (`MADE`) and every key the fingerprint of the voice's reference recordings the worker reports when it starts
 (`Voice.refs`), so the same line is made once and a new recording makes new sounds. A Korean key is made from the text
-the worker is asked to say (`spoken`): an English word opening a sentence goes in Hangul (`hangul.for_korean_voice`).
+the worker is asked to say (`spoken`): a short English word opening a sentence goes in Hangul (`hangul.for_korean_voice`).
 Sounds played as they are made once (Jake, Ryan's fixed phrases, Sohee) can be heard back with whisper and made
 again when their last word is missing.
 """
@@ -62,7 +62,7 @@ class VoiceError(Exception):
 
 
 def spoken(lang: str, text: str) -> str:
-    """The text the worker is asked to say. Korean: the English words that open a sentence in Hangul (2026-11-09,
+    """The text the worker is asked to say. Korean: the short English words that open a sentence in Hangul (2026-11-09,
     「go는」 came out like 「조우는」). English model lines go as they are."""
     return for_korean_voice(text) if lang == "korean" else text
 

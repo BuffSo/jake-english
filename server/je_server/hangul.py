@@ -1,14 +1,15 @@
-"""Hangul readings of the English words that open a Korean sentence, for the Korean voices (`tts.audio_key`).
+"""Hangul readings of the short English words that open a Korean sentence, for the Korean voices (`tts.audio_key`).
 
 2026-11-09 a second sentence of Ryan's Korean explanation opened with 「go는」, and it came out like 「종구는」.
 Made through the voice worker, an opening 「go는」 came out as another word in all eleven takes (「조우는」,
 「쪼우는」…); the same word after a Korean one (「그리고 go는」, 「여기서는 go는」) was 「고는」 in all seven, and so was
 「고는」 written in Hangul. Opening a sentence, 「go to는」 went wrong in 7 of 7 takes, 「do는」 in 8 of 10, 「get은」 in 1
-of 7; in Hangul all three were right in 4 of 4. The worker makes
-each Korean sentence on its own (`tts_worker.split_parts`), so an English word that opens a sentence is the first
-thing the model reads, with no Korean before it. Quotes did not help in general ('go' did, 'do' and 'get' did not),
-and inside a sentence the model's own reading was right (「과거형 went를」, 「stop이 step처럼」), so only the opening
-English words are changed. Readings follow the loanword spelling roughly, from CMUdict's first pronunciation.
+of 7; in Hangul all three were right in 4 of 4. The worker makes each Korean sentence on its own
+(`tts_worker.split_parts`), so an English word that opens a sentence is the first thing the model reads, with no
+Korean before it. Quotes did not help in general ('go' did, 'do' and 'get' did not), inside a sentence the model's
+own reading was right (「과거형 went를」, 「stop이 step처럼」), and longer opening words were right too, so only the
+short opening words are changed (`SHORT_WORD`). Readings follow the loanword spelling roughly, from CMUdict's first
+pronunciation.
 """
 from __future__ import annotations
 
@@ -42,8 +43,10 @@ FINALS = ["", "ㄱ", "ㄲ", "ㄳ", "ㄴ", "ㄵ", "ㄶ", "ㄷ", "ㄹ", "ㄺ", "�
 
 
 def _compose(syllables: list[list[str]]) -> str:
-    return "".join(chr(0xAC00 + (INITIALS.index(i) * 21 + MEDIALS.index(m)) * 28 + FINALS.index(f))
-                   for i, m, f in syllables)
+    # a syllable still waiting for its vowel at the end (a w or y with none after it, as in duwe) gets none, or ㅡ after
+    # a consonant; `MEDIALS.index("")` would have been 0, a silent ㅏ (final review)
+    out = [(i, m or "ㅡ", f) for i, m, f in syllables if m or i != "ㅇ"]
+    return "".join(chr(0xAC00 + (INITIALS.index(i) * 21 + MEDIALS.index(m)) * 28 + FINALS.index(f)) for i, m, f in out)
 
 
 def _onset(phone: str, nxt: str | None) -> bool:
@@ -108,16 +111,47 @@ def reading(word: str) -> str | None:
     return hangul(prons[0]) if prons else None
 
 
-# an English word run at the start of a sentence (after . ? ! 。 and a space, where the worker makes each Korean sentence
-# on its own; or a new line, where the voice module may start a new piece, by length), with Hangul after it on the
-# same sentence: an English sentence of its own is left for the English voice. After a new line the word may also end up
-# inside a piece; the Hangul is read right there too, so the rule does not try to tell which.
-OPENING = re.compile(r"(^|(?<=[.?!。])\s+|\n\s*)([A-Za-z][A-Za-z']*(?: [A-Za-z][A-Za-z']*)*)(?=\s*[가-힣])")
+# Only the short words that open the sentence are written in Hangul, up to the first longer one. The voice got the
+# two-letter ones wrong opening a sentence (go 0/11, do 2/10) and the longer ones right (went, stop 4/4; get 6/7;
+# right, very, think, fan 3/3), and the rules can read a longer word worse than the model (coffee would be 카피, copy).
+# The final review asked; the PR #77 measurements are in the guide (SPEECH 맥 서버, 「문장 맨 앞의 영어 낱말」).
+SHORT_WORD = 2  # letters
+# A two-letter capital abbreviation goes by its letters: 「AI가」 read as a word is 아이가, a child.
+LETTERS = {
+    "A": "에이", "B": "비", "C": "씨", "D": "디", "E": "이", "F": "에프", "G": "지", "H": "에이치", "I": "아이",
+    "J": "제이", "K": "케이", "L": "엘", "M": "엠", "N": "엔", "O": "오", "P": "피", "Q": "큐", "R": "알", "S": "에스",
+    "T": "티", "U": "유", "V": "브이", "W": "더블유", "X": "엑스", "Y": "와이", "Z": "제트",
+}
+
+# An English word run at the start of a sentence (after . ? ! 。 and a space, where the worker makes each Korean
+# sentence on its own; or a new line, where the voice module may start a new piece, by length), with Hangul after it in
+# the same sentence (a comma between is fine): an English sentence of its own is left for the English voice. After a
+# new line the word may also end up inside a piece; the Hangul is read right there too, so the rule does not try to
+# tell which.
+WORD = r"[A-Za-z][A-Za-z'’]*"
+OPENING = re.compile(rf"(^\s*|(?<=[.?!。])\s+|\n\s*)({WORD}(?: {WORD})*)(?=,?\s*[가-힣])")
+
+
+def _short_reading(word: str) -> str | None:
+    """The Hangul for a short opening word, or None to leave it (a longer word, or one the dictionary lacks)."""
+    if len(re.findall(r"[A-Za-z]", word)) > SHORT_WORD:
+        return None
+    if len(word) > 1 and word.isupper():
+        return "".join(LETTERS[c] for c in word)
+    try:
+        return reading(word)
+    except (KeyError, ValueError, IndexError):  # a hole in the rules leaves the word to the voice, never stops a sound
+        return None
 
 
 def for_korean_voice(text: str) -> str:
     def read(m: re.Match) -> str:
-        words = [reading(w) or w for w in m.group(2).split(" ")]
+        words = m.group(2).split(" ")
+        for n, word in enumerate(words):
+            hangul_word = _short_reading(word)
+            if hangul_word is None:
+                break
+            words[n] = hangul_word
         return m.group(1) + " ".join(words)
 
     return OPENING.sub(read, text)
