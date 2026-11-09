@@ -22,10 +22,13 @@ import type {
 
 export type ErrorCode = "offline" | "claude_unavailable" | "no_speech" | "too_long" | "not_found" | "unknown";
 
+// `status` is the HTTP status of the Mac's answer; none when no answer came (offline, a timeout, a broken stream).
+// `code` alone cannot tell a refusal (409) from a server error (500), both "unknown".
 export class ApiError extends Error {
   constructor(
     public code: ErrorCode,
     public say?: Said,
+    public status?: number,
   ) {
     super(code);
   }
@@ -67,7 +70,7 @@ export function makeApi(base: string, token: string, f: FetchLike, readFile: Rea
       } catch {
         // not JSON: keep the status only
       }
-      throw new ApiError(toCode(res.status, body.code), body.say ?? undefined);
+      throw new ApiError(toCode(res.status, body.code), body.say ?? undefined, res.status);
     }
     return res;
   }

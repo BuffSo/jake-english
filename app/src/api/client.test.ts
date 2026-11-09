@@ -49,6 +49,21 @@ test("network failure becomes offline", async () => {
   expect(err.code).toBe("offline");
 });
 
+test("an answer's HTTP status is kept on the error, and none when no answer came", async () => {
+  for (const status of [404, 409, 500, 503]) {
+    const f = jest.fn(async () => json(status, {}));
+    const err = await makeApi(URL, TOKEN, f as never, noFile).dropTurn("x", 3).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(status);
+  }
+  const f = jest.fn(async () => {
+    throw new TypeError("Network request failed");
+  });
+  const err = await makeApi(URL, TOKEN, f as never, noFile).dropTurn("x", 3).catch((e) => e);
+  expect(err.code).toBe("offline");
+  expect(err.status).toBeUndefined();
+});
+
 test("timeout becomes offline", async () => {
   jest.useFakeTimers();
   const f = jest.fn(
