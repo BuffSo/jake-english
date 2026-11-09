@@ -47,11 +47,11 @@ flowchart LR
     data[("기록과 녹음")]
   end
   claude["Claude API"]
-  app <-- "Tailscale 개인 망" --> server
+  app <-->|"Tailscale 개인 망"| server
   server --> asr
   server --> tts
   server --> data
-  server -- "글만 보냄" --> claude
+  server -->|"글만 보냄"| claude
 ```
 
 - **폰 앱** (`app/`): React Native와 Expo로 만들고, 맥에서 빌드해 APK를 폰에 직접 깝니다([ADR-0002](docs/adr/0002-app-build-and-install.md)). 화면, 녹음, 재생만 합니다.
