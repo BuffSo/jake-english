@@ -180,6 +180,15 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     def health() -> dict:
         return {"ok": True}
 
+    def picture(name: str) -> str:
+        # The phone's image cache keeps a picture by its address and does not ask the Mac again, so a picture replaced
+        # under the same name kept showing the old one (2026-11-09, Jake's new face). The file's modified time goes in
+        # the address: a replaced picture gets a new address. `/assets/{name}` ignores the query.
+        try:
+            return f"/assets/{name}?v={(settings.assets_dir / name).stat().st_mtime_ns}"
+        except OSError:
+            return f"/assets/{name}"
+
     @router.get("/home")
     def home(tip: bool = Query(False)) -> dict:
         e = engine()
@@ -190,10 +199,10 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         said_tip = e.home_tip() if tip else None
         extra = {"tip": said_tip.model_dump()} if said_tip else {}
         return {"lines": {n: e.said(n).model_dump() for n in lines}, **extra, "topics": topics.public(),
-                "images": {"front": "/assets/ryan-front.png", "listening": "/assets/ryan-listening.png",
-                           "jake": "/assets/jake-front.png",
-                           "thinking": {who: [f"/assets/{n}" for n in names] for who, names in THINKING.items()},
-                           "sohee": {"face": "/assets/sohee-face.png", "whisper": "/assets/sohee-whisper-face.png"}}}
+                "images": {"front": picture("ryan-front.png"), "listening": picture("ryan-listening.png"),
+                           "jake": picture("jake-front.png"),
+                           "thinking": {who: [picture(n) for n in names] for who, names in THINKING.items()},
+                           "sohee": {"face": picture("sohee-face.png"), "whisper": picture("sohee-whisper-face.png")}}}
 
     @router.get("/assets/{name}")
     def asset(name: str):
