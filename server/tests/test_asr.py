@@ -97,3 +97,41 @@ async def test_whisper_failures_are_whisper_errors(tmp_path, handler):
     wav.write_bytes(b"RIFF")
     with pytest.raises(WhisperError):
         await whisper_with(handler).transcribe_auto(wav)
+
+
+async def test_transcribe_english_returns_text_and_korean_probability(tmp_path):
+    # free talk (spec free-talk-design 3): forced English, with the language probabilities whisper gives alongside
+    seen = {}
+
+    def handler(request: httpx.Request):
+        seen["body"] = request.read()
+        return httpx.Response(200, json={"text": " Is the bakery open today? [BLANK_AUDIO]\n", "language": "english",
+                                         "language_probabilities": {"ko": 0.993, "en": 0.004}})
+
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    assert await whisper_with(handler).transcribe_english(wav) == ("Is the bakery open today?", 0.993)
+    assert b"\r\n\r\nen\r\n" in seen["body"] and b"verbose_json" in seen["body"]
+
+
+async def test_transcribe_english_without_probabilities_is_zero(tmp_path):
+    # a whisper-server started with -nlp, or an older one
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    w = whisper_with(lambda r: httpx.Response(200, json={"text": "I had pizza."}))
+    assert await w.transcribe_english(wav) == ("I had pizza.", 0.0)
+
+
+async def test_transcribe_english_without_korean_is_zero(tmp_path):
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    for probs in ({"en": 0.97}, {"ko": "high"}, {"ko": True}, None, []):
+        w = whisper_with(lambda r, p=probs: httpx.Response(200, json={"text": "Hi.", "language_probabilities": p}))
+        assert await w.transcribe_english(wav) == ("Hi.", 0.0)
+
+
+async def test_transcribe_english_failing_raises_whisper_error(tmp_path):
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    with pytest.raises(WhisperError):
+        await whisper_with(lambda r: httpx.Response(500)).transcribe_english(wav)
