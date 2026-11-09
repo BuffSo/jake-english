@@ -49,6 +49,42 @@ def test_home_lists_fixed_lines(client):
     }
 
 
+def test_home_picture_address_carries_the_file_version(client, settings):
+    # The phone's image cache keeps a picture by its address and never asks the Mac again, so a picture replaced
+    # under the same name kept showing the old one (2026-11-09, Jake's new face). The address changes with the file.
+    import os
+
+    settings.assets_dir.mkdir(parents=True)
+    pic = settings.assets_dir / "jake-front.png"
+    pic.write_bytes(b"old")
+    os.utime(pic, ns=(1_000_000_000_000_000_000, 1_000_000_000_000_000_000))
+    first = client.get("/home").json()["images"]["jake"]
+    assert first == "/assets/jake-front.png?v=1000000000000000000"
+    pic.write_bytes(b"new")
+    os.utime(pic, ns=(1_000_000_000_500_000_000, 1_000_000_000_500_000_000))
+    assert client.get("/home").json()["images"]["jake"] == "/assets/jake-front.png?v=1000000000500000000"
+
+
+def test_home_versions_every_picture_on_disk(client, settings):
+    settings.assets_dir.mkdir(parents=True)
+    for n in ["ryan-front.png", "ryan-listening.png", "jake-thinking-1.png", "sohee-face.png",
+              "sohee-whisper-face.png"]:
+        (settings.assets_dir / n).write_bytes(b"png")
+    images = client.get("/home").json()["images"]
+    for path in [images["front"], images["listening"], images["thinking"]["jake"][0], images["sohee"]["face"],
+                 images["sohee"]["whisper"]]:
+        assert "?v=" in path
+    assert images["thinking"]["jake"][1] == "/assets/jake-thinking-2.png"  # not on disk: the plain address
+
+
+def test_versioned_picture_address_is_served(client, settings):
+    settings.assets_dir.mkdir(parents=True)
+    (settings.assets_dir / "jake-front.png").write_bytes(b"png")
+    path = client.get("/home").json()["images"]["jake"]
+    r = client.get(path)
+    assert r.status_code == 200 and r.content == b"png"
+
+
 def test_thinking_faces_served(client, settings):
     settings.assets_dir.mkdir(parents=True)
     names = ["jake-thinking-1.png", "jake-thinking-2.png", "ryan-thinking-1.png", "ryan-thinking-2.png"]
