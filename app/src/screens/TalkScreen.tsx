@@ -26,7 +26,6 @@ import { tapPlay } from "../audio/tapPlay";
 import { useMic } from "../audio/useMic";
 import { usePlayingTag } from "../audio/usePlayingTag";
 import { createGate, createGates, tapHold, tapThenHold } from "../flow/gate";
-import { createDropper } from "../flow/talkDrop";
 import { koOpensOnTap, koView } from "../flow/interpret";
 import { tapRow } from "../flow/review";
 import {
@@ -59,6 +58,7 @@ import {
   type TalkBubble,
   type TalkState,
 } from "../flow/talk";
+import { createDropper } from "../flow/talkDrop";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { InRowButton } from "../ui/InRowButton";
@@ -127,6 +127,7 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
   const chancesNow = useRef<Chances>({});
   const asked = (idx: number) => chancesNow.current[idx] !== undefined;
   // which button started the recording: the redone turn's idx, or null for 「🎤 말하기」 (read once in `beforeStart`)
+  // every caller writes it right before `mic.start()`, so a tap the gate refused never leaks into the next one
   const redoAt = useRef<number | null>(null);
   // the drop requests, settled before the next upload and before the end (spec talk-resay 3)
   const dropper = useRef(createDropper((idx) => api.dropTurn(now.current.roleplay?.id ?? "", idx))).current;
@@ -271,6 +272,7 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
     };
     try {
       await dropper.settle(); // a drop that did not reach the Mac goes once more; if it fails, this turn is not sent
+      if (!current()) return; // settling can take a while: I may have left, redone again or ended meanwhile
       // a cut made before a cancelled recording is still on Ryan's line (`cutOf`)
       await api.talkTurn(id, uri, cutOf(t), onEvent);
     } catch (e) {
@@ -306,6 +308,7 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
     if (!id) return;
     try {
       await dropper.settle();
+      if (!mounted.current) return;
       const end = await api.endTalk(id, cutOf(t));
       if (mounted.current) act({ type: "ended", end });
     } catch (e) {
@@ -647,12 +650,15 @@ export function TalkScreen({ sounds, sohee, onHome }: Props) {
             {!s.micUsed && canSpeak(s) && <Text style={styles.micHint}>{keepWords("🎤를 누르고 말하세요")}</Text>}
             <View style={styles.pair}>
               <Button label="대화 끝내기" onPress={endTalk} kind="secondary" disabled={!canEnd(s)} />
-              <Button label="🎤 말하기" onPress={() => {
+              <Button
+                label="🎤 말하기"
+                onPress={() => {
                   redoAt.current = null;
                   mic.start();
                 }}
                 disabled={!canSpeak(s)}
-                grow />
+                grow
+              />
             </View>
           </>
         )}
