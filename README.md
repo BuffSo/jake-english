@@ -33,7 +33,7 @@
 
 | 첫 화면 | 대화 중 내 차례 | 녹음 평가 |
 |---|---|---|
-| <img src="docs/images/home.png" width="240" alt="첫 화면: 라이언이 인사하고, 대화 연습하기, 자유 대화, 복습하기 카드가 있다"> | <img src="docs/images/roleplay-three-lines.png" width="240" alt="대화 중 내 차례: 제 대사를 영어, 한글 발음, 읽는 법의 세 줄로 보여 준다"> | <img src="docs/images/roleplay-feedback.png" width="240" alt="녹음 평가: 받아쓴 말을 대사와 견주고, 라이언이 stop이 step으로 들렸다고 짚는다"> |
+| <img src="docs/images/home.png" width="240" alt="첫 화면: 라이언이 인사하고, 대화 연습하기, 자유 대화, 복습하기 카드가 있다"> | <img src="docs/images/roleplay-three-lines.png" width="240" alt="대화 중 내 차례: 제 대사를 영어, 한글 발음, 읽는 법의 세 줄로 보여 준다"> | <img src="docs/images/roleplay-feedback.png" width="240" alt="녹음 평가: 받아쓴 말을 대사와 견주고, 라이언이 stop이 step처럼 들렸다고 짚는다"> |
 | 라이언이 인사하고 무엇을 연습할지 묻습니다. | 제 대사를 영어, 한글 발음, 읽는 법의 세 줄로 봅니다. 세게 읽을 곳은 굵은 주황 글자입니다. | 맥이 받아쓴 말을 대사와 견주고, 라이언이 다르게 들린 낱말을 짚습니다. |
 
 화면은 시험용 빈 데이터로 띄운 에뮬레이터에서 찍었습니다. 상황은 목록에 미리 써 둔 「명동역에서 경복궁 가는 길」이고, 평가 화면의 녹음은 시험용으로 만든 것입니다.
