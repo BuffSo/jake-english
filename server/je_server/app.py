@@ -16,13 +16,14 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from . import topics
+from .hints import hide_unshown  # every answer with lines goes through it (spec free-talk-design 9)
 from .auth import RequestGuard, token_checker
 from .claude import ClaudeUnavailable
 from .config import Settings
 from .engine import Engine, NotFound, TooLong
 from .asr import WhisperError
 from .models import Mode
-from .talk import Talks, TalkBusy, TalkEnded
+from .talk import NoHint, Talks, TalkBusy, TalkEnded
 from .tts import VoiceError
 
 log = logging.getLogger("je_server")
@@ -30,9 +31,12 @@ MAX_UPLOAD = 5 * 1024 * 1024
 # Thinking faces shown instead of a spinner while Claude works, two per person, cross-faded by the app
 # (docs/superpowers/specs/2026-11-06-waiting-animation-design.md). Like Ryan's pictures they live only in the
 # private assets folder.
-THINKING = {who: [f"{who}-thinking-{n}.png" for n in (1, 2)] for who in ("jake", "ryan")}
+THINKING = {who: [f"{who}-thinking-{n}.png" for n in (1, 2)] for who in ("jake", "ryan", "sohee")}
 # jake-front.png: Jake's face while his suggested situation waits for 「이걸로 할게요」 or 「다른 걸로요」 (2026-11-06 user)
-ASSETS = {"ryan-front.png", "ryan-listening.png", "jake-front.png", *THINKING["jake"], *THINKING["ryan"]}
+# Sohee's faces for the free talk (spec free-talk 2, 3): the face and the whisper face sit beside the thinking pair
+# (the thinking pair comes from THINKING above).
+ASSETS = {"ryan-front.png", "ryan-listening.png", "jake-front.png", "sohee-face.png", "sohee-whisper-face.png",
+          *THINKING["jake"], *THINKING["ryan"], *THINKING["sohee"]}
 ID = r"^[0-9a-f]{12}$"
 KEY = r"^[0-9a-f]{64}$"
 
@@ -72,11 +76,11 @@ def build_services(settings: Settings) -> Services:
     voice = Voice(settings.tts_python, settings.tts_module, store.audio_dir, hear=whisper.hear)
     writer, quick = WRITERS[settings.claude_writer], QUICKS[settings.claude_quick]
     recommender = QUICKS[settings.claude_recommend]
-    talker = TALKERS[settings.claude_talk]
-    log.info("claude models: writer %s, quick %s, recommend %s, talk %s", writer["model"], quick["model"],
-             recommender["model"], talker["model"])
+    talker, hinter = TALKERS[settings.claude_talk], QUICKS[settings.claude_hint]
+    log.info("claude models: writer %s, quick %s, recommend %s, talk %s, hint %s", writer["model"], quick["model"],
+             recommender["model"], talker["model"], hinter["model"])
     claude = Claude(anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=2, timeout=30),
-                    writer=writer, quick=quick, recommender=recommender, talker=talker)
+                    writer=writer, quick=quick, recommender=recommender, talker=talker, hinter=hinter)
     return Services(engine=Engine(store, claude, voice, whisper), voice=voice, whisper=whisper)
 
 
@@ -188,7 +192,8 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
         return {"lines": {n: e.said(n).model_dump() for n in lines}, **extra, "topics": topics.public(),
                 "images": {"front": "/assets/ryan-front.png", "listening": "/assets/ryan-listening.png",
                            "jake": "/assets/jake-front.png",
-                           "thinking": {who: [f"/assets/{n}" for n in names] for who, names in THINKING.items()}}}
+                           "thinking": {who: [f"/assets/{n}" for n in names] for who, names in THINKING.items()},
+                           "sohee": {"face": "/assets/sohee-face.png", "whisper": "/assets/sohee-whisper-face.png"}}}
 
     @router.get("/assets/{name}")
     def asset(name: str):
@@ -229,14 +234,14 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
                 rp = await engine().create_pick(body.topic, body.pick)
             else:
                 rp = await engine().create(body.situation.strip(), body.topic)
-            return rp.model_dump(mode="json")
+            return hide_unshown(rp.model_dump(mode="json"))
         except ClaudeUnavailable:
             raise claude_down() from None
 
     @router.get("/roleplays/{rp_id}")
     def roleplay(rp_id: str = PathParam(pattern=ID)) -> dict:
         try:
-            return engine().load(rp_id).model_dump(mode="json")
+            return hide_unshown(engine().load(rp_id).model_dump(mode="json"))
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -247,14 +252,14 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.get("/groups/{group}/latest")
     def latest(group: str = PathParam(pattern=ID)) -> dict:
         try:
-            return engine().latest(group)
+            return hide_unshown(engine().latest(group))
         except NotFound:
             raise ApiError(404, "not_found") from None
 
     @router.get("/resume")
     def resume() -> dict:
         # the conversation to resume and where, or null (spec resume-roleplay 1, 2)
-        return {"resume": engine().resume()}
+        return {"resume": hide_unshown(engine().resume())}
 
     @router.get("/saved")
     def saved() -> dict:
@@ -270,7 +275,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.post("/roleplays/{rp_id}/copy")
     async def copy(rp_id: str = PathParam(pattern=ID)) -> dict:
         try:
-            return (await engine().copy(rp_id)).model_dump(mode="json")
+            return hide_unshown((await engine().copy(rp_id)).model_dump(mode="json"))
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -278,7 +283,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     async def line(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
         try:
             line = await engine().line(rp_id, idx)  # waits for the model sound only (LINE_WAIT); notes come later
-            return {**line.model_dump(mode="json"), "progress": engine().progress(rp_id, idx)}
+            return hide_unshown({**line.model_dump(mode="json"), "progress": engine().progress(rp_id, idx)})
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -344,7 +349,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
     @router.get("/roleplays/{rp_id}/summary")
     def summary(rp_id: str = PathParam(pattern=ID)) -> dict:
         try:
-            return engine().summary(rp_id)
+            return hide_unshown(engine().summary(rp_id))
         except NotFound:
             raise ApiError(404, "not_found") from None
 
@@ -353,7 +358,7 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
 
     @router.post("/talks")
     async def create_talk() -> dict:
-        return (await talks().create()).model_dump(mode="json")  # a VoiceError is kept inside `create`
+        return hide_unshown((await talks().create()).model_dump(mode="json"))  # a VoiceError is kept in `create`
 
     @router.post("/talks/{rp_id}/turns")
     async def talk_turn(request: Request, rp_id: str = PathParam(pattern=ID),
@@ -374,18 +379,75 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
                     yield json.dumps(ev, ensure_ascii=False) + "\n"
             except WhisperError:
                 # whisper could not hear it: an error event the app shows, not a stream that breaks off
-                yield json.dumps(engine().error("no_speech"), ensure_ascii=False) + "\n"
+                yield json.dumps(engine().talk_error("no_speech"), ensure_ascii=False) + "\n"
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
 
     @router.post("/talks/{rp_id}/end")
     async def end_talk(rp_id: str = PathParam(pattern=ID), heard: int | None = Query(None, ge=0, le=50)) -> dict:
         try:
-            return await talks().end(rp_id, heard)
+            return hide_unshown(await talks().end(rp_id, heard))
         except NotFound:
             raise ApiError(404, "not_found") from None
         except TalkBusy:
             raise ApiError(409, "busy") from None
+        except ClaudeUnavailable:
+            raise claude_down() from None
+
+    # Sohee chance on Ryan's reply at `idx` (spec free-talk-design 9), each step on its own route like `/ko` and
+    # `/ko/audio`. A step asked before the one it follows is 409 `no_hint`; the first step's answer leaves the full
+    # sentence out, which only 「전체 문장 보기」 (`/hint/full`) gives.
+
+    @router.post("/talks/{rp_id}/lines/{idx}/hint")
+    async def hint(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            h = await talks().hint(rp_id, idx)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except ClaudeUnavailable:
+            raise claude_down() from None
+        return {"meaning_ko": h.meaning_ko, "starters": h.starters}
+
+    @router.get("/talks/{rp_id}/lines/{idx}/hint/audio")
+    async def hint_audio(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            return {"audio": await talks().hint_audio(rp_id, idx)}
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except NoHint:
+            raise ApiError(409, "no_hint") from None
+        except VoiceError:
+            raise ApiError(503, "voice_unavailable") from None
+
+    @router.post("/talks/{rp_id}/lines/{idx}/hint/full")
+    async def hint_full(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            return await talks().show_full(rp_id, idx)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except NoHint:
+            raise ApiError(409, "no_hint") from None
+
+    @router.get("/talks/{rp_id}/lines/{idx}/hint/sounds/{n}")
+    async def hint_sound(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0),
+                         n: int = PathParam(ge=0, le=3)) -> dict:
+        try:
+            return {"audio": await talks().hint_sound(rp_id, idx, n)}
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except NoHint:
+            raise ApiError(409, "no_hint") from None
+        except VoiceError:
+            raise ApiError(503, "voice_unavailable") from None
+
+    @router.get("/talks/{rp_id}/lines/{idx}/hint/three")
+    async def hint_three(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        try:
+            return (await talks().hint_three(rp_id, idx)).model_dump(mode="json")
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except NoHint:
+            raise ApiError(409, "no_hint") from None
         except ClaudeUnavailable:
             raise claude_down() from None
 

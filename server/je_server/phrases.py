@@ -25,9 +25,20 @@ PHRASES: dict[str, str] = {
     "talk_no_fixes": "이번 대화에서는 고칠 곳을 찾지 못했어요. 수고했어요.",
 }
 
-# Said when the 「말하기」 of a free talk came out in Korean (spec free-talk-design 3). English, in Ryan's English voice:
-# inside a free talk Ryan speaks only English (2026-11-08 user). Easy words; not in PHRASES, which are Korean.
-TALK_ENGLISH = "Could you try that in English? Short is fine."
+# Said in a free talk when its turn cannot be answered (spec free-talk-design 3, PR 2): English, in Ryan's English voice,
+# because inside a free talk Ryan speaks only English (2026-11-08 user). Easy words; not in PHRASES, which are Korean.
+TALK_PHRASES: dict[str, str] = {
+    "no_speech": "Sorry, I didn't catch that. Could you say it again?",
+    "too_long": "That was a little long. Could you say it in a shorter way?",
+    "claude_down": "Sorry, I can't answer right now. Let's try again in a moment.",
+}
+
+# Sohee's fixed words in Sohee chance (spec free-talk-design 9), in her Korean voice. hint_start is said after the
+# hint's Korean line, in one sound with it; hint_full when the full sentence is shown, made once ahead (`Engine.warm`).
+SOHEE_PHRASES: dict[str, str] = {
+    "hint_start": "이렇게 시작해 보세요.",
+    "hint_full": "이렇게 말해 봐요.",
+}
 
 # Ryan's first question in a free talk (spec free-talk-design 2): a light everyday question, no Korean introduction,
 # taken in turn, not at random. The turn of the next one is kept in the Mac's records folder (`Store.load_talk`), so a

@@ -7,7 +7,7 @@ import pytest
 
 from fakes import (FakeAnthropic, connection_error, refusal_response, script_json, three_json,
                    three_json_with_wrong_stress)
-from je_server import prompts
+from je_server import fixes, prompts
 from je_server.claude import JAKE_ENDINGS, LIVE_OPTIONS, WRITERS, Claude, ClaudeUnavailable, pick_ending
 from je_server.threeline import check
 from je_server.topics import get
@@ -835,3 +835,113 @@ async def test_aside_cut_drops_a_leaking_piece():
                                                                                      None, [], []):
             got.append(d)
     assert got == ["괜찮아요. "]
+
+
+# --- Sohee chance (spec free-talk-design 9) --------------------------------------------------------------------
+
+HINT_TALK = [{"말한 사람": "라이언", "말": "Hi! What do you usually do on weekends?"}]
+GOOD_HINT = {"meaning_ko": "주말에 보통 뭐 하는지 물어요.", "starters": ["I usually…", "Not much, just…"],
+             "full": "I usually stay home and rest."}
+
+
+async def test_hint_sends_the_talk_on_the_hint_model():
+    from je_server.claude import QUICK_SONNET
+    from je_server.models import Hint
+
+    fake = FakeAnthropic([json.dumps(GOOD_HINT)])
+    hint = await Claude(fake).hint(HINT_TALK)
+    assert hint == Hint(**GOOD_HINT)
+    r = fake.requests[0]
+    assert r["model"] == QUICK_SONNET["model"] and r["thinking"] == QUICK_SONNET["thinking"]
+    assert r["system"] == prompts.HINT_SYSTEM and r["output_config"]["format"]["schema"] == prompts.HINT_SCHEMA
+    assert json.loads(r["messages"][0]["content"]) == {"대화": HINT_TALK}
+    assert fake.options == [LIVE_OPTIONS]  # the learner waits: fail fast
+    fake = FakeAnthropic([json.dumps(GOOD_HINT)])
+    await Claude(fake, hinter=WRITERS["haiku"]).hint(HINT_TALK)
+    assert fake.requests[0]["model"] == "claude-haiku-5-5"
+
+
+async def test_hint_asks_again_once_when_the_first_is_bad():
+    from je_server.models import Hint
+
+    bad = {**GOOD_HINT, "full": "On weekends I rest."}  # does not start with a starter
+    fake = FakeAnthropic([json.dumps(bad), json.dumps(GOOD_HINT)])
+    assert await Claude(fake).hint(HINT_TALK) == Hint(**GOOD_HINT) and len(fake.requests) == 2
+    fake = FakeAnthropic([json.dumps(bad), "not json"])
+    with pytest.raises(ClaudeUnavailable, match="bad hint"):
+        await Claude(fake).hint(HINT_TALK)
+    assert len(fake.requests) == 2
+
+
+async def test_hint_asks_again_when_openers_repeat_ryans_line():
+    from je_server.models import Hint
+
+    ryan = HINT_TALK[-1]["말"]
+    # 「usually do on weekends」 is his words back: one opener left (spec 9), so it is asked again
+    bad = {**GOOD_HINT, "starters": ["Usually do on weekends…", "I usually…"]}
+    fake = FakeAnthropic([json.dumps(bad), json.dumps(GOOD_HINT)])
+    assert await Claude(fake).hint(HINT_TALK, ryan) == Hint(**GOOD_HINT) and len(fake.requests) == 2
+    fake = FakeAnthropic([json.dumps(bad)])
+    assert await Claude(fake).hint(HINT_TALK) == Hint(**bad)  # no Ryan line given: nothing to compare with
+
+
+async def test_hint_log_has_tries_and_time_only(caplog):
+    caplog.set_level(logging.INFO, logger="je_server")
+    await Claude(FakeAnthropic([json.dumps(GOOD_HINT)])).hint(HINT_TALK)
+    assert "hint: 1 tries" in caplog.text
+    assert not [t for t in (GOOD_HINT["meaning_ko"], GOOD_HINT["full"], *GOOD_HINT["starters"]) if t in caplog.text]
+
+
+def test_hint_prompt_and_schema_ask_for_the_three_parts():
+    assert prompts.HINT_SCHEMA["required"] == ["meaning_ko", "starters", "full"]
+    assert prompts.HINT_SCHEMA["properties"]["starters"] == {"type": "array", "items": {"type": "string"}}
+    for key in ("meaning_ko", "starters", "full", "소희 찬스"):
+        assert key in prompts.HINT_SYSTEM
+
+
+async def test_fixes_sends_the_helped_turns_with_the_talk():
+    fake = FakeAnthropic([json.dumps({"items": FIX_ITEMS})])
+    conversation = [{"차례": 0, "말한 사람": "라이언", "말": "Hi!"}, {"차례": 1, "말한 사람": "학습자", "말": "I want."}]
+    helped = [{"차례": 1, "알려 준 문장": "I went.", "들린 말": "I want.",
+               "짚을 것": [{"대사 낱말": "went", "들린 낱말": "want", "소리 내는 법": ""}]}]
+    await Claude(fake).fixes(conversation, helped)
+    assert json.loads(fake.requests[0]["messages"][0]["content"]) == {"대화": conversation, "도움 받은 차례": helped}
+    # none helped: the talk only, as before
+    fake = FakeAnthropic([json.dumps({"items": []})])
+    await Claude(fake).fixes(conversation, [])
+    assert json.loads(fake.requests[0]["messages"][0]["content"]) == {"대화": conversation}
+
+
+def test_fix_prompt_words_helped_turns_by_the_macs_points_only():
+    rules = prompts.FIX_SYSTEM
+    assert "도움 받은 차례" in rules and "문법" in rules
+    assert "처럼 들렸어요" in rules and "들리지 않았어요" in rules and "말했어요" in rules
+    # the helped ones come apart from Claude's own picks, but `fixes.check` keeps three in all, own ones first (PR review)
+    assert "세지 않아요" not in rules and "모두 합쳐 세 가지까지만" in rules and fixes.MAX_FIXES == 3
+
+
+def test_fix_prompt_completes_fragments_and_keeps_misheard_words():
+    rules = prompts.FIX_SYSTEM
+    assert '"도움 받은 차례": true' in rules  # the mark `talk.fix_input` puts on a helped turn
+    # only a fragment answer to a what, where or when question is completed; bare answer words and complete short
+    # sentences stay as they are
+    assert "완성 문장" in rules and "무엇, 어디, 언제" in rules
+    assert "Yes., No., Good., Sure., Sounds good." in rules and "Yes, I do., I'm good." in rules
+    assert "소리가 가장 가깝" in rules and "소리가 전혀 다른" in rules
+
+
+def test_talk_prompt_reads_a_nonsense_word_as_a_similar_sounding_one():
+    assert "similar-sounding" in prompts.TALK_SYSTEM and "question back" in prompts.TALK_SYSTEM
+
+
+def test_talk_prompt_never_writes_korean_letters_and_ends_on_the_sentence_limit():
+    rules = prompts.TALK_SYSTEM
+    # Ryan's reply is voiced in English: once he wrote the Korean word he was asked about (2026-11-09 measure)
+    assert "never write Korean letters, not even the Korean word they asked about" in rules
+    # four-sentence replies rose to 12/52 as rules were added, so the limit is said again last
+    assert rules.rstrip().splitlines()[-1] == "- Whatever the case, at most three sentences."
+
+
+def test_talk_prompt_carries_on_after_a_helped_turn():
+    assert prompts.TALK_HELPED == "(said with help: a sentence Sohee showed)"
+    assert prompts.TALK_HELPED in prompts.TALK_SYSTEM

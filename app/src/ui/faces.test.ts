@@ -36,3 +36,12 @@ test("the pictures shown later are loaded as soon as /home is back", () => {
 test("an older server's missing pictures are skipped", () => {
   expect(laterPictures({ front: "/f.png", listening: "/l.png" } as never)).toEqual(["/l.png"]);
 });
+
+test("Sohee's thinking faces, face and whisper face are loaded; an older server has none", () => {
+  const withSohee = {
+    ...home,
+    thinking: { ...home.thinking, sohee: ["/s1.png", "/s2.png"] },
+    sohee: { face: "/sf.png", whisper: "/sw.png" },
+  };
+  expect(laterPictures(withSohee)).toEqual([...laterPictures(home), "/s1.png", "/s2.png", "/sf.png", "/sw.png"]);
+});

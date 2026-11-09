@@ -5,4 +5,4 @@
 {"type": "audio", "key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
 {"type": "audio", "key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}
 {"type": "done", "idx": 2}
-{"type": "error", "code": "no_speech", "say": {"text": "잘 안 들렸어요. 한 번 더 말해 줄래요?", "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}
+{"type": "error", "code": "no_speech", "say": {"text": "Sorry, I didn't catch that. Could you say it again?", "audio": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}}

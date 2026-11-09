@@ -23,6 +23,9 @@ export type ScriptLine = {
   parts: Said[] | null; // Ryan's answer sentence by sentence with the sound of each
   heard_upto: number | null; // sentences heard when cut off; null when heard to the end
   fix: Fix | null;
+  // the Mac's record of Sohee chance on Ryan's reply (spec free-talk-design 9), absent from an older server and sent
+  // without its full sentence before 「전체 문장 보기」. The app reads a hint through the hint routes only, never here
+  hint?: unknown;
 };
 export type Frame = { title_ko: string; user_role_ko: string; ryan_role_ko: string; place_ko: string; goal_ko: string };
 export type Issue = { target: string; heard: string; sound: [string, string] | null; explain: string };
@@ -60,7 +63,10 @@ export type Roleplay = {
 };
 export type Said = { text: string; audio: string };
 // thinking-face picture paths per person, cross-faded while the app waits (/home `images.thinking`)
-export type Thinking = { jake: string[]; ryan: string[] };
+export type Thinking = { jake: string[]; ryan: string[]; sohee?: string[] };
+// Sohee chance (spec free-talk-design): Korean meaning + sentence starters, then the full sentence on request
+export type Hint = { meaning_ko: string; starters: string[] };
+export type HintFull = { text: string; say: Said };
 // A situation topic and its prepared list (spec situation-topics 1, 3). The Mac keeps what Claude gets; the app only
 // shows the names and sends the ids back.
 export type Topic = { id: string; name_ko: string; placeholder_ko: string; picks: { id: string; title_ko: string }[] };
@@ -83,7 +89,8 @@ export type Home = {
   // (spec ryan-shadowing-tip 4)
   tip?: Said;
   // jake: Jake's front picture, shown while his suggestion waits for the learner's pick (absent on an older server)
-  images: { front: string; listening: string; jake?: string; thinking: Thinking };
+  // sohee: her face and whisper face; absent on a server from before the Sohee chance
+  images: { front: string; listening: string; jake?: string; thinking: Thinking; sohee?: { face: string; whisper: string } };
   topics?: Topic[]; // absent on a server from before topics: use flow/situation `topicsOf`
 };
 export type Progress = { no: number; total: number }; // 「내 대사 no/total」
@@ -124,9 +131,10 @@ export type AttemptEvent =
   | { type: "audio"; key: string }
   | { type: "error"; code: string; say: Said | null }
   | { type: "done"; next: number; issues: number };
-// Free talk (spec free-talk-design 2; contract/talk-events.ndjson, talk-end.json). `heard` is my English turn heard: idx
-// is its line, n its recording, korean whether it was heard again in Korean (then Ryan's fixed English `help` line
-// follows, with no Claude).
+// Free talk (spec free-talk-design 2; contract/talk-events.ndjson, talk-end.json). `heard` is my turn heard: idx is its
+// line, n its recording, korean whether it was heard again in Korean (Ryan then answers in English, as after any turn).
+// A `reply` of kind `help` (his fixed English line after a Korean turn, with no Claude) comes only from an older server,
+// and such lines are only in records from one.
 export type TalkEvent =
   | { type: "heard"; text: string; n: number; idx: number; korean: boolean }
   | { type: "text"; delta: string }
@@ -136,16 +144,18 @@ export type TalkEvent =
   | { type: "done"; idx: number };
 // one fix of the talk's end: the corrected line and the recording of the turn it fixes (null when there is none)
 export type TalkItem = { line: ScriptLine; rec: TryRef | null };
-export type TalkEnd = { items: TalkItem[]; say: Said | null };
+// sohee: Sohee chances used in the talk, the hint and the full sentence each once (spec free-talk-design 9); absent
+// from an older server
+export type TalkEnd = { items: TalkItem[]; say: Said | null; sohee?: number };
 
 // Key lists checked against contract/ by the tests; the type checks below keep them in step with the types.
 export const ROLEPLAY_KEYS = ["id", "created", "situation", "frame", "lines", "attempts", "pos", "origin", "topic", "pick", "kind"] as const;
-export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio", "parts", "heard_upto", "fix"] as const;
+export const LINE_KEYS = ["idx", "speaker", "text", "kind", "three", "audio", "ko", "ko_audio", "parts", "heard_upto", "fix", "hint"] as const;
 export const FIX_KEYS = ["of", "said", "why_ko", "why_audio"] as const;
 export const SYLLABLE_KEYS = ["en", "ko", "m", "hi"] as const;
 export const EVENT_TYPES = ["heard", "text", "audio", "error", "done"] as const;
 export const TALK_EVENT_TYPES = ["heard", "text", "reply", "audio", "error", "done"] as const;
-export const TALK_END_KEYS = ["items", "say"] as const;
+export const TALK_END_KEYS = ["items", "say", "sohee"] as const;
 export const TALK_ITEM_KEYS = ["line", "rec"] as const;
 export const SUMMARY_KEYS = ["say", "lines"] as const;
 export const TRY_KEYS = ["n", "mode", "heard", "followed", "issues", "point_ko"] as const;

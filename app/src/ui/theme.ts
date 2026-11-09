@@ -19,6 +19,9 @@ export const colors = {
   ryanTag: "#E9ECEF", // 「라이언」 on a gray card, one step darker than the card
   sohee: "#2F9E44", // Sohee's tag on her interpretation (spec korean-translation 2)
   soheeText: "#1F6F34", // her Korean: darker, to read on the gray and blue bubbles
+  // her bubble in the free talk's Sohee chance, and the edge of its opener chips and full sentence (spec free-talk 9)
+  soheeBg: "#EBFBEE",
+  soheeLine: "#B2F2BB",
   danger: "#C92A2A",
   // while recording, in the blue 「● 말하기 끝」: the blinking red dot (white ring) and the thin voice line (spec
   // record-feedback 2). A red band and a red button read as too loud (2026-11-08 user).

@@ -52,6 +52,9 @@ export const canTry = (s: FixState): boolean => (s.phase === "ready" || s.phase 
 // the message is drawn in red after a failure and when the mic could not be used; the no-speech notice is not one
 export const fixMessageIsError = (s: FixState): boolean => s.phase === "error" || s.message === MIC_FAILED;
 
+// 「소희 찬스 N번 썼어요」 on the closing screen (spec free-talk-design 9): none when unused or from an older server
+export const soheeLine = (end: TalkEnd): string | null => (end.sohee && end.sohee >= 1 ? `소희 찬스 ${end.sohee}번 썼어요` : null);
+
 export function fixReduce(s: FixState, a: FixAction): FixState {
   switch (a.type) {
     case "lineLoaded":

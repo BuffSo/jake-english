@@ -11,18 +11,29 @@
 // ryan, user, feedback, ryanOpen, userOpen, ryanText, plainText, links, link, hint, micHint, count and the frame) and
 // the bubble handlers `playFromBubble`, `toggleThree` (here `toggleNotes`), `toggleKo`, `toggleBubble`, `ryanBubble` and
 // `myBubble`. They move into one place with the recording wiring (docs/todo 20261108_44_todo_roleplay_use_usemic.md).
-import { useEffect, useReducer, useRef, useState, type ComponentRef } from "react";
+import { Fragment, useEffect, useReducer, useRef, useState, type ComponentRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { api } from "../api";
-import type { TalkEvent, ThreeLine, TryRef } from "../api/types";
+import type { Home, TalkEvent, ThreeLine, TryRef } from "../api/types";
 import type { SoundQueue } from "../audio/player";
 import { tapPlay } from "../audio/tapPlay";
 import { useMic } from "../audio/useMic";
 import { usePlayingTag } from "../audio/usePlayingTag";
-import { createGate, tapHold, tapThenHold } from "../flow/gate";
+import { createGate, createGates, tapHold, tapThenHold } from "../flow/gate";
 import { koOpensOnTap, koView } from "../flow/interpret";
 import { tapRow } from "../flow/review";
+import {
+  canAskFull,
+  canAskHint,
+  createSoheeChance,
+  hintSoundTag,
+  lastReply,
+  soheeFullTag,
+  soheeTag,
+  type Chances,
+  type SoheeChance,
+} from "../flow/soheeChance";
 import {
   canEnd,
   canSpeak,
@@ -32,6 +43,7 @@ import {
   isCurrent,
   lineSounds,
   mayListenTalk,
+  ryanSpeaking,
   talkInitial,
   talkMessageIsError,
   talkReduce,
@@ -47,6 +59,9 @@ import { KoButton, KoLine } from "../ui/Interpret";
 import { keepWords } from "../ui/keepWords";
 import { Named } from "../ui/Named";
 import { PlayLabel } from "../ui/PlayIcon";
+import { SoheeChanceButton } from "../ui/SoheeChanceButton";
+import { SoheeHint } from "../ui/SoheeHint";
+import { SpeakingBars } from "../ui/SpeakingBars";
 import { SoonEnds, StopButton } from "../ui/StopButton";
 import { ThreeLineView } from "../ui/ThreeLine";
 import { koTag, useInterpret } from "../ui/useInterpret";
@@ -54,7 +69,8 @@ import { colors, top } from "../ui/theme";
 import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 import { TalkFixScreen } from "./TalkFixScreen";
 
-type Props = { sounds: SoundQueue; onHome: () => void };
+// sohee: her face and whisper face from /home (`images.sohee`); absent on an older server, then her words alone
+type Props = { sounds: SoundQueue; sohee?: Home["images"]["sohee"]; onHome: () => void };
 type Of<K extends TalkBubble["kind"]> = Extract<TalkBubble, { kind: K }>;
 
 // Ryan's sounds in the talk: the keys whose sound has started are the sentences I heard (spec 2)
@@ -64,7 +80,7 @@ const talkTag = (key: string) => TALK + key;
 const bubbleTag = (idx: number) => `bubble:${idx}`;
 const recTag = (r: TryRef) => `rec:${r.rp_id}:${r.idx}:${r.n}`;
 
-export function TalkScreen({ sounds, onHome }: Props) {
+export function TalkScreen({ sounds, sohee, onHome }: Props) {
   const [s, dispatch] = useReducer(talkReduce, talkInitial);
   // The talk with every action so far, drawn or not: a tap that lands before the redraw (the second tap of a double
   // tap, 「대화 끝내기」 and 「🎤 말하기」 together) reads where the talk is now (REVIEW.md 「앱 화면」).
@@ -87,6 +103,8 @@ export function TalkScreen({ sounds, onHome }: Props) {
   // past bubbles show only what was said; one opens its buttons on a tap, by line (spec 2, review-practice 8)
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [threes, setThrees] = useState<Record<number, ThreeLine | "loading">>({});
+  // which Ryan bubbles show their English words: closed for a new bubble, opened per bubble with 「자막 보기」
+  const [subOpen, setSubOpen] = useState<Record<number, boolean>>({});
   const [notesOpen, setNotesOpen] = useState<Record<number, boolean>>({});
   // which Ryan lines show Sohee's line; the ref is set at the tap, before the render, since a sound already made plays
   // at once (as on the roleplay screen)
@@ -96,6 +114,39 @@ export function TalkScreen({ sounds, onHome }: Props) {
   const interp = useInterpret(rp?.id ?? "", sounds, (auto) =>
     mounted.current && mayListenTalk(now.current) && (!auto || !sounds.isPlaying()),
   );
+  // 「소희 찬스」 (spec free-talk-design 9): the requests and when her voice plays are in `flow/soheeChance.ts`
+  const [chances, setChances] = useState<Chances>({});
+  // older Sohee bubbles a tap opened; the one on Ryan's latest reply is always open
+  const [soheeOpen, setSoheeOpen] = useState<Record<number, boolean>>({});
+  const [hintThrees, setHintThrees] = useState<Record<number, ThreeLine | "loading">>({});
+  const [hintNotesOpen, setHintNotesOpen] = useState<Record<number, boolean>>({});
+  // one request for the full sentence's notes per line at a time (REVIEW.md 「앱 화면」): the second tap of a double
+  // tap reads the state from before the first one's redraw
+  const hintNotesGates = useRef(createGates<number>()).current;
+  const chanceRef = useRef<SoheeChance | null>(null);
+  if (chanceRef.current === null) {
+    const talkId = () => now.current.roleplay?.id ?? "";
+    chanceRef.current = createSoheeChance({
+      getHint: (idx) => api.getHint(talkId(), idx),
+      getHintAudio: (idx) => api.getHintAudio(talkId(), idx),
+      showFull: (idx) => api.showFull(talkId(), idx),
+      getHintSound: (idx, n) => api.getHintSound(talkId(), idx, n),
+      talk: () => now.current,
+      playing: () => sounds.isPlaying(),
+      // tagged with her line, so its 🔊 bounces while she speaks; nothing after I left (`mounted`, before unmount)
+      play: (audio, tag) => {
+        if (!mounted.current) return;
+        sounds.clear();
+        sounds.enqueue(api.audioSource(audio), tag);
+      },
+      onChange: setChances,
+    });
+  }
+  const chance = chanceRef.current;
+  useEffect(() => {
+    chance.start();
+    return () => chance.stop();
+  }, [chance]);
 
   const mic = useMic({
     canStart: () => mounted.current && canSpeak(now.current),
@@ -141,9 +192,12 @@ export function TalkScreen({ sounds, onHome }: Props) {
   // what was said, Ryan's text and a message come in at the bottom. Always a moment later: on Android a scroll run
   // with the views that appear in the same commit stops above them (PR #20 review).
   const toEnd = () => setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
+  // Sohee's bubble on Ryan's latest reply comes in at the bottom too, and grows with her hint and step 2
+  const latest = lastReply(s);
+  const latestStep = latest === null ? undefined : chances[latest]?.step;
   useEffect(() => {
     toEnd();
-  }, [s.bubbles.length, s.phase, s.pending, s.message]);
+  }, [s.bubbles.length, s.phase, s.pending, s.message, latestStep]);
 
   // Ryan asks his first question at once: its sound was made on the Mac ahead (spec 2)
   function openTalk() {
@@ -184,6 +238,7 @@ export function TalkScreen({ sounds, onHome }: Props) {
     const onEvent = (e: TalkEvent) => {
       if (!current()) return;
       if (e.type === "audio") sounds.enqueue(api.audioSource(e.key), talkTag(e.key));
+      // Ryan's English voice plays; the words on screen are the app's Korean (`talkErrorText`)
       if (e.type === "error" && e.say?.audio) sounds.enqueue(api.audioSource(e.say.audio));
       act({ type: "event", turn, e });
     };
@@ -307,27 +362,99 @@ export function TalkScreen({ sounds, onHome }: Props) {
     setOpenRow(next);
   }
 
+  // 「자막 보기」 / 「자막 접기」 on one bubble; the reading notes fold with the words, and a past bubble's own row
+  // closing leaves its subtitles as they are
+  function toggleSub(idx: number) {
+    setSubOpen((o) => ({ ...o, [idx]: !o[idx] }));
+  }
+
+  // A tap on Sohee's Korean: her voice again, under the rule of a bubble's 🔊 (my turn only, stopping what plays)
+  function replaySohee(idx: number, which: "hint" | "full") {
+    if (!mounted.current || !mayListenTalk(now.current)) return;
+    tapPlay(sounds, which === "hint" ? soheeTag(idx) : soheeFullTag(idx), () => void chance.replay(idx, which));
+  }
+  // Ryan's English model of an opener or of the full sentence, made on the Mac when first asked: a tap while it plays
+  // stops it, as any bubble 🔊 (the second tap of a double tap does nothing, `playTap`)
+  function playHintSound(idx: number, n: number) {
+    const tag = hintSoundTag(idx, n);
+    if (!mounted.current || !mayListenTalk(now.current)) return;
+    if (sounds.nowTag().tag === tag) return tapPlay(sounds, tag, () => {});
+    void chance.ryanSound(idx, n).then((audio) => {
+      if (audio) playFromBubble([api.audioSource(audio)], tag);
+    });
+  }
+  // the full sentence's 「읽는 법 보기」: made on the Mac only when asked, as Ryan's; a failure folds it again
+  async function toggleHintNotes(idx: number) {
+    if (hintNotesOpen[idx]) return setHintNotesOpen((o) => ({ ...o, [idx]: false }));
+    setHintNotesOpen((o) => ({ ...o, [idx]: true }));
+    if (hintThrees[idx] || !rp) return;
+    const id = rp.id;
+    await hintNotesGates.run(idx, async () => {
+      setHintThrees((t) => ({ ...t, [idx]: "loading" }));
+      try {
+        const three = await api.getHintThree(id, idx);
+        setHintThrees((t) => ({ ...t, [idx]: three }));
+      } catch {
+        setHintThrees(({ [idx]: _, ...rest }) => rest);
+        setHintNotesOpen((o) => ({ ...o, [idx]: false }));
+      }
+    });
+  }
+
+  // Sohee's bubble right under Ryan's line it belongs to: open while it is his latest reply (also while I record and
+  // wait), folded once he has a newer one, opened again on a tap. A failure on an older line keeps nothing to show.
+  function soheeBubble(idx: number) {
+    const c = chances[idx];
+    const isLatest = idx === latest;
+    if (!c || (!isLatest && c.step === "failed")) return null;
+    return (
+      <SoheeHint
+        chance={c}
+        open={isLatest || soheeOpen[idx] === true}
+        latest={isLatest}
+        faces={sohee}
+        canFull={canAskFull(s, c)}
+        listenOk={listenOk}
+        playingTag={playingTag}
+        three={hintThrees[idx]}
+        notesOpen={hintNotesOpen[idx] === true}
+        onToggle={() => setSoheeOpen((o) => ({ ...o, [idx]: !o[idx] }))}
+        onReplay={(which) => replaySohee(idx, which)}
+        onSound={(n) => playHintSound(idx, n)}
+        onFull={() => void chance.askFull(idx)}
+        onNotes={() => void toggleHintNotes(idx)}
+      />
+    );
+  }
+
   // Ryan's English line, the sentences I did not hear when I cut in weak (spec 2). The line he says now has its buttons
   // out; a past one opens them on a tap. The buttons are the roleplay's, in its order.
   function ryanBubble(b: Of<"ryan">, isNow: boolean) {
-    const opened = isNow || openRow === String(b.idx);
+    const speaking = isNow && ryanSpeaking(s, b.idx);
+    // the buttons: out on his current line once he has finished, on a tap for a past one; none while he speaks
+    const opened = !speaking && (isNow || openRow === String(b.idx));
+    const subs = subOpen[b.idx] === true;
     const three = threes[b.idx];
     const body = (
       <>
-        <Text style={styles.ryanText}>
-          {b.parts.length === 0
-            ? b.text
-            : b.parts.map((p, i) => (
-                <Text key={i} style={b.heard !== null && i >= b.heard ? styles.unheard : undefined}>
-                  {i > 0 ? " " : ""}
-                  {p.text}
-                </Text>
-              ))}
-        </Text>
-        {opened && notesOpen[b.idx] && three === "loading" && (
+        {subs && !speaking ? (
+          <Text style={styles.ryanText}>
+            {b.parts.length === 0
+              ? b.text
+              : b.parts.map((p, i) => (
+                  <Text key={i} style={b.heard !== null && i >= b.heard ? styles.unheard : undefined}>
+                    {i > 0 ? " " : ""}
+                    {p.text}
+                  </Text>
+                ))}
+          </Text>
+        ) : (
+          <HiddenWords moving={speaking} />
+        )}
+        {opened && subs && notesOpen[b.idx] && three === "loading" && (
           <Text style={common.sub}>{keepWords("세 줄을 만들고 있어요…")}</Text>
         )}
-        {opened && notesOpen[b.idx] && three && three !== "loading" && <ThreeLineView three={three} />}
+        {opened && subs && notesOpen[b.idx] && three && three !== "loading" && <ThreeLineView three={three} />}
         {opened && (
           <KoLine
             view={koViewAt(b.idx)}
@@ -339,15 +466,20 @@ export function TalkScreen({ sounds, onHome }: Props) {
         {opened && (
           <View style={styles.links}>
             <InRowButton
-              label="듣기"
+              label={isNow ? "다시 듣기" : "듣기"}
               playing={playingTag === bubbleTag(b.idx)}
               onPress={() => playLine(b)}
               dim={!listenOk}
               textStyle={styles.link}
             />
-            <Pressable onPress={() => toggleNotes(b.idx)} hitSlop={8}>
-              <Text style={styles.link}>{notesOpen[b.idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
+            <Pressable onPress={() => toggleSub(b.idx)} hitSlop={8}>
+              <Text style={styles.link}>{subs ? "자막 접기" : "자막 보기 ›"}</Text>
             </Pressable>
+            {subs && (
+              <Pressable onPress={() => toggleNotes(b.idx)} hitSlop={8}>
+                <Text style={styles.link}>{notesOpen[b.idx] ? "읽는 법 접기" : "읽는 법 보기 ›"}</Text>
+              </Pressable>
+            )}
             <KoButton view={koViewAt(b.idx)} onPress={() => toggleKo(b.idx)} />
           </View>
         )}
@@ -402,7 +534,9 @@ export function TalkScreen({ sounds, onHome }: Props) {
     );
   }
 
-  if (s.phase === "fixes" && rp && s.end) return <TalkFixScreen rp={rp} end={s.end} sounds={sounds} onHome={onHome} />;
+  // her face on the 「소희 찬스 N번 썼어요」 line, as on her button; none from an older server
+  if (s.phase === "fixes" && rp && s.end)
+    return <TalkFixScreen rp={rp} end={s.end} sounds={sounds} soheeFace={sohee?.face} onHome={onHome} />;
 
   const last = s.bubbles[s.bubbles.length - 1];
   const nowIdx = last?.kind === "ryan" ? last.idx : null;
@@ -419,17 +553,26 @@ export function TalkScreen({ sounds, onHome }: Props) {
       <ScrollView ref={scroll} contentContainerStyle={styles.scroll}>
         {/* who says each bubble, like a messenger: Ryan left in gray, me right in blue (as in the roleplay) */}
         {s.bubbles.map((b) =>
-          b.kind === "ryan" ? ryanBubble(b, b.idx === nowIdx) : b.kind === "me" ? myBubble(b) : helpBubble(b),
+          b.kind === "ryan" ? (
+            <Fragment key={b.idx}>
+              {ryanBubble(b, b.idx === nowIdx)}
+              {soheeBubble(b.idx)}
+            </Fragment>
+          ) : b.kind === "me" ? (
+            myBubble(b)
+          ) : (
+            helpBubble(b)
+          ),
         )}
         {s.phase === "opening" && <Waiting who="ryan" text={keepWords("준비하고 있어요")} onShow={toEnd} />}
         {s.phase === "waiting" && s.pending === "" && (
           <Waiting who="ryan" text={keepWords("라이언이 듣고 있어요")} onShow={toEnd} />
         )}
-        {/* Ryan's answer as it is written, before it is his line: no buttons yet */}
+        {/* Ryan's answer as it is written, before it is his line: the moving bars only, no words and no buttons */}
         {s.pending !== "" && (
           <Named part="ryan">
             <View style={[styles.bubble, styles.ryan]}>
-              <Text style={styles.ryanText}>{s.pending}</Text>
+              <HiddenWords moving />
             </View>
           </Named>
         )}
@@ -454,6 +597,9 @@ export function TalkScreen({ sounds, onHome }: Props) {
           <Button label="다시 시도" onPress={retry} />
         ) : (
           <>
+            {/* 「소희 찬스」 above the row, on the left: the hint for Ryan's latest reply, once (spec 9). Gray while he
+                speaks, while she thinks and once used on his line; a failed one can be asked again. */}
+            <SoheeChanceButton face={sohee?.face} on={canAskHint(s, chances)} onPress={() => void chance.ask()} />
             {/* my first turn says to tap 🎤 first (spec 2, record-feedback 3) */}
             {!s.micUsed && canSpeak(s) && <Text style={styles.micHint}>{keepWords("🎤를 누르고 말하세요")}</Text>}
             <View style={styles.pair}>
@@ -467,7 +613,18 @@ export function TalkScreen({ sounds, onHome }: Props) {
   );
 }
 
+// the bubble with its words hidden: the bars and a gray note (spec free-talk-design 9)
+function HiddenWords({ moving }: { moving: boolean }) {
+  return (
+    <View style={styles.hidden}>
+      <SpeakingBars moving={moving} />
+      <Text style={[styles.hint, { marginTop: 0 }]}>{keepWords(moving ? "라이언이 말하는 중" : "자막 숨김")}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  hidden: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 28 },
   wrap: { flex: 1, backgroundColor: colors.bg, paddingTop: top },
   header: { paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#E9ECEF" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },

@@ -73,11 +73,11 @@ def test_records_from_before_read_as_roleplays():
     raw = json.loads((CONTRACT / "roleplay.json").read_text(encoding="utf-8"))
     del raw["kind"]
     for l in raw["lines"]:
-        for k in ("parts", "heard_upto", "fix"):
+        for k in ("parts", "heard_upto", "fix", "hint"):
             del l[k]
     rp = Roleplay.model_validate(raw)
     assert rp.kind == "roleplay"
-    assert all(l.parts is None and l.heard_upto is None and l.fix is None for l in rp.lines)
+    assert all(l.parts is None and l.heard_upto is None and l.fix is None and l.hint is None for l in rp.lines)
 
 
 def test_talk_events_example_has_the_engine_types():
@@ -89,11 +89,27 @@ def test_talk_events_example_has_the_engine_types():
         if e["type"] in keys:
             assert set(e) == keys[e["type"]]
     assert next(e for e in events if e["type"] == "heard")["korean"] is False
+    # inside a free talk Ryan speaks English only: its errors say a fixed English line (spec free-talk-design 3)
+    from je_server.phrases import TALK_PHRASES
+
+    error = next(e for e in events if e["type"] == "error")
+    assert error["say"]["text"] == TALK_PHRASES[error["code"]]
 
 
 def test_talk_end_example_has_the_engine_shape():
     raw = json.loads((CONTRACT / "talk-end.json").read_text(encoding="utf-8"))
-    assert set(raw) == {"items", "say"} and raw["say"] is None and raw["items"]
+    assert set(raw) == {"items", "say", "sohee"} and raw["say"] is None and raw["items"]
+    assert isinstance(raw["sohee"], int) and raw["sohee"] >= 0  # Sohee chances used (spec free-talk-design 9)
     for item in raw["items"]:
         assert set(item) == {"line", "rec"}
         assert ScriptLine.model_validate(item["line"]).model_dump(mode="json") == item["line"]
+
+
+def test_a_lines_given_is_in_its_json_only_when_set():
+    # only my turns said from Sohee's full sentence have it (spec free-talk-design 9), so the examples' lines, and the
+    # app's line keys, stay without it
+    line = ScriptLine(idx=1, speaker="user", text="I want home.", kind="turn")
+    assert "given" not in line.model_dump(mode="json") and '"given"' not in line.model_dump_json()
+    helped = line.model_copy(update={"given": "I went home."})
+    assert helped.model_dump(mode="json")["given"] == "I went home."
+    assert ScriptLine.model_validate_json(helped.model_dump_json()) == helped

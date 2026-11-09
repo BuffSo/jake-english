@@ -7,6 +7,7 @@ short forms, joined words) and restarts or fillers (spec 「평가」 2, 3).
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from itertools import product
@@ -320,10 +321,25 @@ def _compare(target: str, heard: str, hangul: bool = False) -> Comparison:
                       heard_total=len(b) - restarted, korean=korean)
 
 
-def find_issues(target: str, heard: str, limit: int) -> list[Issue]:
+def sounds_close(i: Issue) -> bool:
+    """Whether a difference may be the transcriber mishearing a word: a listed sound, or one word heard as another
+    whose dictionary sounds differ by `SOUND_MAX_EDITS` or fewer. A word swapped for a far one, and words added or
+    left out, are not: in a free talk said from Sohee's sentence those are the learner's own words (final review)."""
+    if not i.target or not i.heard:
+        return False
+    if i.sound is not None:
+        return True
+    if len(i.target.split()) != 1 or len(i.heard.split()) != 1:
+        return False
+    d = sound_diff(i.target, i.heard)
+    return d is not None and d[0] <= SOUND_MAX_EDITS
+
+
+def find_issues(target: str, heard: str, limit: int, keep: Callable[[Issue], bool] | None = None) -> list[Issue]:
     """At most `limit` differences, front of the line first. Past the limit a second issue with the same listed
-    sound is skipped, so Ryan does not give the same sound tip twice (spec 「평가」 5)."""
-    diffs = compare(target, heard).diffs
+    sound is skipped, so Ryan does not give the same sound tip twice (spec 「평가」 5). `keep`: only the differences
+    it lets through count, before the limit."""
+    diffs = [i for i in compare(target, heard).diffs if keep is None or keep(i)]
     if len(diffs) <= limit:
         return diffs
     out: list[Issue] = []

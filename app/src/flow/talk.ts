@@ -72,6 +72,14 @@ export const canSpeak = (s: TalkState) => s.phase === "ready" || s.phase === "ry
 export const canEnd = canSpeak;
 // the 🔊, interpretation and my recording of past bubbles: only on my turn, not over Ryan's sound
 export const mayListenTalk = (s: TalkState) => s.phase === "ready";
+// Ryan's current bubble while he is still on: no buttons on it yet and its bars move (spec free-talk-design 9). Only
+// in `ryan`, when his reply is the last bubble. In `waiting` and `replying` the last Ryan bubble is his previous,
+// finished line (what he writes now is the pending bubble), so its opened subtitle must not fold (Task 7 review).
+export function ryanSpeaking(s: TalkState, idx: number): boolean {
+  if (s.phase !== "ryan") return false;
+  const last = s.bubbles[s.bubbles.length - 1];
+  return last?.kind === "ryan" && last.idx === idx;
+}
 export const isCurrent = (s: TalkState, turn: number) => turn === s.turn;
 // the message is drawn in red after a failure; Ryan's no-speech words and the no-speech notice are not one
 export const talkMessageIsError = (s: TalkState) => s.phase === "error" || (s.message !== null && s.failure);
@@ -111,6 +119,14 @@ function withCut(s: TalkState, heard: number | null): TalkBubble[] {
 }
 
 const joined = (parts: Said[]) => parts.map((p) => p.text).join(" ");
+
+// A talk error says what happened in the app's Korean. Ryan's English `say` still plays (the screen queues its
+// sound), but its text is not shown: the English words would be Ryan's subtitles.
+export function talkErrorText(code: string): string {
+  if (code === "no_speech") return "잘 안 들렸어요. 한 번 더 말해 줄래요?";
+  if (code === "too_long") return "녹음이 너무 길어요. 한 문장씩 짧게 말해 볼까요?";
+  return messageFor(code as ErrorCode);
+}
 
 export function talkReduce(s: TalkState, a: TalkAction): TalkState {
   switch (a.type) {
@@ -172,7 +188,7 @@ export function talkReduce(s: TalkState, a: TalkAction): TalkState {
             ...s,
             phase: "ready",
             pending: "",
-            message: messageFor(e.code as ErrorCode, e.say ?? undefined),
+            message: talkErrorText(e.code),
             failure: !SOFT.has(e.code),
           };
         default:

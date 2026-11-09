@@ -92,3 +92,66 @@ def test_a_guess_whose_say_is_the_unfilled_template_is_dropped():
     assert check([item(5, "I turned light at the bank.", "I turned right at the bank.", why="", **guess)], TURNS) == []
     [f] = check([item(5, "I turned light at the bank.", "I turned right at the bank.", why="방향이에요.", **guess)], TURNS)
     assert f.why_ko == "방향이에요."
+
+
+# --- turns said from Sohee's full sentence: fixed last, by the Mac's points only (spec 7 「고르는 차례」) ------------
+
+def _helped(given: str, heard: str):
+    from je_server.compare import find_issues
+    from je_server.fixes import Helped
+
+    return Helped(given=given, heard=heard, issues=find_issues(given, heard, 2))
+
+
+HELPED = {9: _helped("I turned right at the bank.", "I turned light at the bank."),  # R heard as L
+          11: _helped("I like red rice.", "I like led lice."),  # R heard as L twice
+          13: _helped("I went to the park with my dog.", "I want to the park with my dog.")}  # no listed sound
+R_L = sounds.find("R", "L").explain
+
+
+def test_own_picks_come_before_helped_turns():
+    helped = [item(13, "x", "x", why="went가 want처럼 들렸어요."), item(9, "x", "x", why="right가 light처럼 들렸어요."),
+              item(11, "x", "x", why="red가 led처럼 들렸어요.")]
+    own = [item(7, "I had a cat on my finger.", "I had a cat on my finger now."),
+           item(3, "Yesterday I go to the market.", "Yesterday I went to the market.")]
+    assert [f.of for f in check(helped + own, TURNS, HELPED)] == [3, 7, 9]  # own in turn order, then helped
+    assert [f.of for f in check(helped + own[:1], TURNS, HELPED)] == [7, 9, 11]
+    assert [f.of for f in check(helped, TURNS, HELPED)] == [9, 11, 13]
+    assert check(helped, TURNS) == []  # without helped turns, as before
+
+
+def test_helped_fix_is_the_given_sentence_with_the_listed_sound():
+    # Claude's said and fixed are not used: the sentence is Sohee's and the words what was heard
+    [f] = check([item(9, "I turned.", "I turned left.", why="right가 light처럼 들렸어요.")], TURNS, HELPED)
+    assert f == Found(9, "I turned light at the bank.", "I turned right at the bank.", "right가 light처럼 들렸어요. " + R_L)
+    # two points with the same sound: its explanation once
+    [f] = check([item(11, "", "", why="red가 led처럼, rice가 lice처럼 들렸어요.")], TURNS, HELPED)
+    assert f.why_ko == "red가 led처럼, rice가 lice처럼 들렸어요. " + R_L
+    # Claude wrote the explanation out anyway (it is in the points it is given): not twice
+    [f] = check([item(9, "", "", why="right가 light처럼 들렸어요. " + R_L)], TURNS, HELPED)
+    assert f.why_ko == "right가 light처럼 들렸어요. " + R_L
+    # no listed sound: Claude's words only
+    [f] = check([item(13, "", "", why="went가 want처럼 들렸어요.")], TURNS, HELPED)
+    assert f.why_ko == "went가 want처럼 들렸어요." and f.fixed == "I went to the park with my dog."
+
+
+def test_helped_fix_without_the_words_is_dropped():
+    for why in ("발음이 조금 달랐어요.", "", "right light", "bright가 slight처럼 들렸어요."):
+        assert check([item(9, "", "", why=why)], TURNS, HELPED) == []
+    # one word of the points is enough, written in any case
+    [f] = check([item(9, "", "", why="Light처럼 들렸어요.")], TURNS, HELPED)
+    assert f.why_ko == "Light처럼 들렸어요. " + R_L
+
+
+def test_helped_fix_that_says_what_was_said_is_dropped():
+    # the transcript may be wrong: what was heard, never what I said (spec 7, as `_guess`)
+    for why in ("light라고 말했어요.", "right를 light라고 말했는데 R이에요."):
+        assert check([item(9, "", "", why=why)], TURNS, HELPED) == []
+
+
+def test_claudes_grammar_pick_on_a_helped_turn_is_dropped():
+    grammar = item(9, "I turned light at the bank.", "I turned right at the bank yesterday.",
+                   why="지난 일이라 yesterday를 더하면 자연스러워요.")
+    assert check([grammar], TURNS, HELPED) == []
+    # a helped turn with nothing heard wrong is not one to fix at all (`fix_input` leaves it out of both)
+    assert check([item(15, "I like it.", "I really like it.", why="더 자연스러워요.")], TURNS, HELPED) == []

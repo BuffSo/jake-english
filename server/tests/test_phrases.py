@@ -71,10 +71,12 @@ def test_openers_are_short_everyday_questions():
 def test_talk_phrases():
     import re
 
-    from je_server.phrases import TALK_ENGLISH
+    from je_server.phrases import TALK_PHRASES
 
-    # inside a free talk Ryan speaks only English (2026-11-08 user): one easy English line, not in the Korean table
-    assert "talk_english" not in PHRASES
-    assert TALK_ENGLISH == "Could you try that in English? Short is fine."
-    assert not re.search(r"[가-힣]", TALK_ENGLISH) and len(TALK_ENGLISH.split()) <= 12
+    # inside a free talk Ryan speaks only English (2026-11-08 user): easy English lines, apart from the Korean table
+    assert set(TALK_PHRASES) == {"no_speech", "too_long", "claude_down"}
+    assert TALK_PHRASES["no_speech"] == "Sorry, I didn't catch that. Could you say it again?"
+    assert TALK_PHRASES["too_long"] == "That was a little long. Could you say it in a shorter way?"
+    assert TALK_PHRASES["claude_down"] == "Sorry, I can't answer right now. Let's try again in a moment."
+    assert not [t for t in TALK_PHRASES.values() if re.search(r"[가-힣]", t)]
     assert PHRASES["talk_no_fixes"] == "이번 대화에서는 고칠 곳을 찾지 못했어요. 수고했어요."

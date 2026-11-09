@@ -91,5 +91,6 @@
  "ko_audio": null,
  "parts": null,
  "heard_upto": null,
- "fix": null
+ "fix": null,
+ "hint": null
 }

@@ -214,3 +214,21 @@ test("endTalk surfaces a 409 and a 503", async () => {
     .catch((e) => e);
   expect(down.code).toBe("claude_unavailable");
 });
+
+test("Sohee chance calls use the talk hint routes", async () => {
+  const f = jest.fn(async () => json(200, { audio: "k" }));
+  const api = makeApi(URL, TOKEN, f as never, noFile);
+  await api.getHint("x", 3);
+  await api.getHintAudio("x", 3);
+  await api.showFull("x", 3);
+  await api.getHintSound("x", 3, 2);
+  await api.getHintThree("x", 3);
+  const calls = f.mock.calls as unknown as [string, RequestInit][];
+  expect(calls.map(([u, i]) => `${i.method ?? "GET"} ${u.replace(URL, "")}`)).toEqual([
+    "POST /talks/x/lines/3/hint",
+    "GET /talks/x/lines/3/hint/audio",
+    "POST /talks/x/lines/3/hint/full",
+    "GET /talks/x/lines/3/hint/sounds/2",
+    "GET /talks/x/lines/3/hint/three",
+  ]);
+});

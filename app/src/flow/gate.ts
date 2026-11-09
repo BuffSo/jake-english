@@ -18,6 +18,22 @@ export function createGate() {
   };
 }
 
+// One gate per key (a line number): a call for a key while one for it runs is ignored, other keys run. For a request
+// a bubble asks on a tap, where the second tap of a double tap still reads the state from before the first one's
+// redraw (PR #67 review: 「읽는 법 보기」 under Sohee's full sentence asked the Mac twice).
+export function createGates<K extends string | number>() {
+  const gates = new Map<K, ReturnType<typeof createGate>>();
+  const of = (key: K) => {
+    let g = gates.get(key);
+    if (!g) gates.set(key, (g = createGate()));
+    return g;
+  };
+  return {
+    busy: (key: K) => gates.get(key)?.busy === true,
+    run: <T>(key: K, fn: () => Promise<T>): Promise<T | undefined> => of(key).run(fn),
+  };
+}
+
 // Stopping the recorder goes through the gate (a double tap, the auto-stop landing on a tap); sending it and
 // reading Ryan's answer come after, outside it. Back from a practice in the middle of the answer keeps the roleplay
 // screen and its gate (spec roleplay-practice 9), and the mic must not wait for that old answer (final review).

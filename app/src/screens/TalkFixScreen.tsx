@@ -6,7 +6,7 @@
 // The bubble styles are a copy of `RoleplayScreen`'s `styles`; they move into one
 // place with the recording wiring (docs/todo 20261108_44_todo_roleplay_use_usemic.md).
 import { useEffect, useReducer, useRef, useState, type ComponentRef } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { api } from "../api";
 import type { AttemptEvent, Roleplay, TalkEnd, ThreeLine, TryRef } from "../api/types";
@@ -18,7 +18,7 @@ import { usePlayingTag } from "../audio/usePlayingTag";
 import { tapHold, tapThenHold } from "../flow/gate";
 import { toggleRow } from "../flow/review";
 import { mayListen } from "../flow/state";
-import { canTry, fixCount, fixInitial, fixMessageIsError, fixReduce, isLastFix, nextLabel } from "../flow/talkFix";
+import { canTry, fixCount, fixInitial, fixMessageIsError, fixReduce, isLastFix, nextLabel, soheeLine } from "../flow/talkFix";
 import { BackButton, useBackKey } from "../ui/BackButton";
 import { Button } from "../ui/Button";
 import { HeardLine } from "../ui/HeardLine";
@@ -27,6 +27,7 @@ import { InRowButton } from "../ui/InRowButton";
 import { keepWords } from "../ui/keepWords";
 import { Named } from "../ui/Named";
 import { lineNotes, needsNotes, notesView } from "../ui/notesView";
+import { usePicture } from "../ui/picture";
 import { StarButton } from "../ui/Star";
 import { SoonEnds, StopButton } from "../ui/StopButton";
 import { ThreeLineView } from "../ui/ThreeLine";
@@ -34,13 +35,15 @@ import { useSaved } from "../ui/useSaved";
 import { colors, top } from "../ui/theme";
 import { ErrorText, messageOf, styles as common, Waiting } from "./common";
 
-type Props = { rp: Roleplay; end: TalkEnd; sounds: SoundQueue; onHome: () => void };
+// soheeFace: her face from /home (`images.sohee.face`); absent on an older server (or failing to load), then the chip's
+// words alone
+type Props = { rp: Roleplay; end: TalkEnd; sounds: SoundQueue; soheeFace?: string; onHome: () => void };
 
 // 「🔊 듣기」 under the corrected sentence plays its model under this tag (spec play-button-feedback 2)
 const LISTEN_TAG = "listen";
 const recTag = (r: TryRef) => `rec:${r.rp_id}:${r.idx}:${r.n}`;
 
-export function TalkFixScreen({ rp, end, sounds, onHome }: Props) {
+export function TalkFixScreen({ rp, end, sounds, soheeFace, onHome }: Props) {
   const [s, dispatch] = useReducer(fixReduce, end, (e: TalkEnd) => fixInitial(rp.id, e));
   // the state as of the last render, for what arrives after a tap (the line, the practice answer)
   const now = useRef(s);
@@ -207,6 +210,9 @@ export function TalkFixScreen({ rp, end, sounds, onHome }: Props) {
   const busy = s.phase === "evaluating";
   const three = line ? lineNotes(line, threes[line.idx], !!noNotes[line.idx]) : null;
   const view = notesView(three, s.reading);
+  const chance = soheeLine(end);
+  // her face, left out once it fails to load: the words alone (spec 9 「그림」)
+  const [chipFace, onChipFaceError] = usePicture(soheeFace);
 
   return (
     <View style={styles.wrap}>
@@ -216,6 +222,13 @@ export function TalkFixScreen({ rp, end, sounds, onHome }: Props) {
           <Text style={[common.title, styles.titleText]}>{keepWords("대화 돌아보기")}</Text>
           {count && <Text style={styles.count}>{count}</Text>}
         </View>
+        {/* under the title, also when there is nothing to fix; her green, as on her bubbles */}
+        {chance && (
+          <View style={[styles.chip, !chipFace && styles.chipNoFace]}>
+            {chipFace && <Image source={api.imageSource(chipFace)} onError={onChipFaceError} style={styles.chipFace} />}
+            <Text style={styles.chipText}>{chance}</Text>
+          </View>
+        )}
       </View>
       <ScrollView ref={scroll} contentContainerStyle={styles.scroll}>
         {s.items.length === 0 && end.say && (
@@ -361,6 +374,23 @@ const styles = StyleSheet.create({
   titleText: { flexShrink: 1 },
   // in my blue, like the roleplay's 「내 대사 1/3」
   count: { fontSize: 14, fontWeight: "700", color: colors.primary, backgroundColor: colors.user, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: 6,
+    paddingVertical: 3,
+    paddingLeft: 3,
+    paddingRight: 10,
+    borderRadius: 16,
+    backgroundColor: colors.soheeBg,
+    borderWidth: 1,
+    borderColor: colors.soheeLine,
+  },
+  chipNoFace: { paddingVertical: 5, paddingLeft: 10 },
+  chipFace: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.ryan },
+  chipText: { fontSize: 14, fontWeight: "700", color: colors.soheeText },
   scroll: { padding: 16, paddingBottom: 32 },
   // Ryan's explanation and his answer to a try: the roleplay's yellow feedback bubble
   bubble: { borderRadius: 14, padding: 12, marginVertical: 5, maxWidth: "92%" },

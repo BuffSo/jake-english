@@ -10,7 +10,7 @@ import httpx2
 
 from je_server.asr import WhisperError
 from je_server.claude import ClaudeUnavailable
-from je_server.models import Frame, Roleplay, Syllable, ThreeLine, Word
+from je_server.models import Frame, Hint, Roleplay, Syllable, ThreeLine, Word
 
 
 def talk_example() -> Roleplay:
@@ -171,8 +171,14 @@ class FakeClaude:
         self.talk_pieces = ["Sounds fun! ", "I walk there too. ", "Was it busy?"]
         self.talk_fail_after: int | None = None  # pieces given before talk() fails
         self.fix_calls: list[list[dict]] = []  # the conversation each fixes() was given
+        self.fix_helped: list[list[dict]] = []  # the helped turns each fixes() was given
         self.fix_items: list[dict] = []  # what fixes() picks
         self.fix_gate = None  # an asyncio.Event to hold fixes until set
+        self.hint_calls: list[list[dict]] = []  # the conversation each hint() was given
+        self.hint_ryans: list[str] = []  # Ryan's line each hint() was given
+        self.hint_gate = None  # an asyncio.Event to hold hint until set
+        self.hint_value = Hint(meaning_ko="오늘 무엇을 했는지 물어요.", starters=["I went to…", "Not much. I just…"],
+                               full="I went to the park with my dog.")
 
     def _maybe_fail(self):
         if self.fail_next:
@@ -242,8 +248,9 @@ FakeClaude.talk = _talk_method()
 
 
 def _fixes_method():
-    async def fixes(self, conversation):
+    async def fixes(self, conversation, helped=None):
         self.fix_calls.append(conversation)
+        self.fix_helped.append(helped)
         self._maybe_fail()
         if self.fix_gate is not None:
             await self.fix_gate.wait()
@@ -253,6 +260,21 @@ def _fixes_method():
 
 
 FakeClaude.fixes = _fixes_method()
+
+
+def _hint_method():
+    async def hint(self, conversation, ryan=""):
+        self.hint_calls.append(conversation)
+        self.hint_ryans.append(ryan)
+        self._maybe_fail()
+        if self.hint_gate is not None:
+            await self.hint_gate.wait()
+        return self.hint_value
+
+    return hint
+
+
+FakeClaude.hint = _hint_method()
 
 
 class FakeVoice:

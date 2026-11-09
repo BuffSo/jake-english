@@ -20,3 +20,8 @@ test("no frames before /home or from an older server", () => {
   expect(framesFor(undefined, "ryan")).toEqual([]);
   expect(framesFor({ ryan: ["/r1.png"] } as never, "jake")).toEqual([]);
 });
+
+test("Sohee's frames, none from an older server", () => {
+  expect(framesFor({ ...thinking, sohee: ["/s1.png"] }, "sohee")).toEqual(["/s1.png"]);
+  expect(framesFor(thinking, "sohee")).toEqual([]);
+});

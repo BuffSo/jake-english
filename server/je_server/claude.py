@@ -13,8 +13,8 @@ import anthropic
 import httpx2  # the HTTP client the anthropic SDK uses
 from pydantic import ValidationError
 
-from . import prompts
-from .models import Draft, Frame, Issue, Speaker, ThreeLine
+from . import hints, prompts
+from .models import Draft, Frame, Hint, Issue, Speaker, ThreeLine
 from .threeline import Problem, check, degrade, plain, tidy
 from .topics import Topic
 
@@ -44,12 +44,15 @@ TALKERS = WRITERS
 # after the three quick jobs were compared on made-up inputs. Haiku wrote odd recommendation sentences 12 times in
 # 63 (the message's 「끝말:」 copied, two endings, 「제가 …」), Sonnet twice; Sohee's interpretation and Ryan's
 # feedback came out about the same and Sonnet was slower there, so they stay on the quick model.
+# Sohee chance picks from QUICKS too (JE_CLAUDE_HINT), default Sonnet: in 16 made-up talks it broke no rule and Haiku
+# broke one 3 times, a long Korean line or Ryan's line misread (spec free-talk-design 「확인 방법」).
 
 log = logging.getLogger("je_server")
 USER_TURNS = (3, 3)  # 2026-11-05 the user tried 5 on the phone, found it too many, chose 3
 USER_MAX_WORDS = 14
 ANNOTATE_TRIES = 3
 INTERPRET_TRIES = 2
+HINT_TRIES = 2
 HANGUL = re.compile(r"[가-힣]")
 QUOTES = "\"'“”‘’「」『』"
 # Ryan's live answers never show double quotes (phone test 2026-11-08: Haiku quoted the transcript in them). 「」 stay:
@@ -172,12 +175,13 @@ def _spoken(text: str) -> str:
 class Claude:
     def __init__(self, client: Any, writer: dict[str, Any] = SONNET, quick: dict[str, Any] = HAIKU,
                  recommender: dict[str, Any] = QUICK_SONNET,
-                 talker: dict[str, Any] = SONNET):
+                 talker: dict[str, Any] = SONNET, hinter: dict[str, Any] = QUICK_SONNET):
         self.client = client
         self.writer = writer
         self.quick = quick
         self.recommender = recommender
         self.talker = talker
+        self.hinter = hinter
 
     def _request(self, model: dict[str, Any], output_config: dict[str, Any]) -> dict[str, Any]:
         kw = {k: v for k, v in model.items() if k != "effort"}
@@ -309,12 +313,34 @@ class Claude:
                 return ko
         raise ClaudeUnavailable("bad interpretation")
 
+    # --- Sohee chance ---------------------------------------------------------------------------
+
+    async def hint(self, conversation: list[dict], ryan: str = "") -> Hint:
+        """Sohee's hint for Ryan's last line in `conversation` (`hints.conversation`, spec free-talk-design 9); `ryan`
+        is that line, for the check on openers that repeat it. The learner waits for it, so it fails fast; asked once
+        more when the Mac's checks drop the answer (a full sentence that does not start with an opener, too many
+        words, fewer than two openers that do not repeat him)."""
+        body = json.dumps({"대화": conversation}, ensure_ascii=False)
+        t0 = time.perf_counter()
+        for tries in range(1, HINT_TRIES + 1):
+            hint = hints.check(await self._json(self.hinter, prompts.HINT_SYSTEM, body, prompts.HINT_SCHEMA, 400,
+                                                live=True), ryan)
+            if hint is not None:
+                log.info("hint: %d tries, %.1fs", tries, time.perf_counter() - t0)
+                return hint
+        raise ClaudeUnavailable("bad hint")
+
     # --- free talk's corrections ----------------------------------------------------------------
 
-    async def fixes(self, conversation: list[dict]) -> list[dict]:
+    async def fixes(self, conversation: list[dict], helped: list[dict] | None = None) -> list[dict]:
         """Up to a few fixes Claude picks from the whole free talk (spec free-talk-design 7). The Mac checks them
-        (`fixes.check`), so these are only candidates."""
-        body = json.dumps({"대화": conversation}, ensure_ascii=False)
+        (`fixes.check`), so these are only candidates. `helped`: my turns said from Sohee's full sentence, with the
+        Mac's points (`talk.helped_input`), which Claude only words; left out of the message when there are none, so a
+        talk without them is asked as before."""
+        found: dict = {"대화": conversation}
+        if helped:
+            found["도움 받은 차례"] = helped
+        body = json.dumps(found, ensure_ascii=False)
         data = await self._json(self.writer, prompts.FIX_SYSTEM, body, prompts.FIX_SCHEMA, 1500)
         items = data.get("items") if isinstance(data, dict) else None
         if not isinstance(items, list):

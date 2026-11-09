@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SerializerFunctionWrapHandler, model_serializer
 
 Mark = Literal["s", "w", "n"]  # s: strong (bold dark orange on screen), w: small gray (weak), n: as is
 
@@ -47,7 +47,7 @@ Draft = list[tuple[Speaker, str]]
 # script: a roleplay's line. reply: Ryan's English line (in a free talk also the first question); in records from before
 # 2026-11-07 it is also Ryan's in-role answer to something said differently from the line. The rest are free talk only
 # (spec free-talk-design 2): turn is my English turn, ask my Korean turn, help Ryan's fixed English line after it
-# (`TALK_ENGLISH`, asking for English), and fix the corrected sentence (said by `user`) that the closing 「대화 돌아보기」
+# (only in records from before PR 2; no longer made, skipped when read), and fix the corrected sentence (said by `user`) that the closing 「대화 돌아보기」
 # shows.
 LineKind = Literal["script", "reply", "turn", "ask", "help", "fix"]
 
@@ -60,6 +60,18 @@ class Fix(BaseModel):
     said: str  # the one sentence of that turn that had the problem, as it was heard
     why_ko: str  # Ryan's explanation in Korean, with the sound list's explanation when a mispronunciation is guessed
     why_audio: str | None = None  # sound key of Ryan saying why_ko in Korean
+
+
+class Hint(BaseModel):
+    """Sohee chance on one of Ryan's free-talk replies (spec free-talk-design 9), made once and kept on his line. The
+    hint routes give `full` only from 「전체 문장 보기」 on (`full_shown`), which the end of the talk also counts."""
+
+    meaning_ko: str  # what Ryan asks, in one Korean line
+    starters: list[str]  # two or three English openers ending in …
+    full: str  # one short answer that starts with a starter
+    audio: str | None = None  # sound key of Sohee saying meaning_ko and 「이렇게 시작해 보세요.」
+    full_shown: bool = False
+    full_three: ThreeLine | None = None  # the full sentence's notes, made when asked
 
 
 class ScriptLine(BaseModel):
@@ -78,6 +90,18 @@ class ScriptLine(BaseModel):
     # how many sentences of the answer were heard when I cut it off; None when heard to the end
     heard_upto: int | None = None
     fix: Fix | None = None
+    hint: Hint | None = None  # free talk only, on Ryan's reply: Sohee chance (spec free-talk-design 9)
+    # free talk only, on my English turn said from the full sentence of Sohee chance on Ryan's reply right before it
+    # (spec free-talk-design 9 「그 문장을 말하면」): that sentence. Left out of the line's JSON when None, so the
+    # contract's line keys (and the app's, which never reads it) stay as they were
+    given: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _leave_out_no_given(self, handler: SerializerFunctionWrapHandler) -> dict:
+        out = handler(self)
+        if self.given is None:
+            out.pop("given", None)
+        return out
 
 
 class Issue(BaseModel):

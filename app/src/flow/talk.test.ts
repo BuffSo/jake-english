@@ -11,6 +11,8 @@ import {
   isCurrent,
   lineSounds,
   mayListenTalk,
+  ryanSpeaking,
+  talkErrorText,
   talkMessageIsError,
   replaysSituation,
   savedBefore,
@@ -198,7 +200,7 @@ test("Claude down drops the half reply and keeps my bubble", () => {
   );
   expect(s.phase).toBe("ready");
   expect(s.pending).toBe("");
-  expect(s.message).toBe("지금은 대답할 수 없어요.");
+  expect(s.message).toBe("지금은 라이언이 대답할 수 없어요. 맥의 인터넷 연결을 확인해 주세요.");
   expect(s.bubbles.map((b) => b.kind)).toEqual(["ryan", "me"]);
   const bare = run(s0, ev(s0, { type: "error", code: "claude_unavailable", say: null }));
   expect(bare.message).toBe("지금은 라이언이 대답할 수 없어요. 맥의 인터넷 연결을 확인해 주세요.");
@@ -337,4 +339,31 @@ test("a free talk is not played again from saved practice", () => {
   const old = { ...(roleplayJson as unknown as Roleplay) } as Partial<Roleplay>;
   delete old.kind;
   expect(replaysSituation(old as Roleplay)).toBe(true);
+});
+
+test("talk errors show Korean app text, not Ryan's English words", () => {
+  const s0 = run(ready(), { type: "recordStart", heard: null }, { type: "recordStop" });
+  const say = { text: "Sorry, I could not hear you.", audio: key("h") };
+  const msg = (code: string) => talkReduce(s0, ev(s0, { type: "error", code, say })).message;
+  expect(msg("no_speech")).toBe("잘 안 들렸어요. 한 번 더 말해 줄래요?");
+  expect(msg("too_long")).toBe("녹음이 너무 길어요. 한 문장씩 짧게 말해 볼까요?");
+  expect(msg("claude_unavailable")).toBe("지금은 라이언이 대답할 수 없어요. 맥의 인터넷 연결을 확인해 주세요.");
+  expect(talkErrorText("something_new")).toBe("문제가 생겼어요. 다시 해 볼까요?");
+});
+
+test("Ryan's current bubble is speaking until his turn ends", () => {
+  const opening = opened();
+  expect(ryanSpeaking(opening, 0)).toBe(true); // phase ryan
+  expect(ryanSpeaking(ready(), 0)).toBe(false);
+  const a = answered();
+  expect(ryanSpeaking(a, 2)).toBe(true);
+  expect(ryanSpeaking(a, 0)).toBe(false); // a past bubble
+  // while my turn waits his old line is still the last bubble, but finished: what he says next is the pending bubble,
+  // so an opened subtitle on it must not fold (Task 7 review)
+  const waiting = run(ready(), { type: "recordStart", heard: null }, { type: "recordStop" });
+  expect(ryanSpeaking(waiting, 0)).toBe(false);
+  expect(ryanSpeaking(run(waiting, ev(waiting, { type: "text", delta: "Nice! " })), 0)).toBe(false); // replying
+  expect(ryanSpeaking(run(waiting, ev(waiting, heardE)), 0)).toBe(false);
+  expect(ryanSpeaking(run(ready(), { type: "recordStart", heard: null }), 0)).toBe(false);
+  expect(ryanSpeaking(run(a, { type: "ryanDone" }), 2)).toBe(false);
 });
