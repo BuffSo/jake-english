@@ -19,6 +19,10 @@ lines after the talk, and makes the first one's sounds before answering. Those l
 Sohee chance (`Talks.hint` and after, spec 9) is a hint on one of Ryan's replies, made once and kept on his line: a
 Korean line Sohee says and English openers in Ryan's voice; then, once asked (「전체 문장 보기」), one full sentence with
 its sound and notes. The routes answer each step on its own, like Sohee's interpretation (`/ko`, `/ko/audio`).
+
+「↻ 다시 말하기」 (`Talks.drop`, docs/superpowers/specs/2026-11-09-talk-resay-design.md 3, 4) marks my last turn and
+Ryan's reply to it dropped: kept with their numbers and left out of everything that reads the talk (`live`). A reply
+still being made is stopped and the talk takes the next turn at once.
 """
 from __future__ import annotations
 
@@ -26,7 +30,8 @@ import asyncio
 import contextlib
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -168,6 +173,56 @@ class NoHint(Exception):
     shown yet (the app shows the steps in turn, spec 9)."""
 
 
+class CannotDrop(Exception):
+    """My turn cannot be dropped (spec talk-resay 3, 4); `code` names why. `not_last`: more than Ryan's reply to it
+    follows it (a turn of mine). `hinted`: Sohee chance was used, or is being made, on his reply to it: using it took
+    the turn as said."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass
+class _Running:
+    """A turn whose Ryan reply is being made (`Talks.running`): my line's number, the signal a drop sets to stop it
+    (`_until`), and that turn's own `release` of the talk's busy guard."""
+
+    idx: int
+    stop: asyncio.Event
+    release: Callable[[], None]
+
+
+_END = object()  # `_until`: the events ran out
+
+
+async def _until(stop: asyncio.Event, events: AsyncIterator[dict]) -> AsyncIterator[dict]:
+    """`events` until `stop` is set (a drop, spec talk-resay 3 「만들던 답 버리기」). Each next event is waited for
+    beside the signal; when the signal comes first that wait is cancelled, which ends `events` where it was:
+    `Engine.speak`'s `finally` then stops reading Claude's text and making the sounds. Once the signal is set no
+    event goes out and nothing more is asked of `events`."""
+    halt = asyncio.create_task(stop.wait())
+    nxt: asyncio.Future | None = None
+    try:
+        while not stop.is_set():
+            nxt = asyncio.ensure_future(anext(events, _END))
+            await asyncio.wait((nxt, halt), return_when=asyncio.FIRST_COMPLETED)
+            if not nxt.done():
+                return
+            ev, nxt = nxt.result(), None
+            if ev is _END or stop.is_set():
+                return
+            yield ev
+    finally:
+        halt.cancel()
+        if nxt is not None:  # stopped, or cancelled itself, while it waited for the next event
+            nxt.cancel()
+            await asyncio.wait((nxt,))  # `events` can be closed only once it is not running
+            if not nxt.cancelled():
+                nxt.exception()  # retrieved: this ends on the stop or the cancel, not on what the event was
+        await events.aclose()
+
+
 class _Unheard(Exception):
     """The recording holds no turn; `code` names the error to send (`no_speech`, `too_long`)."""
 
@@ -180,6 +235,9 @@ class Talks:
     def __init__(self, engine: Engine):
         self.engine = engine
         self.turning: set[str] = set()  # talks with a turn running whose Ryan line is not saved yet
+        # the turn of each talk whose Ryan reply is being made, from my line saved to its last event: a drop of that
+        # line stops it (spec talk-resay 3)
+        self.running: dict[str, _Running] = {}
         # the rest of a cut-off reply still being made for 「🔊 듣기」, one task per line (`_mark_heard`)
         self.finishing: dict[tuple[str, int], asyncio.Task] = {}
         # talks being ended, one task per talk: a second 「대화 끝내기」 waits for the same Claude call
@@ -327,10 +385,12 @@ class Talks:
             return
         self.turning.add(rp_id)  # no await since the check: two turns sent together cannot both pass it
         held = True
+        me: _Running | None = None
 
         def release() -> None:
             # as soon as Ryan's line is saved: while its sounds are still being made, the learner may cut them off and
-            # send the next turn (spec 2). Only once, so a turn whose sounds end late does not free the next one
+            # send the next turn (spec 2), or when my line is dropped (`drop`). Only once, so a turn whose sounds end
+            # late, or a dropped one, does not free the next one
             nonlocal held
             if held:
                 held = False
@@ -354,39 +414,60 @@ class Talks:
                                               given=given),
                             Attempt(n=n, mode="turn", heard=shown, followed=followed, issues=issues, say_ko="",
                                     audio=[], timings=timings, at=datetime.now().isoformat(timespec="seconds")))
+            # from here a drop of my line stops this turn: the app may send it as soon as it has my line (spec
+            # talk-resay 3). A dropped turn still closing leaves the next turn's record alone (`finally`)
+            me = self.running[rp_id] = _Running(idx, asyncio.Event(), release)
             yield {"type": "heard", "text": shown, "n": n, "idx": idx, "korean": korean}
 
             ryan = idx + 1
             failed = False
-            async def saved(text: str) -> dict:
+            said: list[str] = []  # Ryan's text as it came, for the sounds to put behind when the turn is dropped
+
+            async def saved(text: str) -> dict | None:
                 # the parts are the sentences `speak` voiced, so 「🔊 듣기」 and a cut-off count use the same ones
                 parts = [Said(text=s, audio=engine.voice.key("ryan", "english", s)) for s in sentences.split(text)]
-                await self._add(rp_id, ScriptLine(idx=ryan, speaker="ryan", text=text.strip(), kind="reply",
-                                                  parts=parts))
+                async with engine.lock(rp_id):
+                    rp = engine.store.load(rp_id)
+                    if rp.lines[idx].dropped:
+                        # dropped first: no Ryan line and no event (spec talk-resay 3). Not dropped, the turn still
+                        # holds the talk, so no line came after mine and his takes the next number
+                        return None
+                    rp.lines.append(ScriptLine(idx=ryan, speaker="ryan", text=text.strip(), kind="reply",
+                                               parts=parts))
+                    engine.store.save(rp)
                 release()
                 return {"type": "reply", "idx": ryan, "kind": "reply", "parts": [p.model_dump() for p in parts]}
 
             # Ryan speaks from his first sentence while the rest is written (spec 4, 5: 2.8 s sooner than voicing
             # the whole reply). When Claude cannot answer, my line stays and Ryan's is not kept (spec 4)
-            async for ev in engine.speak(self._reply_text(rp_id), [], [], timings, t0, lang="english",
-                                         on_text_end=saved,
-                                         down=engine.talk_error("claude_unavailable", "claude_down")):
-                if ev["type"] == "error":
-                    # no Ryan line can be kept after it (`saved` runs only for a whole reply), so the talk is free
-                    # as the app reads the error, not once the sentence already written is voiced (1-3 s): a quick
-                    # 「대화 끝내기」 or next turn is not refused as busy. `_keep_timings` finds its own try
-                    failed = True
-                    release()
-                yield ev
+            async with contextlib.aclosing(_until(me.stop, engine.speak(
+                    self._reply_text(rp_id), said, [], timings, t0, lang="english", on_text_end=saved,
+                    down=engine.talk_error("claude_unavailable", "claude_down")))) as events:
+                async for ev in events:
+                    if ev["type"] == "error":
+                        # no Ryan line can be kept after it (`saved` runs only for a whole reply), so the talk is
+                        # free as the app reads the error, not once the sentence already written is voiced (1-3 s):
+                        # a quick 「대화 끝내기」 or next turn is not refused as busy. `_keep_timings` finds its own try
+                        failed = True
+                        release()
+                    yield ev
+            dropped = me.stop.is_set()
+            if dropped:
+                # its sentences not voiced yet wait behind the next reply's, like a cut-off reply's rest: there is one
+                # voice worker (spec talk-resay 3 「만들던 답 버리기」). The voice leaves out those made
+                engine.voice.demote([engine.voice.key("ryan", "english", s) for s in sentences.split("".join(said))])
             timings["total"] = time.perf_counter() - t0
             await self._keep_timings(rp_id, idx, n, timings)
             # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
-            log.info("talk %s/%d n=%d korean=%s helped=%s transcribed=%.2f first_text=%.2f first_audio=%.2f "
-                     "total=%.2f", rp_id, idx, n, korean, given is not None, timings["transcribed"],
-                     timings.get("first_text", 0), timings.get("first_audio", 0), timings["total"])
-            if not failed:
+            log.info("talk %s/%d n=%d korean=%s helped=%s dropped=%s transcribed=%.2f first_text=%.2f "
+                     "first_audio=%.2f total=%.2f", rp_id, idx, n, korean, given is not None, dropped,
+                     timings["transcribed"], timings.get("first_text", 0), timings.get("first_audio", 0),
+                     timings["total"])
+            if not failed and not dropped:  # the app has left a dropped turn: it reads none of its events
                 yield {"type": "done", "idx": ryan}
         finally:
+            if me is not None and self.running.get(rp_id) is me:
+                del self.running[rp_id]
             release()
 
     async def _mark_heard(self, rp: Roleplay, heard: int | None) -> None:
@@ -471,6 +552,56 @@ class Talks:
                 if a.n == n:
                     a.timings = dict(timings)
             self.engine.store.save(rp)
+
+    async def drop(self, rp_id: str, idx: int) -> None:
+        """「↻ 다시 말하기」 (spec talk-resay 3): my turn at `idx` and Ryan's reply to it marked dropped, kept in the
+        record with their numbers so a late answer, interpretation or hint of theirs never lands on a new turn. When
+        that turn's reply is still being made it stops, and the talk takes the next turn at once, not when the reply
+        has closed; its sounds not made yet go behind the next reply's. Dropped already (the app sent it again): the
+        same, with nothing changed. NotFound: no such free talk, or that line is not my turn. TalkEnded: the talk was
+        ended. TalkBusy: it is being ended. CannotDrop: not my last turn, or Sohee chance on Ryan's reply to it (spec
+        4). The app shows no 「다시 말하기」 then, so these come only when the two disagree."""
+        engine = self.engine
+        if engine.load(rp_id).kind != "talk":  # before the lock, so an unknown id makes none
+            raise NotFound(rp_id)
+        async with engine.lock(rp_id):  # with the reply's save (`_turn`), so one of the two sees the other
+            rp = engine.store.load(rp_id)
+            if not 0 <= idx < len(rp.lines):
+                raise NotFound(f"{rp_id}/{idx}")
+            line = rp.lines[idx]
+            if line.speaker != "user" or line.kind not in ("turn", "ask"):
+                raise NotFound(f"{rp_id}/{idx}")
+            if line.dropped:
+                return
+            if any(l.kind == "fix" for l in rp.lines):
+                raise TalkEnded(rp_id)
+            if self._ending(rp_id) is not None:
+                raise TalkBusy(rp_id)  # Claude is picking the fixes from the talk with this turn in it
+            after = [l for l in rp.lines[idx + 1:] if not l.dropped]
+            reply = after[0] if after and after[0].speaker == "ryan" and after[0].kind == "reply" else None
+            if after and (reply is None or len(after) > 1):  # after it: nothing, or Ryan's reply to it only
+                raise CannotDrop("not_last")
+            if reply is not None and (reply.hint is not None or self._hinting(rp_id, reply.idx)):
+                raise CannotDrop("hinted")
+            gone = [i for i in range(idx, len(rp.lines)) if not rp.lines[i].dropped]
+            for i in gone:
+                rp.lines[i] = rp.lines[i].model_copy(update={"dropped": True})
+            engine.store.save(rp)
+            running = self.running.get(rp_id)
+            stopped = running is not None and running.idx == idx
+            if stopped:
+                running.stop.set()
+                running.release()  # the turn said again is taken now, while this one closes (spec 3 「다음 차례」)
+        if reply is not None and reply.parts:
+            # saved already, its sounds may still be being made (spec 3 「만들던 답 버리기」)
+            engine.voice.demote([p.audio for p in reply.parts])
+        # times and counts only, never what was said (REVIEW.md 「녹음 처리」)
+        log.info("talk drop %s/%d lines=%d running=%s", rp_id, idx, len(gone), stopped)
+
+    def _hinting(self, rp_id: str, idx: int) -> bool:
+        """A hint on Ryan's reply at `idx` is being made (「소희 찬스」 pressed, spec talk-resay 4)."""
+        task = self.hinting.get((rp_id, idx))
+        return task is not None and not task.done()
 
     # --- Sohee chance (spec 9) ------------------------------------------------------------------------------------
 

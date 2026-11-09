@@ -23,7 +23,7 @@ from .config import Settings
 from .engine import Engine, NotFound, TooLong
 from .asr import WhisperError
 from .models import Mode
-from .talk import NoHint, Talks, TalkBusy, TalkEnded
+from .talk import CannotDrop, NoHint, Talks, TalkBusy, TalkEnded
 from .tts import VoiceError
 
 log = logging.getLogger("je_server")
@@ -355,6 +355,8 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
 
     # --- free talk (spec free-talk-design 2, 6, 7). Like every route, behind the token; the recording comes through
     # `read_body` (5 MB); ids are checked by `ID`, `heard` is a count 0..50 ---------------------------------------
+    # 「↻ 다시 말하기」 drops my last turn by its line number, found only among the talk's lines
+    # (docs/superpowers/specs/2026-11-09-talk-resay-design.md 3, 4)
 
     @router.post("/talks")
     async def create_talk() -> dict:
@@ -382,6 +384,21 @@ def create_app(settings: Settings, services: Services | None = None) -> FastAPI:
                 yield json.dumps(engine().talk_error("no_speech"), ensure_ascii=False) + "\n"
 
         return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+    @router.post("/talks/{rp_id}/lines/{idx}/drop")
+    async def drop_turn(rp_id: str = PathParam(pattern=ID), idx: int = PathParam(ge=0)) -> dict:
+        # sent as 「↻ 다시 말하기」 is pressed, before the turn said again (spec talk-resay 3 「맥에 알리는 길」)
+        try:
+            await talks().drop(rp_id, idx)
+        except NotFound:
+            raise ApiError(404, "not_found") from None
+        except TalkEnded:
+            raise ApiError(409, "ended") from None
+        except TalkBusy:
+            raise ApiError(409, "busy") from None
+        except CannotDrop as e:
+            raise ApiError(409, e.code) from None
+        return {"dropped": idx}
 
     @router.post("/talks/{rp_id}/end")
     async def end_talk(rp_id: str = PathParam(pattern=ID), heard: int | None = Query(None, ge=0, le=50)) -> dict:

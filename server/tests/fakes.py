@@ -1,6 +1,7 @@
 """Test doubles. No network, no audio models."""
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -170,6 +171,7 @@ class FakeClaude:
         self.talk_gate = None  # an asyncio.Event to hold talk before its first piece until set
         self.talk_pieces = ["Sounds fun! ", "I walk there too. ", "Was it busy?"]
         self.talk_fail_after: int | None = None  # pieces given before talk() fails
+        self.talk_closed = 0  # talk() streams closed or cancelled before their end (a dropped turn, spec talk-resay 3)
         self.fix_calls: list[list[dict]] = []  # the conversation each fixes() was given
         self.fix_helped: list[list[dict]] = []  # the helped turns each fixes() was given
         self.fix_items: list[dict] = []  # what fixes() picks
@@ -234,12 +236,16 @@ def _talk_method():
     async def talk(self, messages):
         self.talk_calls.append(messages)
         self._maybe_fail()
-        if self.talk_gate is not None:
-            await self.talk_gate.wait()
-        for n, piece in enumerate(self.talk_pieces):
-            if self.talk_fail_after is not None and n >= self.talk_fail_after:
-                raise ClaudeUnavailable("fake")
-            yield piece
+        try:
+            if self.talk_gate is not None:
+                await self.talk_gate.wait()
+            for n, piece in enumerate(self.talk_pieces):
+                if self.talk_fail_after is not None and n >= self.talk_fail_after:
+                    raise ClaudeUnavailable("fake")
+                yield piece
+        except (GeneratorExit, asyncio.CancelledError):
+            self.talk_closed += 1
+            raise
 
     return talk
 
