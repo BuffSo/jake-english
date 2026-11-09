@@ -3,7 +3,8 @@
 One worker, one queue: urgent jobs (Ryan's live feedback) go before prepared ones (model audio for
 later lines). Sounds are cached by sha256(voice|lang|rate|text), with Korean keys also carrying how they were
 made (`MADE`) and every key the fingerprint of the voice's reference recordings the worker reports when it starts
-(`Voice.refs`), so the same line is made once and a new recording makes new sounds.
+(`Voice.refs`), so the same line is made once and a new recording makes new sounds. A Korean key is made from the text
+the worker is asked to say (`spoken`): a short English word opening a sentence goes in Hangul (`hangul.for_korean_voice`).
 Sounds played as they are made once (Jake, Ryan's fixed phrases, Sohee) can be heard back with whisper and made
 again when their last word is missing.
 """
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Literal
 
 from .audio import with_rate
+from .hangul import for_korean_voice
 
 WORKER = Path(__file__).with_name("tts_worker.py")
 RATES = (0.6, 0.8, 1.0)
@@ -59,13 +61,22 @@ class VoiceError(Exception):
     pass
 
 
+def spoken(lang: str, text: str) -> str:
+    """The text the worker is asked to say. Korean: the short English words that open a sentence in Hangul (2026-11-09,
+    「go는」 came out like 「조우는」). English model lines go as they are."""
+    return for_korean_voice(text) if lang == "korean" else text
+
+
 def audio_key(voice: str, lang: str, text: str, ref: str = "") -> str:
     """The rate is in the key, so a sound made before a rate change is never served for the new rate; so is `ref`,
     the reference recordings' fingerprint, so a sound in an old recording's voice is not served after a new one
-    (todo voice-reference-in-sound-key). Without a fingerprint the key is as it was before it came in."""
+    (todo voice-reference-in-sound-key). Without a fingerprint the key is as it was before it came in.
+    The text in the key is what the worker says (`spoken`): a sentence the change rewrites gets a new key and is made
+    again, and one it leaves alone keeps its key and its sound."""
     made = f"{MADE[lang]}|" if MADE[lang] else ""
     ref = f"{ref}|" if ref else ""
-    return hashlib.sha256(f"{voice}|{lang}|{SPEAK_RATE[voice, lang]}|{made}{ref}{text}".encode()).hexdigest()
+    return hashlib.sha256(
+        f"{voice}|{lang}|{SPEAK_RATE[voice, lang]}|{made}{ref}{spoken(lang, text)}".encode()).hexdigest()
 
 
 def ends_right(text: str, heard: str) -> bool:
@@ -197,8 +208,8 @@ class Voice:
     async def _render(self, tmp: Path, text: str, voice: str, lang: str) -> None:
         if self.proc is None or self.proc.returncode is not None:
             await self._spawn()
-        req = {"id": next(self.ids), "text": text, "voice": WORKER_VOICE.get(voice, voice), "lang": lang, "rate": SPEAK_RATE[voice, lang],
-               "out": str(tmp)}
+        req = {"id": next(self.ids), "text": spoken(lang, text), "voice": WORKER_VOICE.get(voice, voice), "lang": lang,
+               "rate": SPEAK_RATE[voice, lang], "out": str(tmp)}
         self.proc.stdin.write((json.dumps(req, ensure_ascii=False) + "\n").encode())
         await self.proc.stdin.drain()
         line = await self.proc.stdout.readline()

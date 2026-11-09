@@ -308,3 +308,40 @@ async def test_an_urgent_say_of_a_demoted_key_is_not_pushed_back(voice, tmp_path
     assert key not in voice.demoted
     await asyncio.gather(busy, other, same, again)
     assert calls(tmp_path).index("same text") < calls(tmp_path).index("other old")
+
+
+# --- 2026-11-09: an English word opening a Korean sentence was read as another word (「go는」 like 「조우는」);
+# the voice gets it in Hangul (`hangul.for_korean_voice`), and the key follows what the voice is asked to say
+
+
+async def test_the_english_word_opening_a_korean_sentence_goes_to_the_worker_in_hangul(voice, tmp_path):
+    text = "어제 일이라 went를 써요. go는 지금 일에 써요."
+    key = await voice.say(text, "ryan", "korean", urgent=True)
+    assert calls(tmp_path) == ["어제 일이라 went를 써요. 고는 지금 일에 써요."]
+    assert key == voice.key("ryan", "korean", text)
+
+
+async def test_a_korean_sound_made_from_the_raw_english_is_not_served():
+    # the sound made before, from 「go는」 as it was, is not served for the same text; the key is the Hangul one's
+    text = "go는 지금 일에 써요."
+    from je_server import tts
+
+    made = f"{tts.MADE['korean']}|"
+    before = tts.hashlib.sha256(f"ryan|korean|1.2|{made}{text}".encode()).hexdigest()
+    assert audio_key("ryan", "korean", text) != before
+    assert audio_key("ryan", "korean", text) == audio_key("ryan", "korean", "고는 지금 일에 써요.")
+
+
+async def test_korean_without_an_opening_english_word_keeps_its_key():
+    # nothing to change, nothing made again (Ryan's fixed phrases, most feedback)
+    from je_server import tts
+
+    made = f"{tts.MADE['korean']}|"
+    for text in ("반가워요.", "그리고 go는 맞지 않아요."):
+        assert audio_key("ryan", "korean", text) == tts.hashlib.sha256(
+            f"ryan|korean|1.2|{made}{text}".encode()).hexdigest()
+
+
+async def test_english_model_lines_are_not_changed(voice, tmp_path):
+    await voice.say("Go there. Go는 아니에요.", "ryan", "english", urgent=True)
+    assert calls(tmp_path) == ["Go there. Go는 아니에요."]
