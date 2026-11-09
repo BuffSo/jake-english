@@ -1,17 +1,19 @@
-// Three lines: English, Korean pronunciation, how to read it. Bold dark orange = strong, small gray = weak.
-// Strong used to be a yellow fill; on the light blue card it looked blocky, so the user chose colored bold text
-// (2026-11-06). The Korean line is smaller, blue-gray and tagged 「발음」, and the Korean sounds in the reading line
-// share its color: the two big lines read as one block before (spec three-line-listen 1, 2026-11-08 user).
+// Three lines: English, Korean pronunciation, how to read it. Strong is bold: black in the English line, dark orange
+// in the Korean line (`syllableLook`, 2026-11-09 user). Strong used to be a yellow fill; on the light blue card it
+// looked blocky, so the user chose colored bold text (2026-11-06). The Korean line is smaller, blue-gray and tagged
+// 「발음」, and the Korean sounds in the reading line share its color: the two big lines read as one block before (spec
+// three-line-listen 1, 2026-11-08 user).
 import { StyleSheet, Text, View } from "react-native";
 
 import type { ThreeLine } from "../api/types";
 import { keepPieces } from "./keepWords";
 import { Tag } from "./Tag";
 import { colors } from "./theme";
+import { syllableLook, type Line } from "./threeLineLook";
 import { englishSegments, koreanSegments, readingSegments, type Seg } from "./threeLineSegments";
 
 // A group is one word in pieces (the stressed letter is its own `Text`), kept whole across them (`keepPieces`)
-function Pieces({ groups, size }: { groups: Seg[][]; size: number }) {
+function Pieces({ groups, line, size }: { groups: Seg[][]; line: Line; size: number }) {
   return (
     <>
       {groups.map((g, i) => {
@@ -20,16 +22,7 @@ function Pieces({ groups, size }: { groups: Seg[][]; size: number }) {
           <Text key={i}>
             {i > 0 ? " " : ""}
             {g.map((s, j) => (
-              <Text
-                key={j}
-                style={
-                  s.style === "strong"
-                    ? { color: colors.stress, fontWeight: "800" }
-                    : s.style === "weak"
-                      ? { fontSize: size * 0.78, color: colors.weak }
-                      : undefined
-                }
-              >
+              <Text key={j} style={syllableLook(s.style, line, size)}>
                 {texts[j]}
               </Text>
             ))}
@@ -47,13 +40,13 @@ export function ThreeLineView({ three, bare = false }: { three: ThreeLine; bare?
   return (
     <View style={bare ? styles.bare : styles.card}>
       <Text style={styles.en}>
-        <Pieces groups={englishSegments(three)} size={24} />
+        <Pieces groups={englishSegments(three)} line="en" size={24} />
       </Text>
       {korean.length > 0 && (
         <View style={styles.koRow}>
           <Tag label="발음" color={colors.pron} style={styles.koTag} />
           <Text style={styles.ko}>
-            <Pieces groups={korean} size={17} />
+            <Pieces groups={korean} line="ko" size={17} />
           </Text>
         </View>
       )}
