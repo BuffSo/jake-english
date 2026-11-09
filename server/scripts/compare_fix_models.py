@@ -5,12 +5,12 @@ Each case is a made-up talk (every line below is invented, so the output may be 
 the same input through the server's own `Claude.fixes`, the order swapping by case so a slow minute hits both alike
 (docs/guide/PROMPT_일마다_모델_견주기_20261108.md). Every raw item and what `fixes.check` kept is printed, plus the rules a
 run broke: more than three items, an item on a turn that must not be fixed (`keep_off`), items the Mac dropped, a
-fragment answer not made a complete sentence (`complete`), a misheard word filled with a far-sounding one (`far`).
-Whether a kept correction is wrong (a right sentence "fixed", a recognition slip called a grammar mistake) is judged by
-reading the output.
+fragment answer not made a complete sentence (`complete`), a misheard word filled with a far-sounding one (`far`), a
+plain mistake left unpicked (`must`). Whether a kept correction is wrong (a right sentence "fixed", a recognition slip
+called a grammar mistake) is judged by reading the output.
 
-Money: Sonnet about 0.5 cent a call, Haiku a tenth of that; the default 11 cases x 3 runs x 2 models is 66 calls,
-about $0.18 (real API credit, outside the subscription). Say so before running (AGENTS.md).
+Money: Sonnet about 1 cent a call, Haiku a tenth of that; the default 15 cases x 3 runs x 2 models is 90 calls,
+about $0.45 (real API credit, outside the subscription). Say so before running (AGENTS.md).
 
     uv run python scripts/compare_fix_models.py [--runs 3] [--only N]
 """
@@ -49,6 +49,9 @@ class Case:
     # my turns with a word the recognizer wrote wrong: far-sounding words a fix must not put in its place (spec 7
     # 「잘못 받아써진 낱말을 엉뚱하게 메우지 않는다」)
     far: dict[int, set[str]] = field(default_factory=dict)
+    # my turns with a plain grammar mistake that a run must keep a fix for (a broken sentence passed over for a lighter
+    # one, or for a right sentence "fixed", 2026-11-09)
+    must: set[int] = field(default_factory=set)
 
 
 # foods a fix might put in place of a misheard "and you?" in a talk about lunch: none sounds like it
@@ -110,6 +113,40 @@ CASES: list[Case] = [
         ("ryan", "Nice combo! I had a sandwich at my desk. Do you cook dinner at home?"),
         ("user", "Yes, I cook most nights. Endu?"),
     ], {3}, complete={1: r"\b(I|we) (had|ate|grabbed)\b.*\bkimbap\b"}, far={1: FAR_FOODS, 3: FAR_FOODS}),
+    # a badly broken sentence about something I made must be among the picks, a lighter slip may be too, and a natural
+    # "I should go" line when leaving is not a mistake (2026-11-09: the badly broken turn was passed over while a
+    # natural leaving line was "fixed" to another modal)
+    Case("broken sentence and a leaving line", [
+        ("ryan", "Hi! What did you do this weekend?"), ("user", "I baked a cake for my son birthday."),
+        ("ryan", "Oh, how sweet! Did you use a recipe?"), ("user", "No, this recipe was made it by me myself."),
+        ("ryan", "Wow, your own recipe! Was it hard to make?"), ("user", "Yes, it was a hard work."),
+        ("ryan", "I bet! Do you bake often?"), ("user", "Not often. Oh, I should pick up my son now. Sorry. Bye!"),
+    ], {7}, must={3}),
+    # the same with a made-up shop name the model cannot know, so the broken turn may look misheard
+    Case("broken sentence with a name", [
+        ("ryan", "What's new with you?"), ("user", "I started a small online shop. Its name is Mintleaf."),
+        ("ryan", "Cool! What do you sell there?"), ("user", "Mintleaf sell it by me handmade candles."),
+        ("ryan", "Handmade candles, lovely! Is it busy these days?"),
+        ("user", "Yes, it is busy. I should go to the post office now. See you!"),
+    ], {1, 5}, must={3}),
+    # the name was first misheard as other words and Ryan took it so; the broken turn that names it is still a mistake
+    Case("broken sentence after a misheard name", [
+        ("ryan", "What did you do last weekend?"), ("user", "I worked at the bit bakery."),
+        ("ryan", "Oh, nice, a bakery! Do you work there every weekend?"),
+        ("user", "No, Dalbit Bakery opened it by me my own bakery."),
+        ("ryan", "Ah, I see, your own bakery! Is it hard to run it?"), ("user", "Yes, but it's a happy."),
+        ("ryan", "That's great to hear! What do you like to bake most?"),
+        ("user", "I should open the shop now. Sorry, talk to you later."),
+    ], {7}, must={3}),
+    # the same, where the natural fix names the thing and says what it is: a long sentence
+    Case("broken sentence with a long fix", [
+        ("ryan", "What did you do this morning?"), ("user", "I checked the mint leaf."),
+        ("ryan", "Oh, nice, you checked the mint leaves! Do you grow herbs at home?"),
+        ("user", "No, Mintleaf made it by me online candle shop."),
+        ("ryan", "Ah, I see, an online candle shop! Is it fun to run it?"), ("user", "Yes, it's a busy."),
+        ("ryan", "Great, it sounds busy! What do you sell most?"),
+        ("user", "I should pack some orders now. Sorry, see you soon."),
+    ], {7}, must={3}),
 ]
 
 
@@ -151,6 +188,7 @@ def flags(raw: list[dict], checked: list[Found], case: Case) -> list[str]:
         out.append(f"dropped {dropped}")
     out += [f"fragment turn {i} left" for i in sorted(set(case.complete) - set(completed(checked, case)))]
     out += [f"far fill turn {i}" for i in far_fills(checked, case)]
+    out += [f"missed turn {i}" for i in sorted(case.must - {f.of for f in checked})]
     return out
 
 
@@ -166,7 +204,7 @@ async def main() -> None:
     claude = {m: Claude(counting[m], writer=models[m]) for m in models}
     cases = [CASES[args.only - 1]] if args.only else CASES
     stat = {m: {"n": 0, "flagged": 0, "keep_off": 0, "changed": 0, "fragments": 0, "completed": 0, "far": 0,
-                "items": 0, "kept": 0, "failed": 0} for m in models}
+                "musts": 0, "fixed": 0, "items": 0, "kept": 0, "failed": 0} for m in models}
     for c, case in enumerate(cases):
         print(f"\n## {case.name}")
         for i, (who, text) in enumerate(case.conversation):
@@ -194,6 +232,8 @@ async def main() -> None:
                 s["fragments"] += len(case.complete)
                 s["completed"] += len(completed(kept, case))
                 s["far"] += len(far_fills(kept, case))
+                s["musts"] += len(case.must)
+                s["fixed"] += len(case.must & {x.of for x in kept})
                 print(f"  {m:6} {len(raw)} items, {len(kept)} kept" + (f"   [{', '.join(f)}]" if f else ""))
                 for it in raw:
                     sound = it.get("sound") or {}
@@ -203,10 +243,11 @@ async def main() -> None:
                 for x in kept:
                     print(f"         kept turn {x.of}: {x.fixed!r}  {x.why_ko}")
     print("\nmodel: runs, flagged, hit a keep-off turn, right sentences changed (kept), fragments completed, "
-          "far fills, items / kept, failed, cost")
+          "far fills, mistakes that must be picked (picked/all), items / kept, failed, cost")
     for m, s in stat.items():
         print(f"  {m}: {s['n']}, {s['flagged']}, {s['keep_off']}, {s['changed']}, {s['completed']}/{s['fragments']}, "
-              f"{s['far']}, {s['items']} / {s['kept']}, {s['failed']}, ${cost(counting[m].log):.4f}")
+              f"{s['far']}, {s['fixed']}/{s['musts']}, {s['items']} / {s['kept']}, {s['failed']}, "
+              f"${cost(counting[m].log):.4f}")
 
 
 if __name__ == "__main__":
