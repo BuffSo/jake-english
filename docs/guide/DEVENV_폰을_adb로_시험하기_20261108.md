@@ -121,3 +121,21 @@ adb는 안드로이드 SDK의 `platform-tools/adb`다(SDK 기본 위치는 `~/Li
   - 같은 실수를 막는 방법: 앱이 맥에 닿지 않으면 ping으로 판단하지 않는다. 맥의 `tailscale status`에서 폰이 offline인지 먼저 보고, 폰에서 TCP로 닿는지는 `adb -s <일련번호> shell "printf 'GET /health HTTP/1.0\r\n\r\n' | toybox nc -w 5 <맥 주소> <포트>"`로 본다. 맥 서버는 토큰 없는 요청에 401을 주니, 그 줄이 오면 닿은 것이다.
 - **녹음과 라이언의 말이 움직이는 동안에는 화면을 읽지 못한다 (2026-11-09 talk-resay):** 녹음 중(빨간 동그라미와 목소리 줄)이나 라이언이 말하는 중(소리 막대)에는 `uiautomator dump`가 `could not get idle state`로 실패한다. 녹음 중에 화면을 읽으려다 그 사이 5초가 지나, 맥 스피커로 튼 녹음이 들어가기 전에 「잘 안 들렸어요」로 취소됐다. 라이언이 말하는 동안에는 말풍선이 늘며 화면이 내려가, 전에 읽은 자리로 누르면 빈 곳이 눌렸다.
   - 어떻게 하나: 녹음 중에는 읽지 않고 「🎤 말하기」 → 2.5초 → `afplay -v 6` → 1초 → 「말하기 끝」을 한 명령으로 잇는다. 움직이는 동안 누를 자리는 스크린샷(`screencap`)을 찍어 그 버튼의 색(덜 주된 버튼이면 파란 테두리 `#1C7ED6`)이 모인 곳의 가운데로 찾는다. 같은 파란 글자 버튼(「통역 ›」)이 섞이지 않게 찾을 범위를 좁힌다.
+- **에뮬레이터 입력칸에 한국어 넣기 (2026-11-11 화면 그림 찍기 카드):**
+  - 증상: `adb shell input text "공항"`은 한글을 치지 못하고 오류로 끝났다. 에뮬레이터는 맥 클립보드를 나눠 쓰므로, 맥 클립보드에 문장을 넣고 입력칸에서 붙여넣기(`input keyevent 279`)를 보냈다. 그런데 넣은 문장이 아니라, 에뮬레이터 안 클립보드에 전부터 남아 있던 앱과 관계없는 다른 작업의 글이 붙었다. 서버에 보내기 전에 바로 지웠고(`input keycombination 113 29`로 모두 고른 뒤 `input keyevent 67`), 그 화면의 스크린샷과 화면 덤프도 지웠다. 그사이 맥 클립보드는 몇 초 만에 다른 것이 복사되어 바뀌었다. 맥 클립보드는 사용자와 다른 세션도 쓴다.
+  - 원인: 에뮬레이터 안 클립보드는 빠른 부팅 스냅숏에 남아 지난번 내용을 그대로 갖고 뜬다(짐작). 맥에서 넣은 문장이 1.5초 안에 에뮬레이터로 넘어가지 않은 까닭은 확인하지 않았다.
+  - 고친 것: 에뮬레이터의 gRPC `setClipboard`로 에뮬레이터 안 클립보드에만 문장을 넣었다. 맥 클립보드는 바뀌지 않았다(`NSPasteboard`의 `changeCount`가 그대로였다).
+    1. 에뮬레이터를 `-grpc 8556 -grpc-use-token`을 더해 띄운다. 에뮬레이터 로그의 `Advertising in:` 줄이 가리키는 `~/Library/Caches/TemporaryItems/avd/running/pid_<번호>.ini`에 `grpc.token`이 있다. 콘솔 토큰(`~/.emulator_console_auth_token`)은 받지 않았다(`The token … is invalid`). 옵션 없이 띄운 에뮬레이터도 gRPC를 열어 두지만(`adb emu grpc <포트>`가 이미 열렸다고 답한다), 그때는 토큰이 든 이 파일을 찾지 못했다.
+    2. 요청 본문은 gRPC 틀(0 한 바이트와 길이 4바이트) 뒤에 protobuf `ClipData`(`0x0a`, 길이, UTF-8 글)를 붙인 것이다. 아래 한 줄은 글이 127바이트 이하일 때만 맞다. 더 길면 길이를 varint로 쓴다.
+
+       ```sh
+       python3 -c 'import struct,sys; t=sys.argv[1].encode(); pb=b"\x0a"+bytes([len(t)])+t; sys.stdout.buffer.write(b"\x00"+struct.pack(">I",len(pb))+pb)' "<넣을 글>" > clip.bin
+       curl -s -v --http2-prior-knowledge -X POST -H "content-type: application/grpc" -H "te: trailers" \
+         -H "authorization: Bearer <grpc.token>" --data-binary @clip.bin \
+         http://127.0.0.1:8556/android.emulation.control.EmulatorController/setClipboard -o /dev/null 2>&1 | grep grpc-status
+       ```
+
+       `grpc-status: 0`이면 들어갔다.
+    3. 입력칸을 누르고 `input keyevent 279`로 붙인 뒤, 화면 덤프로 칸의 글이 넣은 문장인지 본다. 키보드는 `KEYCODE_BACK`으로 내린다(`dumpsys input_method`의 `mInputShown=false`).
+  - 같은 실수를 막는 방법: 에뮬레이터에 글을 넣을 때 맥 클립보드를 쓰지 않는다. 붙이기 전에 gRPC로 에뮬레이터 클립보드부터 채우고, 붙인 뒤 스크린샷을 찍기 전에 칸의 글을 화면 덤프로 본다. 다른 글이 붙었으면 바로 지우고 그 스크린샷과 덤프도 지운다.
+  - 입력칸의 커서가 깜빡여 스크린샷마다 보이기도 하고 안 보이기도 했다. 0.35초 간격으로 여러 장 찍어 커서 자리의 색을 재고, 커서가 없는 장을 골랐다.
