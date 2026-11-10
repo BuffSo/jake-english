@@ -4,12 +4,13 @@
 
 앱이 결과물이라면, 이 저장소는 그 과정입니다. 저는 무엇을 만들지와 여러 안 중 무엇을 고를지 정하고, 머지할지 판단했습니다. 기획 문서, 설계, 구현, 테스트, PR 리뷰는 AI 코딩 에이전트(Claude Code)가 했습니다. 그 규칙과 기록을 처음부터 함께 남겼습니다.
 
-> **English summary.** jake-english is a speaking-practice app I built for myself. On an Android phone I role-play everyday situations with an AI teacher, Ryan, and get feedback on each recording right away. A Mac at home transcribes my speech, compares it with the script line, and explains in Korean which words sounded different and how to say them. Speech recognition (whisper.cpp) and the voices (Qwen3-TTS) run on the Mac, and only text goes to the Claude API, so recordings never leave the Mac. I decided what to build and whether to merge. An AI coding agent (Claude Code) wrote the specs, plans, code, tests and PR reviews under the rules in [AGENTS.md](AGENTS.md), and each feature has a devlog of what the AI proposed and what I decided. The documents are in Korean.
+> **English summary.** jake-english is a speaking-practice app I built for myself. On an Android phone I role-play everyday situations with an AI teacher, Ryan, and get feedback on each recording right away. A Mac at home transcribes my speech, compares it with the script line, and explains in Korean which words sounded different and how to say them. Speech recognition (whisper.cpp) and the voices (Qwen3-TTS) run on the Mac, and only text goes to the Claude API, so recordings never leave the Mac. I decided what to build and whether to merge. An AI coding agent (Claude Code) wrote the specs, plans, code, tests and PR reviews under the rules in [AGENTS.md](AGENTS.md), and each feature has a devlog of what the AI proposed and what I decided. The documents are in Korean, and so is the 3-minute [introduction video](https://youtu.be/5FByJLa8R1k) (app demo from [1:42](https://youtu.be/5FByJLa8R1k?t=102)).
 
-## 시연 영상
+## 소개 영상
 
-<!-- DEMO-VIDEO: 유튜브 링크가 생기면 이 자리에 넣는다 -->
-영상 링크를 준비하고 있습니다.
+[Jake English 소개 (유튜브, 3분 17초)](https://youtu.be/5FByJLa8R1k)
+
+앞부분에서 만든 이유와 동작 방식을 소개하고, [1:42부터](https://youtu.be/5FByJLa8R1k?t=102) 앱을 시연합니다.
 
 ## 무엇을 하는 앱인가
 
