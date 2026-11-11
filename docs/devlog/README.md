@@ -115,3 +115,4 @@
 - [2026-11-09 제이크 그림을 반실사로 바꾸고 그림 주소에 수정 시각 붙이기](2026-11-09-picture-address-version.md)
 - [2026-11-11 공개 전 기록 다시 검사와 README 소개 영상 링크](2026-11-11-go-public-recheck.md)
 - [2026-11-11 공개 전 문서 손질](2026-11-11-public-polish.md)
+- [2026-11-11 시험을 GitHub Actions에서도 돌리기](2026-11-11-ci-test-workflow.md)
