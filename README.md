@@ -90,14 +90,26 @@ flowchart LR
 4. **main 세션과 카드**: 의논은 에이전트와의 대화 하나(main 세션)에서 하고, 정한 일은 git worktree를 하나씩 받은 다른 에이전트 세션(카드)에 맡깁니다. 여러 카드가 동시에 일하지만, 카드의 질문과 머지 요청은 main 세션이 모아 한 번에 묻습니다. 그래서 저는 main 세션 하나만 봅니다.
 5. **시험은 에이전트가 끝까지**: 에이전트는 네 가지 시험을 마친 뒤에 머지를 묻습니다. 단위 시험, 실제 모델 호출, 복제한 제 목소리로 만든 녹음을 서버에 보내는 시험, adb로 폰 화면을 누르고 읽는 시험입니다. 제게는 사람만 할 수 있는 것만 부탁합니다. PR을 열면 GitHub Actions도 바뀐 부분의 단위 시험을 새 환경에서 다시 돌립니다([ADR-0014](docs/adr/0014-tests-on-github-actions.md)).
 6. **PR과 리뷰**: 기능 하나에 PR 하나입니다. 에이전트가 커밋하고 PR을 열고, 리뷰 에이전트가 [REVIEW.md](REVIEW.md) 기준으로 리뷰합니다. 확인된 문제는 같은 PR에서 고칩니다. 머지만 제가 정합니다.
-7. **커밋 전 자동 검사**: 처음부터 공개할 생각으로 만들었습니다. 그래서 키, 개인 경로, 내부 주소, 녹음 파일, 비공개 금지어가 든 커밋을 git 훅과 Claude Code 훅 두 겹으로 막습니다([GIT 가이드](docs/guide/GIT_커밋전_자동검사_20261104.md), [scripts/](scripts/), [.githooks/](.githooks/)).
-8. **작업 일지**: 기능마다 [devlog](docs/devlog/)에 AI가 무엇을 추천했고 제가 무엇을 정했는지 표로 남깁니다. 에이전트가 잘못한 것과 그걸 막으려고 더한 규칙도 적습니다. 겪은 문제와 해결은 다음 작업이 따르도록 [가이드](docs/guide/)에 씁니다.
+7. **비공개 메모**: 이 저장소는 공개하므로, 공개하면 안 되는 것은 git에서 뺀 `docs/private/`의 비공개 메모에 둡니다. 개인 환경 값, 공개 글에 쓰지 않을 것의 목록, 개인 정보가 든 할 일 같은 것입니다. 에이전트는 일을 시작할 때마다 이 메모를 먼저 읽고([AGENTS.md](AGENTS.md) 「먼저 읽을 것」), 무엇을 공개 파일에 쓰면 안 되는지 알고 일합니다. 메모 옆의 금지어 목록(`sensitive-terms.txt`)은 아래 커밋 전 자동 검사가 읽습니다. 그래서 메모에 적은 것 중 낱말로 막을 수 있는 것은 에이전트가 놓쳐도 커밋에 들어가지 못합니다. 클론한 저장소에는 메모가 없으니, 빈 양식으로 각자 만듭니다(아래 「비공개 메모 만들기」).
+8. **커밋 전 자동 검사**: 처음부터 공개할 생각으로 만들었습니다. 그래서 키, 개인 경로, 내부 주소, 녹음 파일, 비공개 금지어가 든 커밋을 git 훅과 Claude Code 훅 두 겹으로 막습니다. 금지어 목록이 없으면 검사를 끝낼 수 없으니 커밋을 막습니다([GIT 가이드](docs/guide/GIT_커밋전_자동검사_20261104.md), [scripts/](scripts/), [.githooks/](.githooks/)).
+9. **작업 일지**: 기능마다 [devlog](docs/devlog/)에 AI가 무엇을 추천했고 제가 무엇을 정했는지 표로 남깁니다. 에이전트가 잘못한 것과 그걸 막으려고 더한 규칙도 적습니다. 겪은 문제와 해결은 다음 작업이 따르도록 [가이드](docs/guide/)에 씁니다.
 
 규칙은 대부분 실제로 겪은 일에서 생겼습니다. 예를 들면 이렇습니다.
 
 - 카드가 제게 직접 질문하자 여러 창을 오가야 했습니다. 그래서 질문을 main 세션으로 모으는 규칙이 생겼습니다([devlog](docs/devlog/2026-11-08-route-questions-to-main.md)).
 - 에이전트가 폰 확인을 PR 체크리스트의 빈 칸으로 남겨 제게 넘겼습니다. 그래서 폰 시험까지 에이전트가 마치는 규칙으로 바꿨습니다([devlog](docs/devlog/2026-11-08-tests-before-merge.md)).
 - 목록에서 고른 상황인데도 고를 때마다 AI가 대본을 새로 써서 시작이 늦었습니다. 그래서 목록 상황의 대본을 미리 써 두고 바로 시작하게 바꿨습니다([ADR-0013](docs/adr/0013-fixed-scripts-for-list-picks.md), [devlog](docs/devlog/2026-11-08-fixed-list-scripts.md)).
+
+### 비공개 메모 만들기
+
+이 저장소를 클론해 커밋하거나 이 방식을 자기 저장소에서 따라 쓰려면, 비공개 메모를 먼저 만들고 커밋 전 검사를 켭니다. 빈 양식은 [docs/private.example/](docs/private.example/)에 있습니다.
+
+1. 양식을 복사합니다: `cp -R docs/private.example docs/private`. `docs/private/`는 `.gitignore`로 빠져 있어 커밋되지 않습니다.
+2. `docs/private/private-notes.md`에 그 저장소에서 공개하면 안 되는 것과, 이 폴더에 둔 파일을 적습니다.
+3. `docs/private/sensitive-terms.txt`에 커밋에 들어가면 안 되는 낱말을 한 줄에 하나씩 적습니다. 쓰는 형식은 파일 맨 위의 설명에 있습니다.
+4. `git config core.hooksPath .githooks`로 커밋 전 검사를 켭니다. 검사는 Node.js로 돕니다.
+
+금지어 목록 파일이 없으면 커밋이 막힙니다. 막을 낱말이 아직 없어도 파일은 둡니다(설명 주석만 있어도 됩니다). worktree에서 커밋해도 원래 폴더의 목록을 읽습니다.
 
 ## 이 저장소에서 볼 수 있는 것
 
@@ -111,6 +123,7 @@ flowchart LR
 | 미룬 일과 후속 작업. 할 일은 끝낼 때 커밋하므로, 여기 있는 것은 대부분 끝낸 일입니다(파일 맨 위 「상태」 줄) | [docs/todo/](docs/todo/) |
 | 에이전트 작업 규칙과 리뷰 기준 | [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [REVIEW.md](REVIEW.md) |
 | 커밋 전 공개 금지 검사 | [scripts/check-sensitive.mjs](scripts/check-sensitive.mjs), [.githooks/](.githooks/), [.claude/settings.json](.claude/settings.json) |
+| 비공개 메모와 금지어 목록의 빈 양식 | [docs/private.example/](docs/private.example/) |
 | 폰 앱과 맥 서버 | [app/](app/), [server/](server/), 둘 사이의 응답 예시 [contract/](contract/) |
 
 2026-11-04에 시작해 첫 주(11월 10일까지)에 PR 78개를 머지했습니다.
