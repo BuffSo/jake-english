@@ -6,7 +6,7 @@
 
 ## 먼저 읽을 것
 
-- **`docs/private/private-notes.md`:** 비공개 메모. 공개하면 안 되는 것의 목록이 있다. git에서 뺀 파일이라 새로 클론한 곳에는 없다. worktree에 없으면 원래 폴더(`git worktree list`의 첫 줄)의 것을 읽는다.
+- **`docs/private/private-notes.md`:** 비공개 메모. 공개하면 안 되는 것의 목록이 있다. 비공개 메모는 저장소마다 각자 만든다(만드는 법은 `README.md` 「비공개 메모 만들기」). git에서 뺀 파일이라 새로 클론한 곳에는 없다. worktree에 없으면 원래 폴더(`git worktree list`의 첫 줄)의 것을 읽는다.
 - **`REVIEW.md`:** 리뷰에서 무엇을 지적하고 무엇을 넘길지 정한 기준.
 
 ## 공개 저장소
