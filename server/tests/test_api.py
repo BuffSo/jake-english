@@ -104,7 +104,7 @@ def test_home_lists_sohees_pictures(client):
 
 
 def test_sohee_pictures_are_served(client, settings):
-    # made-up bytes in the test assets folder; the real pictures never go into the repo
+    # made-up bytes in a test assets folder; the real pictures in server/assets/ are checked in test_assets.py
     settings.assets_dir.mkdir(parents=True)
     names = ["sohee-thinking-1.png", "sohee-thinking-2.png", "sohee-face.png", "sohee-whisper-face.png"]
     for n in names + ["sohee-front.png"]:

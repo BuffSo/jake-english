@@ -29,8 +29,8 @@ from .tts import VoiceError
 log = logging.getLogger("je_server")
 MAX_UPLOAD = 5 * 1024 * 1024
 # Thinking faces shown instead of a spinner while Claude works, two per person, cross-faded by the app
-# (docs/superpowers/specs/2026-11-06-waiting-animation-design.md). Like Ryan's pictures they live only in the
-# private assets folder.
+# (docs/superpowers/specs/2026-11-06-waiting-animation-design.md). Every picture in ASSETS sits in the repository's
+# server/assets/ (ADR-0015); tests/test_assets.py fails when one is missing there or an unlisted file sneaks in.
 THINKING = {who: [f"{who}-thinking-{n}.png" for n in (1, 2)] for who in ("jake", "ryan", "sohee")}
 # jake-front.png: Jake's face while his suggested situation waits for 「이걸로 할게요」 or 「다른 걸로요」 (2026-11-06 user)
 # Sohee's faces for the free talk (spec free-talk 2, 3): the face and the whisper face sit beside the thinking pair

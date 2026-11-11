@@ -1,7 +1,8 @@
 """Settings from server/.env and the repository's .env.
 
-Paths to the local voice setup, the whisper model and the private images live only in
-server/.env, which git ignores. Nothing here has a default that points at a personal folder.
+Paths to the local voice setup and the whisper model live only in server/.env, which git ignores. Nothing here has
+a default that points at a personal folder. The character pictures default to the repository's server/assets/
+(ADR-0015), so a fresh clone serves them with JE_ASSETS_DIR left empty.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from .claude import QUICKS, TALKERS, WRITERS
 SERVER_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = SERVER_DIR.parent
 DEFAULT_DATA_DIR = "~/Library/Application Support/jake-english"
+DEFAULT_ASSETS_DIR = SERVER_DIR / "assets"  # the pictures the app shows, in the repository (ADR-0015)
 MIN_TOKEN = 32
 # Without JE_CLAUDE_WRITER / JE_CLAUDE_QUICK / JE_CLAUDE_RECOMMEND the server runs the spec's models (keys of
 # claude.WRITERS, claude.QUICKS; the recommendation picks from QUICKS too)
@@ -80,7 +82,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         tts_python=env.get("JE_TTS_PYTHON", ""),
         tts_module=env.get("JE_TTS_MODULE", ""),
         whisper_model=env.get("JE_WHISPER_MODEL", ""),
-        assets_dir=Path(env.get("JE_ASSETS_DIR", "")).expanduser(),
+        # empty means the repository folder; a value points the server at another folder, as before
+        assets_dir=Path(env.get("JE_ASSETS_DIR", "").strip() or DEFAULT_ASSETS_DIR).expanduser(),
         host=env.get("JE_HOST", "127.0.0.1"),
         port=int(env.get("JE_PORT", "8787")),
         whisper_exe=env.get("JE_WHISPER_SERVER", "whisper-server"),
