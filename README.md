@@ -131,4 +131,4 @@ flowchart LR
 코드와 문서는 [MIT 라이선스](LICENSE)입니다. 다만 아래 그림은 MIT에 들어가지 않습니다.
 
 - 앱 아이콘 그림(`app/assets/icon.png`, `app/assets/android-icon-foreground.png`)은 제 프로필 그림이라, 권리는 제가 갖습니다.
-- 인물 그림(`server/assets/`의 라이언, 소희, 제이크)은 AI로 만들었습니다. 이 앱은 각자 자기 맥에 서버를 띄우고 자기 폰에서 쓰는 개인용이고, 그림도 그렇게 이 앱을 자기가 쓸 때만 쓸 수 있습니다. 다른 앱, 서비스, 글, 영상에 쓰거나 자기가 만든 그림이라고 하면 안 됩니다([server/assets/README.md](server/assets/README.md), [ADR-0015](docs/adr/0015-bundle-character-pictures.md)).
+- 인물 그림(`server/assets/`의 라이언, 소희, 제이크)은 AI로 만들었습니다. 이 앱은 각자 자기 맥에 서버를 띄우고 자기 폰에서 쓰는 개인용이고, 그림도 그렇게 이 앱을 자기가 쓸 때만 쓸 수 있습니다. 다른 앱, 서비스, 글, 영상에 쓰거나 자기가 만든 그림이라고 하면 안 됩니다. 조건의 원본은 [server/assets/README.md](server/assets/README.md)입니다([ADR-0015](docs/adr/0015-bundle-character-pictures.md)).
