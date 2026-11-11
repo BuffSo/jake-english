@@ -70,7 +70,7 @@ flowchart LR
 
 ### 맥 서버가 있어야 돌아갑니다
 
-이 앱은 제 맥에서만 돌아가게 만들었습니다. 저장소만 받아서는 바로 쓸 수 없습니다. 맥 서버에는 아래가 필요합니다.
+이 앱은 각자 자기 맥에 서버를 띄우고 자기 폰에서 쓰는 개인용입니다. 저장소만 받아서는 바로 쓸 수 없고, 맥 서버에 아래가 필요합니다.
 
 - whisper.cpp의 `whisper-server`와 받아쓰기 모델
 - 녹음과 목소리를 바꾸는 ffmpeg
@@ -78,7 +78,7 @@ flowchart LR
 - Anthropic API 키(쓴 만큼 돈이 듭니다)
 - 폰과 맥을 잇는 Tailscale
 
-준비 방법은 [server/README.md](server/README.md)와 [app/README.md](app/README.md)에 있습니다. 녹음, 복제 목소리의 기준 녹음, 인물 그림, 개인 환경 값은 공개 저장소에 넣지 않았습니다.
+준비 방법은 [server/README.md](server/README.md)와 [app/README.md](app/README.md)에 있습니다. 녹음, 복제 목소리의 기준 녹음, 개인 환경 값은 공개 저장소에 넣지 않았습니다. 앱에 나오는 인물 그림은 저장소(`server/assets/`)에 있어서, 따로 준비하지 않아도 앱에 보입니다.
 
 ## AI 에이전트와 일한 방식
 
@@ -124,8 +124,11 @@ flowchart LR
 | 대화와 평가 | Anthropic Claude API | [Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms), [Usage Policy](https://www.anthropic.com/legal/aup) |
 
 - 제이크 목소리는 제 목소리를 복제한 것이고, 라이언과 소희 목소리도 맥에서 만듭니다. 기준 녹음과 목소리 파일은 저장소에 없습니다.
-- 라이언, 소희, 제이크 얼굴은 AI가 만든 그림입니다. 그림 파일은 저장소에 넣지 않았고, 맥 서버가 비공개 폴더에서 읽어 앱에 보냅니다. 위 「화면」의 첫 화면에만 라이언 얼굴이 보입니다.
+- 라이언, 소희, 제이크 얼굴은 AI가 만든 그림입니다. 앱이 쓰는 그림은 `server/assets/`에 있고, 맥 서버가 앱에 보냅니다. 쓸 수 있는 범위는 아래 「라이선스」에 있습니다.
 
 ## 라이선스
 
-코드와 문서는 [MIT 라이선스](LICENSE)입니다. 다만 앱 아이콘 그림(`app/assets/icon.png`, `app/assets/android-icon-foreground.png`)은 제 프로필 그림이라 MIT에 들어가지 않고, 권리는 제가 갖습니다.
+코드와 문서는 [MIT 라이선스](LICENSE)입니다. 다만 아래 그림은 MIT에 들어가지 않습니다.
+
+- 앱 아이콘 그림(`app/assets/icon.png`, `app/assets/android-icon-foreground.png`)은 제 프로필 그림이라, 권리는 제가 갖습니다.
+- 인물 그림(`server/assets/`의 라이언, 소희, 제이크)은 AI로 만들었습니다. 이 앱은 각자 자기 맥에 서버를 띄우고 자기 폰에서 쓰는 개인용이고, 그림도 그렇게 이 앱을 자기가 쓸 때만 쓸 수 있습니다. 다른 앱, 서비스, 글, 영상에 쓰거나 자기가 만든 그림이라고 하면 안 됩니다. 조건의 원본은 [server/assets/README.md](server/assets/README.md)입니다([ADR-0015](docs/adr/0015-bundle-character-pictures.md)).

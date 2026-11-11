@@ -26,6 +26,14 @@ server/scripts/autostart.sh status
 - 서버를 `kill`로 끄면 곧바로 다시 뜬다. 끄고 켤 때는 이 스크립트를 쓴다. 명령과 카드가 서버를 시험하는 순서는 `docs/guide/DEVENV_맥서버_저절로_띄우기_20261107.md`.
 - 손으로 띄우기(worktree에서 시험할 때): `uv run python -m je_server`
 
+## 인물 그림
+
+앱에 나오는 라이언, 소희, 제이크의 그림은 `server/assets/`에 있고, 서버가 `/assets/<이름>`으로 내준다(ADR-0015). AI로 만든 그림이라 MIT 라이선스에 들어가지 않는다. 쓸 수 있는 범위는 그 폴더의 `README.md`에 있다.
+
+- `server/.env`의 `JE_ASSETS_DIR`을 비우면 이 폴더를 읽는다. 값을 주면 그 폴더만 읽는다. 새 그림을 커밋하기 전에 맥에서 시험해 볼 때 쓴다.
+- 서버가 내주는 이름은 `je_server/app.py`의 `ASSETS`다. 그림을 더하거나 바꿀 때는 파일과 목록을 함께 고친다. `tests/test_assets.py`가 목록의 이름마다 PNG가 있는지, 폴더에 목록 밖 파일이 없는지 본다.
+- 만드는 방법과 넣기 전에 볼 것은 `docs/guide/ASSET_제미나이로_얼굴_그림_만들기_20261106.md` 「앱 그림 바꾸기」.
+
 ## Claude 모델 고르기
 
 `server/.env`의 다섯 줄로 모델을 고른다. 비우면 기본값이고, 바꾸면 서버를 다시 띄운다.
