@@ -1,0 +1,45 @@
+# Phone app tests (jest) and type check (tsc) on GitHub Actions (ADR-0014). No app/.env is needed: the tests fake the
+# Mac server. It does not build the APK; that stays on the Mac (ADR-0002). It runs only when the app or the contract
+# examples change, to keep the Actions minutes low while the repository is private.
+name: app tests
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "contract/**"
+      - ".github/workflows/test-app.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "contract/**"
+      - ".github/workflows/test-app.yml"
+
+# a newer push to the same branch or PR stops the run still going: only the last one is looked at
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  jest-tsc:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run typecheck
