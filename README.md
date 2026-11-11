@@ -1,5 +1,7 @@
 # jake-english
 
+[![server tests](https://github.com/BuffSo/jake-english/actions/workflows/test-server.yml/badge.svg?branch=main)](https://github.com/BuffSo/jake-english/actions/workflows/test-server.yml) [![app tests](https://github.com/BuffSo/jake-english/actions/workflows/test-app.yml/badge.svg?branch=main)](https://github.com/BuffSo/jake-english/actions/workflows/test-app.yml) [![hook tests](https://github.com/BuffSo/jake-english/actions/workflows/test-hooks.yml/badge.svg?branch=main)](https://github.com/BuffSo/jake-english/actions/workflows/test-hooks.yml)
+
 제가 쓰려고 만든 영어 말하기 연습 앱입니다. 폰에서 AI 선생님 라이언과 상황 대화를 주고받고, 제 녹음을 바로 평가받습니다. 계산은 집의 맥이 하고, 폰은 화면과 녹음만 맡습니다.
 
 앱이 결과물이라면, 이 저장소는 그 과정입니다. 저는 무엇을 만들지와 여러 안 중 무엇을 고를지 정하고, 머지할지 판단했습니다. 기획 문서, 설계, 구현, 테스트, PR 리뷰는 AI 코딩 에이전트(Claude Code)가 했습니다. 그 규칙과 기록을 처음부터 함께 남겼습니다.
@@ -86,7 +88,7 @@ flowchart LR
 2. **기능마다 스펙, 계획, 구현**: [superpowers](https://github.com/obra/superpowers) 스킬 흐름을 씁니다. 인터뷰로 [스펙](docs/superpowers/specs/)을 쓰고, [계획](docs/superpowers/plans/)으로 나누고, 테스트를 먼저 쓰고 구현합니다.
 3. **되돌리기 어려운 결정은 ADR**: 구조, 외부 서비스, 데이터 저장 같은 결정은 [ADR](docs/adr/)에 남깁니다. AI가 처음 추천한 안과 제가 정한 것이 다르면 그 차이와 이유도 적습니다.
 4. **main 세션과 카드**: 의논은 에이전트와의 대화 하나(main 세션)에서 하고, 정한 일은 git worktree를 하나씩 받은 다른 에이전트 세션(카드)에 맡깁니다. 여러 카드가 동시에 일하지만, 카드의 질문과 머지 요청은 main 세션이 모아 한 번에 묻습니다. 그래서 저는 main 세션 하나만 봅니다.
-5. **시험은 에이전트가 끝까지**: 에이전트는 네 가지 시험을 마친 뒤에 머지를 묻습니다. 단위 시험, 실제 모델 호출, 복제한 제 목소리로 만든 녹음을 서버에 보내는 시험, adb로 폰 화면을 누르고 읽는 시험입니다. 제게는 사람만 할 수 있는 것만 부탁합니다.
+5. **시험은 에이전트가 끝까지**: 에이전트는 네 가지 시험을 마친 뒤에 머지를 묻습니다. 단위 시험, 실제 모델 호출, 복제한 제 목소리로 만든 녹음을 서버에 보내는 시험, adb로 폰 화면을 누르고 읽는 시험입니다. 제게는 사람만 할 수 있는 것만 부탁합니다. PR을 열면 GitHub Actions도 바뀐 부분의 단위 시험을 새 환경에서 다시 돌립니다([ADR-0014](docs/adr/0014-tests-on-github-actions.md)).
 6. **PR과 리뷰**: 기능 하나에 PR 하나입니다. 에이전트가 커밋하고 PR을 열고, 리뷰 에이전트가 [REVIEW.md](REVIEW.md) 기준으로 리뷰합니다. 확인된 문제는 같은 PR에서 고칩니다. 머지만 제가 정합니다.
 7. **커밋 전 자동 검사**: 처음부터 공개할 생각으로 만들었습니다. 그래서 키, 개인 경로, 내부 주소, 녹음 파일, 비공개 금지어가 든 커밋을 git 훅과 Claude Code 훅 두 겹으로 막습니다([GIT 가이드](docs/guide/GIT_커밋전_자동검사_20261104.md), [scripts/](scripts/), [.githooks/](.githooks/)).
 8. **작업 일지**: 기능마다 [devlog](docs/devlog/)에 AI가 무엇을 추천했고 제가 무엇을 정했는지 표로 남깁니다. 에이전트가 잘못한 것과 그걸 막으려고 더한 규칙도 적습니다. 겪은 문제와 해결은 다음 작업이 따르도록 [가이드](docs/guide/)에 씁니다.
