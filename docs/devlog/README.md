@@ -119,3 +119,4 @@
 - [2026-11-11 pr-review 평가 세트](2026-11-11-review-eval-set.md)
 - [2026-11-11 인물 그림을 저장소에 넣기](2026-11-11-bundle-pictures.md)
 - [2026-11-11 빈 JE_DATA_DIR을 기본값으로 읽기](2026-11-11-data-dir-default.md)
+- [2026-11-11 AGENTS.md 줄이기와 규칙 넷 (비공개 메모 양식, Actions, PR 위험, 브랜치 지우기)](2026-11-11-agents-bundle.md)
