@@ -2,7 +2,10 @@
 
 Paths to the local voice setup and the whisper model live only in server/.env, which git ignores. Nothing here has
 a default that points at a personal folder. The character pictures default to the repository's server/assets/
-(ADR-0015), so a fresh clone serves them with JE_ASSETS_DIR left empty.
+(ADR-0015), so a fresh clone serves them with JE_ASSETS_DIR left empty. Recordings and records default to the Mac's
+app data folder, outside the repository: they are the learner's voice and practice lines, so they stay where an agent
+working in the repository does not search, copy or commit them, and they survive deleting or re-cloning the
+repository. A line left empty means its default, the same as a missing line.
 """
 from __future__ import annotations
 
@@ -47,8 +50,17 @@ class Settings:
     claude_hint: str = DEFAULT_HINT
 
 
+def _value(env: Mapping[str, str], key: str, default: str) -> str:
+    """The value of a line that has a default. An empty line means the default, like a missing one.
+
+    .env.example leaves several of these lines empty; Path("") would be the folder the server was started from and
+    int("") stops the server.
+    """
+    return env.get(key, "").strip() or default
+
+
 def _model_name(env: Mapping[str, str], key: str, choices: Mapping[str, object], default: str) -> str:
-    name = env.get(key, "").strip().lower() or default
+    name = _value(env, key, default).lower()
     if name not in choices:
         raise ValueError(f"{key} must be one of {', '.join(choices)}, not {name!r}")
     return name
@@ -77,17 +89,18 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         raise ValueError(f"JE_TOKEN must be set in server/.env and be at least {MIN_TOKEN} characters")
     return Settings(
         token=token,
-        data_dir=Path(env.get("JE_DATA_DIR", DEFAULT_DATA_DIR)).expanduser(),
+        # empty means the Mac's app data folder, never the folder the server was started from (the repository)
+        data_dir=Path(_value(env, "JE_DATA_DIR", DEFAULT_DATA_DIR)).expanduser(),
         anthropic_api_key=env.get("ANTHROPIC_API_KEY", ""),
         tts_python=env.get("JE_TTS_PYTHON", ""),
         tts_module=env.get("JE_TTS_MODULE", ""),
         whisper_model=env.get("JE_WHISPER_MODEL", ""),
         # empty means the repository folder; a value points the server at another folder, as before
-        assets_dir=Path(env.get("JE_ASSETS_DIR", "").strip() or DEFAULT_ASSETS_DIR).expanduser(),
-        host=env.get("JE_HOST", "127.0.0.1"),
-        port=int(env.get("JE_PORT", "8787")),
-        whisper_exe=env.get("JE_WHISPER_SERVER", "whisper-server"),
-        whisper_port=int(env.get("JE_WHISPER_PORT", "8788")),
+        assets_dir=Path(_value(env, "JE_ASSETS_DIR", str(DEFAULT_ASSETS_DIR))).expanduser(),
+        host=_value(env, "JE_HOST", "127.0.0.1"),
+        port=int(_value(env, "JE_PORT", "8787")),
+        whisper_exe=_value(env, "JE_WHISPER_SERVER", "whisper-server"),
+        whisper_port=int(_value(env, "JE_WHISPER_PORT", "8788")),
         claude_writer=_model_name(env, "JE_CLAUDE_WRITER", WRITERS, DEFAULT_WRITER),
         claude_quick=_model_name(env, "JE_CLAUDE_QUICK", QUICKS, DEFAULT_QUICK),
         claude_recommend=_model_name(env, "JE_CLAUDE_RECOMMEND", QUICKS, DEFAULT_RECOMMEND),

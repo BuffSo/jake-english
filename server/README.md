@@ -7,7 +7,7 @@
 ```sh
 cd server
 uv sync
-cp .env.example .env   # 값을 채운다. 경로는 비공개 메모를 본다
+cp .env.example .env   # 값을 채운다. 줄마다 뜻과 기본값은 .env.example 의 설명을 본다
 ```
 
 토큰 만들기: `python3 -c "import secrets; print(secrets.token_hex(24))"`
@@ -25,6 +25,15 @@ server/scripts/autostart.sh status
 
 - 서버를 `kill`로 끄면 곧바로 다시 뜬다. 끄고 켤 때는 이 스크립트를 쓴다. 명령과 카드가 서버를 시험하는 순서는 `docs/guide/DEVENV_맥서버_저절로_띄우기_20261107.md`.
 - 손으로 띄우기(worktree에서 시험할 때): `uv run python -m je_server`
+
+## 녹음과 기록
+
+녹음과 기록은 맥의 앱 데이터 폴더 `~/Library/Application Support/jake-english`에 쌓인다. 대화마다 기록과 녹음(`roleplays/`), 서버가 만든 목소리(`audio/`), 모아 둔 문장(`saved.json`)이 여기 있다. 저장소 밖이라 저장소를 지우거나 새로 받아도 남는다.
+
+- 열기: `open ~/Library/Application\ Support/jake-english` (Finder로 열린다)
+- 지우기: 서버를 끈 뒤(launchd로 띄웠으면 `server/scripts/autostart.sh stop`) 이 폴더 하나를 지우면 녹음과 기록이 모두 사라진다. 되돌릴 수 없다. 다시 띄우면 빈 폴더로 시작한다.
+- 다른 폴더에 두기: `server/.env`의 `JE_DATA_DIR`에 그 폴더를 적고 서버를 다시 띄운다. 비우거나 줄이 없으면 앱 데이터 폴더다.
+- 서버 로그는 따로 `~/Library/Logs/jake-english/`에 있다(launchd로 띄웠을 때).
 
 ## 인물 그림
 
@@ -77,7 +86,7 @@ uv run pytest
 
 ## 집 밖에서 쓰기 (Tailscale, ADR-0007)
 
-- `server/.env`의 `JE_HOST`를 맥의 Tailscale 주소로 둔다(주소는 비공개 메모). 서버는 그 주소에만 붙고, 집 와이파이 주소로는 열리지 않는다.
+- `server/.env`의 `JE_HOST`를 맥의 Tailscale 주소로 둔다. 주소는 맥에서 `tailscale ip -4`로 본다. 서버는 그 주소에만 붙고, 집 와이파이 주소로는 열리지 않는다.
   - 확인: `lsof -nP -iTCP:8787 -sTCP:LISTEN`에 Tailscale 주소만 보여야 한다.
 - 앱의 `app/.env`에도 같은 주소와 토큰을 넣고 빌드한다(`app/README.md`).
 - Tailscale Funnel, 포트 전달, 공개 터널은 쓰지 않는다. 확인: `tailscale funnel status`가 비어 있어야 한다.

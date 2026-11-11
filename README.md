@@ -78,7 +78,7 @@ flowchart LR
 - Anthropic API 키(쓴 만큼 돈이 듭니다)
 - 폰과 맥을 잇는 Tailscale
 
-준비 방법은 [server/README.md](server/README.md)와 [app/README.md](app/README.md)에 있습니다. 녹음, 복제 목소리의 기준 녹음, 개인 환경 값은 공개 저장소에 넣지 않았습니다. 앱에 나오는 인물 그림은 저장소(`server/assets/`)에 있어서, 따로 준비하지 않아도 앱에 보입니다.
+준비 방법은 [server/README.md](server/README.md)와 [app/README.md](app/README.md)에 있습니다. 녹음, 복제 목소리의 기준 녹음, 개인 환경 값은 공개 저장소에 넣지 않았습니다. 앱을 쓰며 쌓이는 녹음과 기록은 저장소 밖, 맥의 앱 데이터 폴더(`~/Library/Application Support/jake-english`)에 있습니다. 여는 법과 지우는 법은 [server/README.md](server/README.md) 「녹음과 기록」에 있습니다. 앱에 나오는 인물 그림은 저장소(`server/assets/`)에 있어서, 따로 준비하지 않아도 앱에 보입니다.
 
 ## AI 에이전트와 일한 방식
 
