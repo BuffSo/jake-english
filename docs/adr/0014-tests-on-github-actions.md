@@ -37,6 +37,7 @@
   - `test-app.yml`: `app/`에서 `npm ci`, `npm test`(jest), `npm run typecheck`(tsc). `app/`, `contract/`가 바뀔 때.
   - `test-hooks.yml`: `node --test 'scripts/**/*.test.mjs'`. `scripts/`, `.githooks/`가 바뀔 때.
   - 각 워크플로 파일 자신이 바뀔 때도 돈다.
+  - PR에서는 마지막 push가 아니라 PR 전체의 바뀐 파일로 거른다. 서버를 바꾼 PR은 뒤에 문서만 push해도 서버 시험이 다시 돈다.
 - PR과 main push에서 돈다. 같은 브랜치에 새 push가 오면 앞 실행을 멈춘다. 러너는 `ubuntu-slim`이고, 작업마다 시간 제한(5~10분)을 둔다. npm과 uv는 캐시를 쓴다.
 - 비공개 파일(`docs/private/`, `.env`)과 키는 넣지 않는다. GitHub secret을 쓰지 않는다. 실제 Claude, 받아쓰기, 음성 합성을 부르는 시험은 지금처럼 가짜로 대신하거나 건너뛴다. 비공개 금지어 목록도 넣지 않는다. 훅 시험은 임시 저장소마다 지어낸 목록을 만들어 돈다.
 - 유료 러너와 외부 서비스(커버리지 서비스 등)는 쓰지 않는다.
