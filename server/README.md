@@ -12,6 +12,8 @@ cp .env.example .env   # 값을 채운다. 경로는 비공개 메모를 본다
 
 토큰 만들기: `python3 -c "import secrets; print(secrets.token_hex(24))"`
 
+`ffmpeg`가 PATH에 있어야 한다. 서버가 녹음과 목소리를 다른 형식으로 바꿀 때 쓰고, 시험도 시험용 소리를 ffmpeg로 만든다. 맥은 `brew install ffmpeg`, GitHub Actions는 우분투 저장소의 것을 깐다(ADR-0014).
+
 ## 띄우기
 
 이 맥에서는 launchd가 띄운다(ADR-0012). 로그인할 때 띄우고, 죽으면 다시 띄운다. 처음 한 번 설치한다.

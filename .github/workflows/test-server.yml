@@ -1,0 +1,47 @@
+# Server tests (pytest) on GitHub Actions (ADR-0014). They run without the private files (docs/private/, .env) and
+# with no keys or secrets: the Claude, speech recognition and voice parts are faked, and the tests that need the
+# Mac's own tools skip themselves. It runs only when the server or the contract examples change, to keep the
+# Actions minutes low while the repository is private.
+name: server tests
+
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - "contract/**"
+      - ".github/workflows/test-server.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "contract/**"
+      - ".github/workflows/test-server.yml"
+
+# a newer push to the same branch or PR stops the run still going: only the last one is looked at
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # the server converts recordings and voices with ffmpeg, and the tests make their sounds with it
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+          working-directory: server
+      - run: uv sync --frozen
+      - run: uv run --frozen pytest -q

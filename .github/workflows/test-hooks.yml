@@ -1,0 +1,39 @@
+# Tests of the pre-commit checks and git hooks (node --test) on GitHub Actions (ADR-0014). The private list of
+# banned words (docs/private/sensitive-terms.txt) is never here: each test makes a throwaway repository with its own
+# made-up list. It runs only when the checks or the hooks change, to keep the Actions minutes low while the
+# repository is private.
+name: hook tests
+
+on:
+  pull_request:
+    paths:
+      - "scripts/**"
+      - ".githooks/**"
+      - ".github/workflows/test-hooks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - ".githooks/**"
+      - ".github/workflows/test-hooks.yml"
+
+# a newer push to the same branch or PR stops the run still going: only the last one is looked at
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node-test:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - run: node --test 'scripts/**/*.test.mjs'

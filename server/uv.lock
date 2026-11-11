@@ -242,6 +242,8 @@ dependencies = [
     { name = "cmudict" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "httpx2" },
+    { name = "pydantic" },
     { name = "uvicorn" },
 ]
 
@@ -256,6 +258,8 @@ requires-dist = [
     { name = "cmudict" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "httpx2" },
+    { name = "pydantic" },
     { name = "uvicorn" },
 ]
 
