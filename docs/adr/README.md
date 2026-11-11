@@ -41,3 +41,4 @@ AI가 처음 추천한 안과 사용자가 정한 것. 둘이 다르면 그 차�
 - [ADR-0012 맥 서버는 launchd 사용자 에이전트로 띄운다](0012-server-autostart-with-launchd.md) (채택)
 - [ADR-0013 목록 상황의 대본은 저장소에 두고, 같은 목록 상황의 회차를 원본 ID로 묶는다](0013-fixed-scripts-for-list-picks.md) (채택)
 - [ADR-0014 시험은 GitHub Actions에서도 돌린다(APK는 만들지 않는다)](0014-tests-on-github-actions.md) (채택)
+- [ADR-0015 앱이 쓰는 인물 그림은 저장소에 넣고, MIT 밖의 개인 사용 안내를 붙인다](0015-bundle-character-pictures.md) (채택)
