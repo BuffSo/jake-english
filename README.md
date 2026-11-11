@@ -71,6 +71,7 @@ flowchart LR
 이 앱은 제 맥에서만 돌아가게 만들었습니다. 저장소만 받아서는 바로 쓸 수 없습니다. 맥 서버에는 아래가 필요합니다.
 
 - whisper.cpp의 `whisper-server`와 받아쓰기 모델
+- 녹음과 목소리를 바꾸는 ffmpeg
 - 로컬 음성 합성(Qwen3-TTS) 환경과 복제 목소리
 - Anthropic API 키(쓴 만큼 돈이 듭니다)
 - 폰과 맥을 잇는 Tailscale
