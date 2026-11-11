@@ -118,3 +118,4 @@
 - [2026-11-11 시험을 GitHub Actions에서도 돌리기](2026-11-11-ci-test-workflow.md)
 - [2026-11-11 pr-review 평가 세트](2026-11-11-review-eval-set.md)
 - [2026-11-11 인물 그림을 저장소에 넣기](2026-11-11-bundle-pictures.md)
+- [2026-11-11 빈 JE_DATA_DIR을 기본값으로 읽기](2026-11-11-data-dir-default.md)
