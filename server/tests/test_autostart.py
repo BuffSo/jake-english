@@ -90,12 +90,17 @@ def test_starts_at_login_comes_back_when_it_dies_and_logs_where_it_always_has(re
     assert job["StandardErrorPath"] == log
 
 
-def test_refuses_when_a_tool_the_server_needs_is_not_on_path(repo, tools, tmp_path):
+@pytest.mark.parametrize("name", ["uv", "ffmpeg", "whisper-server"])
+def test_refuses_when_a_tool_the_server_needs_is_not_on_path(repo, tools, tmp_path, name):
+    # `run` keeps the system folders on PATH, so a tool installed there cannot be made missing: on the Mac they all
+    # come from Homebrew or the user's folders, but GitHub Actions' Ubuntu has ffmpeg in /usr/bin (ADR-0014)
+    if shutil.which(name, path=SYSTEM_PATH):
+        pytest.skip(f"{name} is in the system folders here")
     main, _ = repo
-    del tools["ffmpeg"]
+    del tools[name]
     result = run(main, tmp_path / "home", tools, "plist")
     assert result.returncode != 0
-    assert "ffmpeg" in result.stderr
+    assert name in result.stderr
     assert result.stdout == ""
 
 

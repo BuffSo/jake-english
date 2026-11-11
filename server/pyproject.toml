@@ -9,6 +9,8 @@ dependencies = [
     "anthropic",
     "cmudict",
     "httpx",
+    "httpx2",
+    "pydantic",
 ]
 
 [dependency-groups]
